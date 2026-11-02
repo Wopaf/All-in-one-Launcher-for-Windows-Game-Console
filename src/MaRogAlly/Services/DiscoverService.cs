@@ -74,6 +74,11 @@ public sealed class DiscoverGame : ObservableObject
     [JsonIgnore] public string? CardLine => PlayersText is not null ? PlayersText.Replace(" au pic du jour", "") : ComingSoon ? ReleaseText : PriceText;
 
     public string StoreUrl => $"https://store.steampowered.com/app/{AppId}";
+
+    private bool _isWished;
+    /// <summary>Dans la liste de souhaits (cœur sur la jaquette).</summary>
+    [JsonIgnore] public bool IsWished { get => _isWished; set => Set(ref _isWished, value); }
+    [JsonIgnore] public string WishKey => $"steam-{AppId}";
 }
 
 public sealed class DiscoverSection
@@ -150,6 +155,17 @@ public sealed class DiscoverService(HttpClient http)
             Log.Error("Découverte indisponible", ex);
         }
         return sections;
+    }
+
+    /// <summary>Fiches à jour de ces jeux (prix, promotions) ; vide si le magasin ne répond pas.</summary>
+    public async Task<Dictionary<int, DiscoverGame>> DetailsOfAsync(List<int> ids, CancellationToken ct)
+    {
+        try { return await DetailsAsync(ids, ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Error("Fiches de la liste de souhaits", ex);
+            return [];
+        }
     }
 
     /// <summary>Recherche dans le magasin Steam (jeux uniquement), détaillée comme les tendances.</summary>

@@ -37,7 +37,7 @@ public static class GameLauncher
         => Open(game.InstallUri ?? game.PlatformInfo.LauncherUri ?? game.PlatformInfo.DownloadUrl);
 
     public static bool OpenPlatform(PlatformInfo info, bool clientInstalled)
-        => Open(clientInstalled && info.LauncherUri is not null ? info.LauncherUri : info.DownloadUrl);
+        => Open(clientInstalled ? info.LauncherUri ?? LauncherWarmup.Command(info) ?? info.DownloadUrl : info.DownloadUrl);
 
     /// <summary>Adresses de la page du jeu dans sa plateforme (lanceur d'abord, puis site web en secours).</summary>
     private static IEnumerable<string?> PlatformPages(Game g) => g.Platform switch

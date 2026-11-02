@@ -16,7 +16,7 @@ public partial class DetailView : OverlayBase
 
     public event Action<Game>? PlayRequested, FolderRequested, HideRequested, RefreshRequested, PlatformRequested, UninstallRequested;
     /// <summary>Mode magasin (jeu non possédé, depuis la Découverte) : page Steam ou recherche Instant Gaming.</summary>
-    public event Action<DiscoverGame>? SteamRequested, InstantGamingRequested;
+    public event Action<DiscoverGame>? SteamRequested, InstantGamingRequested, WishRequested;
     /// <summary>« Voir plus » : les succès de ce jeu dans l'onglet Succès.</summary>
     public event Action<AchievementGame>? AchievementsRequested;
 
@@ -470,7 +470,7 @@ public partial class DetailView : OverlayBase
     private void ShowStore(Game g, DiscoverGame store)
     {
         foreach (UIElement child in Actions.Children)
-            child.Visibility = child == SteamButton || child == InstantGamingButton ? Visibility.Visible : Visibility.Collapsed;
+            child.Visibility = child == SteamButton || child == InstantGamingButton || child == WishButton ? Visibility.Visible : Visibility.Collapsed;
         SteamButton.Margin = new Thickness(0, 0, 12, 0);
         InstantGamingButton.Margin = new Thickness(0);
 
@@ -629,6 +629,14 @@ public partial class DetailView : OverlayBase
         : _expanded ? "A:Valider|↕:Défiler|B:Retour"
         : "A:Valider|B:Retour";
 
+    /// <summary>Fiche magasin : état du bouton de la liste de souhaits.</summary>
+    public void SetWished(bool wished)
+    {
+        WishText.Text = wished ? "Dans ma liste" : "Ajouter à ma liste";
+        WishIcon.Text = wished ? "" : "";
+    }
+
+    private void Wish_Click(object sender, RoutedEventArgs e) { if (_store is { } s) WishRequested?.Invoke(s); }
     private void Steam_Click(object sender, RoutedEventArgs e) { if (_store is { } s) SteamRequested?.Invoke(s); }
     private void InstantGaming_Click(object sender, RoutedEventArgs e) { if (_store is { } s) InstantGamingRequested?.Invoke(s); }
 

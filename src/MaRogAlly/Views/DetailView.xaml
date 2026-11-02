@@ -137,6 +137,13 @@
                         <TextBlock Text="Voir les offres Instant Gaming" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Button>
+                <Button x:Name="WishButton" Style="{StaticResource PillButton}" Click="Wish_Click" Background="#33FFFFFF" Height="48" Padding="26,0" Margin="12,0,0,0"
+                        Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="WishIcon" Text="&#xEB51;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <TextBlock x:Name="WishText" Text="Ajouter à ma liste" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
                 <Grid x:Name="PlayBox" Margin="0,0,12,0">
                     <Button x:Name="PlayButton" Style="{StaticResource PillButton}" Click="Play_Click" Background="#33FFFFFF" Height="48" Padding="26,0" Margin="0">
                         <StackPanel Orientation="Horizontal">

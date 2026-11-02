@@ -37,6 +37,10 @@ public static class LauncherWarmup
                 return EpicExe();
             case Platform.Riot:
                 return RiotScanner.ClientServices();
+            case Platform.Rsi:
+                return RsiScanner.LauncherExe();
+            case Platform.Minecraft:
+                return MinecraftScanner.LauncherTarget();
             case Platform.Rockstar:
                 var rockstar = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Rockstar Games\Launcher\Launcher.exe");
                 return File.Exists(rockstar) ? rockstar : null;

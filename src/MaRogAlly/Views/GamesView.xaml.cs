@@ -112,8 +112,8 @@ public partial class GamesView : UserControl
         {
             if (_inBar)
                 return $"{(_lastChip?.Tag is null ? "A:Choisir les catégories" : "A:Filtrer")}|↓:Jeux|Y:Tri : {Filter.SortLabel}|X:Filtres : {Filter.Summary}";
-            var position = _visible.Count == 0 ? "Lettre" : $"{Selected?.Initial}  ·  {_index + 1} / {_visible.Count}";
-            return $"A:Détails|Y:Tri : {Filter.SortLabel}|X:Filtres : {Filter.Summary}|LT/RT:{position}";
+            var categories = CategoryHost.Visibility == Visibility.Visible ? "|LT/RT:Catégorie" : "";
+            return $"A:Détails|Y:Tri : {Filter.SortLabel}|X:Filtres : {Filter.Summary}{categories}";
         }
     }
 
@@ -389,41 +389,13 @@ public partial class GamesView : UserControl
                 SortRequested?.Invoke();
                 return true;
             case NavAction.PrevLetter:
-                JumpLetter(-1);
+                CycleCategory(-1);
                 return true;
             case NavAction.NextLetter:
-                JumpLetter(+1);
+                CycleCategory(+1);
                 return true;
         }
         return false;
-    }
-
-    /// <summary>Saute au premier jeu dont l'initiale change (dans l'ordre affiché).</summary>
-    private void JumpLetter(int direction)
-    {
-        if (_visible.Count == 0) return;
-        var current = _visible[_index].Initial;
-        var i = _index;
-        if (direction > 0)
-        {
-            while (i < _visible.Count && _visible[i].Initial == current) i++;
-            if (i >= _visible.Count) i = 0;
-        }
-        else
-        {
-            // Début du groupe courant, ou début du groupe précédent si on y est déjà.
-            while (i > 0 && _visible[i - 1].Initial == current) i--;
-            if (i == _index)
-            {
-                i = i == 0 ? _visible.Count - 1 : i - 1;
-                var prev = _visible[i].Initial;
-                while (i > 0 && _visible[i - 1].Initial == prev) i--;
-            }
-        }
-        Select(i);
-        LetterText.Text = _visible[i].Initial;
-        LetterBadge.BeginAnimation(OpacityProperty,
-            new System.Windows.Media.Animation.DoubleAnimation(1, 0, Anim.Ms(500)) { BeginTime = TimeSpan.FromMilliseconds(450) });
     }
 
 
@@ -467,6 +439,20 @@ public partial class GamesView : UserControl
             HintsChanged?.Invoke();
         };
         return chip;
+    }
+
+    /// <summary>LT / RT : catégorie précédente ou suivante ; après la dernière (ou avant la première), tous les jeux.</summary>
+    private void CycleCategory(int direction)
+    {
+        if (CategoryHost.Visibility != Visibility.Visible) return;
+        var chips = CategoryBar.Children.OfType<Button>().Where(c => c.Tag is string).ToList();
+        if (chips.Count == 0) return;
+        var current = chips.FindIndex(c => (string)c.Tag == Filter.Category);
+        // Tous les jeux occupent une place de plus dans le cycle, juste avant la première catégorie.
+        var next = (current + 1 + direction + chips.Count + 1) % (chips.Count + 1) - 1;
+        Filter.Category = next < 0 ? null : (string)chips[next].Tag;
+        Refresh(toTop: true);
+        if (next >= 0) chips[next].BringIntoView();
     }
 
     private void UpdateCategoryBar()

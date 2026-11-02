@@ -38,6 +38,9 @@ public sealed class AppSettings
     /// <summary>Catégories affichées en boutons au-dessus de la Bibliothèque.</summary>
     public List<string> LibraryCategories { get; set; } = [.. GameCategories.Defaults];
 
+    /// <summary>Applications favorites du menu Windows maison (identifiants, dans l'ordre d'ajout).</summary>
+    public List<string> FavoriteApps { get; set; } = [];
+
     /// <summary>Applications lancées depuis le menu Windows maison (identifiant, date).</summary>
     public Dictionary<string, DateTime> RecentApps { get; set; } = [];
 

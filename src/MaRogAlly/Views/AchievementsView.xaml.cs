@@ -59,6 +59,7 @@ public partial class AchievementsView : UserControl
         _itemsHighlight = new SlideHighlight(ItemsHighlight, ItemsHost);
         _showTimer.Tick += (_, _) => { _showTimer.Stop(); BuildItems(); };
         SizeChanged += (_, _) => ApplyCompact(ActualHeight < 760);
+        ItemsScroll.ScrollChanged += (_, _) => LoadVisibleIcons();
         UpdateControls();
         ShowEmpty("Chargement des succès…");
     }
@@ -283,8 +284,16 @@ public partial class AchievementsView : UserControl
 
     // ---------------- Succès du jeu ----------------
 
+    private const int ItemsBatch = 24;
+    /// <summary>Marge sous la zone visible où les icônes se chargent déjà.</summary>
+    private const double IconsAhead = 300;
+    private int _itemsBuild;
+    private readonly List<(Button Row, Action Load)> _pendingIcons = [];
+
     private void BuildItems()
     {
+        var build = ++_itemsBuild; // une construction en cours pour un autre jeu s'arrête
+        _pendingIcons.Clear();
         Items.Children.Clear();
         _itemsHighlight.Hide();
         ItemsScroll.ScrollToVerticalOffset(0);
@@ -318,8 +327,35 @@ public partial class AchievementsView : UserControl
             return;
         }
         EmptyText.Visibility = Visibility.Collapsed;
-        foreach (var a in items) Items.Children.Add(BuildItemRow(a));
+        // Un jeu peut avoir des centaines de succès : les premières lignes tout de suite, la suite par petits lots.
+        foreach (var a in items.Take(ItemsBatch)) Items.Children.Add(BuildItemRow(a));
         Anim.Enter(Items, 0, 14, 280);
+        Dispatcher.BeginInvoke(LoadVisibleIcons, DispatcherPriority.Loaded);
+        if (items.Count > ItemsBatch) AppendItems(items, build);
+    }
+
+    private async void AppendItems(List<Achievement> items, int build)
+    {
+        for (var i = ItemsBatch; i < items.Count; i += ItemsBatch)
+        {
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            if (build != _itemsBuild) return;
+            foreach (var a in items.Skip(i).Take(ItemsBatch)) Items.Children.Add(BuildItemRow(a));
+        }
+        await Dispatcher.Yield(DispatcherPriority.Loaded);
+        if (build == _itemsBuild) LoadVisibleIcons();
+    }
+
+    /// <summary>Lance le chargement des icônes qui arrivent à l'écran (les autres attendent le défilement).</summary>
+    private void LoadVisibleIcons()
+    {
+        for (var i = _pendingIcons.Count - 1; i >= 0; i--)
+        {
+            var (row, load) = _pendingIcons[i];
+            if (row.ActualHeight <= 0 || row.TranslatePoint(new Point(0, 0), ItemsScroll).Y > ItemsScroll.ViewportHeight + IconsAhead) continue;
+            _pendingIcons.RemoveAt(i);
+            load();
+        }
     }
 
     /// <summary>Choix des succès affichés, avec leur nombre : le segment actif est plein.</summary>
@@ -381,7 +417,6 @@ public partial class AchievementsView : UserControl
                 Child = new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 10, Foreground = (Brush)FindResource("TextSecondary"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             });
         grid.Children.Add(frame);
-        LoadIcon(icon, a.Unlocked ? a.Icon : a.IconLocked ?? a.Icon, a.Icon);
 
         var secret = a.Hidden && !a.Unlocked;
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 18, 0) };
@@ -427,6 +462,7 @@ public partial class AchievementsView : UserControl
         grid.Children.Add(right);
 
         var row = new Button { Content = grid, Style = (Style)FindResource("RowButton"), Padding = new Thickness(14, 10, 18, 10) };
+        _pendingIcons.Add((row, () => LoadIcon(icon, a.Unlocked ? a.Icon : a.IconLocked ?? a.Icon, a.Icon)));
         RowOptions.SetFloating(row, true);
         row.GotKeyboardFocus += (_, _) =>
         {

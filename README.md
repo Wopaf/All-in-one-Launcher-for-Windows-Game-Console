@@ -22,15 +22,15 @@ L'exécutable n'est pas signé : Windows peut afficher un avertissement au premi
 | Vue (⧉) | F2 | Barre de gauche : applications ouvertes et menu Windows |
 | Vue + Menu | | Revenir sur l'application depuis une autre fenêtre |
 | LB / RB | Maj+Tab / Tab | Onglet précédent / suivant |
-| LT / RT | Page préc. / suiv. | Lettre précédente / suivante |
+| LT / RT | Page préc. / suiv. | Bibliothèque : catégorie précédente / suivante |
 
 ## Données
 
-`%LOCALAPPDATA%\MaRogAlly\` : `settings.json` (clés d'API, jeux ajoutés à la main dans `ManualGames`), `library.json`, `userdata.json` (jeux masqués, dernières parties), caches `metadata\`, `images\`, `tags.json`, journal `log.txt`. Rien de tout cela n'est envoyé ailleurs.
+`%LOCALAPPDATA%\MaRogAlly\` : `settings.json` (clés d'API, jeux ajoutés à la main dans `ManualGames`), `library.json`, `userdata.json` (jeux masqués, dernières parties), `wishlist.json` (liste de souhaits), caches `metadata\`, `images\`, `tags.json`, journal `log.txt`. Rien de tout cela n'est envoyé ailleurs.
 
 ## Sources
 
-- Jeux installés : Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net, Xbox/Microsoft Store, Amazon Games, Riot, itch.io, Rockstar, Ankama, plus les jeux ajoutés à la main.
+- Jeux installés : Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net, Xbox/Microsoft Store, Amazon Games, Riot, itch.io, Rockstar, Ankama, Minecraft Launcher, RSI Launcher, plus les jeux ajoutés à la main.
 - Jeux possédés non installés : cache du lanceur Epic, base GOG Galaxy (et plateformes qui y sont connectées), Amazon, itch, API Steam (clé facultative).
 - Fiches et catégories : magasin Steam (sans clé, en français), IGDB (clés Twitch), SteamGridDB (clé).
 

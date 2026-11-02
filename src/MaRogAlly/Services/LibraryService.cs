@@ -23,7 +23,7 @@ public sealed class LibraryService(AppSettings settings, HttpClient http)
     [
         new SteamScanner(), new EpicScanner(), new GogScanner(), new EaScanner(), new UbisoftScanner(),
         new BattleNetScanner(), new XboxScanner(), new AmazonScanner(), new RiotScanner(), new ItchScanner(),
-        new RockstarScanner(), new AnkamaScanner(), new ManualScanner(),
+        new RockstarScanner(), new AnkamaScanner(), new MinecraftScanner(), new RsiScanner(), new ManualScanner(),
     ];
 
     private Dictionary<string, GameUserData> _userData = Json.Load<Dictionary<string, GameUserData>>(AppPaths.UserData) ?? [];

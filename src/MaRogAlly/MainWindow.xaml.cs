@@ -42,6 +42,7 @@ public partial class MainWindow : Window
     private readonly GameSearch _search;
     private readonly TagService _tags;
     private readonly AppUpdater _appUpdater;
+    private readonly WishlistService _wishlist = new();
     private CancellationTokenSource? _searchCts;
     private readonly PlatformsView _platforms = new();
     private readonly AchievementsView _achievementsView = new();
@@ -218,7 +219,7 @@ public partial class MainWindow : Window
         var renderArg = Array.IndexOf(args, "--render");
         if (renderArg >= 0 && renderArg + 1 < args.Length)
         {
-            var render = new DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+            var render = new DispatcherTimer { Interval = TimeSpan.FromSeconds(args.Contains("--dock") ? 30 : 15) };
             render.Tick += (_, _) =>
             {
                 render.Stop();
@@ -242,6 +243,11 @@ public partial class MainWindow : Window
                 await Task.Delay(500);
                 if (button == "enter") Dock.Enter();
                 else if (button is "left" or "right") OnNav(button == "left" ? NavAction.Left : NavAction.Right);
+                else if (button == "wait") await Task.Delay(3000);
+                else if (button == "wishlist") await ShowWishlistAsync();
+                else if (button == "lt" || button == "rt") OnNav(button == "lt" ? NavAction.PrevLetter : NavAction.NextLetter);
+                else if (button == "down") OnNav(NavAction.Down);
+                else if (button == "y") OnNav(NavAction.Secondary);
                 else if (button == "windows") ToggleDockPanel(WindowsMenu, OpenWindowsMenu);
                 else if (button == "background") ToggleDockPanel(BackgroundApps, OpenBackgroundApps);
                 else ToggleDockPanel(DockOptions, OpenDockOptions);
@@ -805,6 +811,8 @@ public partial class MainWindow : Window
             Toast("", OpenSteamStore(g) ? "Ouverture de la page Steam…" : "Impossible d'ouvrir Steam");
         };
         detail.InstantGamingRequested += OpenInstantGaming;
+        detail.SetWished(_wishlist.Contains(d.WishKey));
+        detail.WishRequested += g => detail.SetWished(ToggleWish(WishOf(g), g.Name));
         OpenOverlay(detail);
         SetHero(d.HeroPath ?? d.CoverPath);
         if (known is null)
@@ -1131,6 +1139,18 @@ public partial class MainWindow : Window
             else OpenStoreDetail(d);
         };
         _explore.OpenTrends += OpenDiscover;
+        _explore.IsWished = _wishlist.Contains;
+        _explore.WishlistRequested += () => _ = ShowWishlistAsync();
+        _explore.WishNewGame += d => ToggleWish(WishOf(d), d.Name);
+        _explore.WishHit += h =>
+        {
+            if (h.Owned is not null)
+            {
+                Toast("", "Ce jeu est déjà dans ta bibliothèque");
+                return;
+            }
+            ToggleWish(WishOf(h), h.Title);
+        };
         _explore.OpenFree += g => OpenStorePrompt(g.Title, PlatformInfo.Of(Platform.Epic),
             () => GameLauncher.Open(_epicInstalled ? g.LauncherUrl : g.WebUrl));
 
@@ -1507,7 +1527,7 @@ public partial class MainWindow : Window
         _achievementsView.ShowGame(game);
     }
 
-    /// <summary>Bouton + : toutes les catégories et tous les tags, on coche les 8 à afficher.</summary>
+    /// <summary>Bouton + : toutes les catégories et tous les tags, on coche ceux à afficher.</summary>
     private void OpenCategoryPicker(GamesView view)
     {
         var chosen = _settings.LibraryCategories;
@@ -1896,15 +1916,28 @@ public partial class MainWindow : Window
         OpenOverlay(panel);
     }
 
+    private (List<InstalledApp>? Apps, List<PlatformInfo> Launchers, List<InstalledApp> Recent) _windowsMenuData = (null, [], []);
+
     /// <summary>Menu Windows maison : accès rapides, puis recherche et liste de toutes les applications.</summary>
     private void OpenWindowsMenu()
     {
         var panel = DockPanelOf(WindowsMenu, bottom: false);
-        List<InstalledApp>? apps = null;
-        List<PlatformInfo> launchers = [];
-        List<InstalledApp> recent = [];
+        // Dernière liste connue : affichée tout de suite, la lecture (quelques secondes) se fait derrière.
+        var (apps, launchers, recent) = _windowsMenuData;
         var search = "";
         var browser = WindowsShell.DefaultBrowser();
+        panel.SetHints("A:Ouvrir|Y:Favori|B:Fermer");
+        // Y (ou clic droit) sur une application : la marque en favori, ou la retire.
+        panel.SecondaryAction = tag =>
+        {
+            if (tag is not InstalledApp app) return;
+            var favorite = !_settings.FavoriteApps.Remove(app.Id);
+            if (favorite) _settings.FavoriteApps.Add(app.Id);
+            _settings.Save();
+            Toast("", favorite ? $"{app.Name} ajouté aux favoris" : $"{app.Name} retiré des favoris");
+            Build();
+            panel.FocusTag(app);
+        };
 
         void Quick(string glyph, string label, Action run) => panel.AddApp(label, null, () =>
         {
@@ -1940,14 +1973,28 @@ public partial class MainWindow : Window
                 Quick("", "Gestionnaire des tâches", () => GameLauncher.Open("taskmgr.exe"));
                 Quick("", "Menu Démarrer de Windows", WindowsShell.ShowStartMenu);
             }
+            // Favoris, dans l'ordre d'ajout (une application désinstallée n'apparaît plus).
+            var favorites = search.Length == 0 && apps is not null
+                ? _settings.FavoriteApps.Select(id => apps.FirstOrDefault(a => a.Id == id)).OfType<InstalledApp>().ToList()
+                : [];
+            if (favorites.Count > 0)
+            {
+                panel.AddHeader("Favoris");
+                panel.AddIconGrid(4, favorites.Select(AppCell));
+            }
             if (search.Length == 0 && launchers.Count > 0)
             {
                 panel.AddHeader("Lanceurs de jeux");
-                panel.AddIconGrid(4, launchers.Select(l => (l.Logo, l.Name, (Action)(() =>
+                panel.AddIconGrid(4, launchers.Select(l => ((string?)l.Logo, (string?)null, l.Name, (Action)(() =>
                 {
                     panel.Close();
-                    if (!GameLauncher.Open(l.LauncherUri ?? LauncherWarmup.Command(l) ?? "")) Toast("", $"Impossible d'ouvrir {l.Name}");
-                }))));
+                    // Lanceur connu de l'application, sinon son entrée dans la liste de Windows.
+                    var target = l.LauncherUri ?? LauncherWarmup.Command(l);
+                    var opened = target is not null
+                        ? GameLauncher.Open(target)
+                        : apps?.FirstOrDefault(a => WindowsShell.LauncherPlatform(a.Name) == l.Id) is { } entry && WindowsShell.LaunchApp(entry);
+                    if (!opened) Toast("", $"Impossible d'ouvrir {l.Name}");
+                }), (object?)null)));
             }
             if (search.Length == 0 && recent.Count > 0)
             {
@@ -1964,7 +2011,7 @@ public partial class MainWindow : Window
             foreach (var app in apps.Where(a => words.All(Text.Normalize(a.Name).Contains))) AddInstalledApp(app);
         }
 
-        void AddInstalledApp(InstalledApp app) => panel.AddApp(app.Name, app.IconSource, () =>
+        void RunApp(InstalledApp app)
         {
             panel.Close();
             if (!WindowsShell.LaunchApp(app))
@@ -1974,7 +2021,13 @@ public partial class MainWindow : Window
             }
             _settings.RecentApps[app.Id] = DateTime.Now;
             _settings.Save();
-        });
+        }
+
+        void AddInstalledApp(InstalledApp app)
+            => panel.AddApp(app.Name, app.IconSource, () => RunApp(app), tag: app, star: _settings.FavoriteApps.Contains(app.Id));
+
+        (string? Logo, string? IconSource, string Label, Action OnClick, object? Tag) AppCell(InstalledApp app)
+            => (null, app.IconSource, app.Name, () => RunApp(app), app);
 
         Build();
         OpenOverlay(panel);
@@ -1982,19 +2035,29 @@ public partial class MainWindow : Window
 
         async void LoadApps()
         {
-            apps = await WindowsShell.ListAppsAsync();
-            var loaded = apps;
-            (launchers, recent) = await Task.Run(() =>
+            var loaded = await WindowsShell.ListAppsAsync();
+            var fresh = await Task.Run(() =>
             {
+                // Plateformes prises en charge par l'application et installées : détectées, ou présentes dans la liste de Windows.
+                var detected = LibraryService.InstalledLaunchers();
+                var platforms = PlatformInfo.All.Where(p => p.Id != Platform.Manual
+                    && (detected.Any(d => d.Id == p.Id) || loaded.Any(a => WindowsShell.LauncherPlatform(a.Name) == p.Id))).ToList();
+
                 // Historique de Windows, complété par ce qui a été lancé depuis ce menu.
                 var history = WindowsShell.WindowsLaunchHistory();
                 foreach (var (id, when) in _settings.RecentApps)
                     if (!history.TryGetValue(id, out var known) || when > known) history[id] = when;
                 var latest = loaded.Where(a => history.ContainsKey(a.Id) && !WindowsShell.IsGameLauncher(a.Name))
                     .OrderByDescending(a => history[a.Id]).Take(5).ToList();
-                return (LibraryService.InstalledLaunchers(), latest);
+                return ((List<InstalledApp>?)loaded, platforms, latest);
             });
-            if (_overlays.LastOrDefault() != panel) return;
+            var previous = _windowsMenuData;
+            _windowsMenuData = fresh;
+            // Rien de neuf : on ne touche pas à la liste, la sélection reste où elle est.
+            var same = previous.Apps is not null && previous.Apps.SequenceEqual(fresh.Item1!) && previous.Launchers.SequenceEqual(fresh.platforms)
+                       && previous.Recent.SequenceEqual(fresh.latest);
+            if (same || _overlays.LastOrDefault() != panel) return;
+            (apps, launchers, recent) = fresh;
             Build();
             FocusNav.FocusFirst(panel);
         }
@@ -2130,16 +2193,7 @@ public partial class MainWindow : Window
             var steam = (await steamTask).Where(d => !ownedSteam.Contains(d.AppId)).ToList();
             if (cts.IsCancellationRequested) return;
             DiscoverService.ApplyCachedImages(steam);
-            var steamHits = steam.Select(d => new SearchHit
-            {
-                Title = d.Name,
-                Platform = PlatformInfo.Of(Platform.Steam),
-                Steam = d,
-                Price = d.PriceText is { } p ? (d.DiscountText is { } off ? $"{off}  {p}" : p) : d.ComingSoon ? "Bientôt" : null,
-                IsDiscounted = d.IsDiscounted,
-                CoverPath = d.CoverPath,
-                HeroPath = d.HeroPath,
-            }).ToList();
+            var steamHits = steam.Select(SteamHit).ToList();
             hits.AddRange(steamHits);
             Show(done: false);
 
@@ -2167,6 +2221,79 @@ public partial class MainWindow : Window
         {
             if (_searchCts == cts) EndActivity("search");
         }
+    }
+
+    private static SearchHit SteamHit(DiscoverGame d) => new()
+    {
+        Title = d.Name,
+        Platform = PlatformInfo.Of(Platform.Steam),
+        Steam = d,
+        Price = d.PriceText is { } p ? (d.DiscountText is { } off ? $"{off}  {p}" : p) : d.ComingSoon ? "Bientôt" : null,
+        IsDiscounted = d.IsDiscounted,
+        CoverPath = d.CoverPath,
+        HeroPath = d.HeroPath,
+    };
+
+    // ---- Liste de souhaits (onglet Découverte) ----
+
+    private static WishItem WishOf(DiscoverGame d) => new()
+    {
+        Key = d.WishKey, Title = d.Name, Platform = Platform.Steam, Steam = d, CoverPath = d.CoverPath, HeroPath = d.HeroPath,
+    };
+
+    private static WishItem WishOf(SearchHit h) => new()
+    {
+        Key = h.WishKey ?? h.Title, Title = h.Title, Platform = h.Platform.Id, Steam = h.Steam, StoreUrl = h.StoreUrl,
+        Price = h.Price, IsDiscounted = h.IsDiscounted, CoverPath = h.CoverPath, HeroPath = h.HeroPath,
+    };
+
+    /// <summary>Ajoute ou retire ; vrai si le jeu est maintenant dans la liste.</summary>
+    private bool ToggleWish(WishItem item, string title)
+    {
+        var added = _wishlist.Toggle(item);
+        Toast("", added ? $"{title} ajouté à ta liste de souhaits" : $"{title} retiré de ta liste de souhaits");
+        if (_explore.WishlistShown) _explore.ShowWishlist(WishlistHits(), focus: false);
+        _explore.RefreshWishMarks();
+        return added;
+    }
+
+    /// <summary>Un jeu acheté entre-temps est signalé « Possédé » et ouvre sa fiche de la bibliothèque.</summary>
+    private List<SearchHit> WishlistHits() => _wishlist.Items.Select(i =>
+    {
+        var owned = _games.FirstOrDefault(g => (i.AppId is int id && (g.SteamAppId == id || g.Meta?.SteamAppId == id)) || Text.Normalize(g.Title) == Text.Normalize(i.Title));
+        if (i.Steam is { } steam && owned is null)
+        {
+            var hit = SteamHit(steam);
+            hit.CoverPath ??= i.CoverPath;
+            hit.HeroPath ??= i.HeroPath;
+            return hit;
+        }
+        return new SearchHit
+        {
+            Title = i.Title, Platform = PlatformInfo.Of(i.Platform), Owned = owned, Steam = i.Steam, StoreUrl = i.StoreUrl,
+            Price = i.Price, IsDiscounted = i.IsDiscounted, CoverPath = owned?.CoverPath ?? i.CoverPath, HeroPath = owned?.HeroPath ?? i.HeroPath,
+        };
+    }).ToList();
+
+    /// <summary>Affiche la liste tout de suite, puis met à jour les prix et les jaquettes depuis le magasin Steam.</summary>
+    private async Task ShowWishlistAsync()
+    {
+        _explore.ShowWishlist(WishlistHits(), focus: true);
+        var items = _wishlist.Items.Where(i => i.AppId is not null).ToList();
+        if (items.Count == 0) return;
+        var fresh = await _discover.DetailsOfAsync(items.Select(i => i.AppId!.Value).ToList(), CancellationToken.None);
+        if (fresh.Count == 0) return;
+        DiscoverService.ApplyCachedImages(fresh.Values);
+        await _discover.LoadImagesAsync(fresh.Values, CancellationToken.None);
+        foreach (var item in items)
+        {
+            if (!fresh.TryGetValue(item.AppId!.Value, out var game)) continue;
+            item.Steam = game;
+            item.CoverPath = game.CoverPath ?? item.CoverPath;
+            item.HeroPath = game.HeroPath ?? item.HeroPath;
+        }
+        _wishlist.Save();
+        if (_explore.WishlistShown) _explore.ShowWishlist(WishlistHits(), focus: false);
     }
 
     private void OpenSearchHit(SearchHit h)

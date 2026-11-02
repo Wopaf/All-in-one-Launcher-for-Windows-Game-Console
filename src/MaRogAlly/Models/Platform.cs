@@ -16,6 +16,8 @@ public enum Platform
     Itch,
     Rockstar,
     Ankama,
+    Minecraft,
+    Rsi,
     Manual,
 }
 
@@ -43,6 +45,8 @@ public sealed record PlatformInfo(
         new(Platform.Itch,      "itch.io",           "ITCH",   "#FA5C5C", "La scène indépendante",                   "https://itch.io/app", "itch://library"),
         new(Platform.Rockstar,  "Rockstar Games",    "R*",     "#FCAF17", "GTA, Red Dead Redemption",                "https://socialclub.rockstargames.com/rockstar-games-launcher", null),
         new(Platform.Ankama,    "Ankama Games",      "ANKAMA", "#F28C28", "Dofus, Wakfu, Waven…",                    "https://www.ankama.com/fr/launcher", "zaap://"),
+        new(Platform.Minecraft, "Minecraft Launcher","MC",     "#62B47A", "Le lanceur de Minecraft",                 "https://www.minecraft.net/download", null),
+        new(Platform.Rsi,       "RSI Launcher",      "RSI",    "#6FB8E6", "Star Citizen et Squadron 42",             "https://robertsspaceindustries.com/download", null),
         new(Platform.Manual,    "Ajoutés à la main", "PERSO",  "#9AA4B2", "Émulateurs et jeux sans lanceur",         "", null),
     ];
 
@@ -63,6 +67,8 @@ public sealed record PlatformInfo(
         [Platform.Itch] = ["itch"],
         [Platform.Rockstar] = ["RockstarService", "LauncherPatcher"],
         [Platform.Ankama] = ["Ankama Launcher"],
+        [Platform.Minecraft] = ["MinecraftLauncher", "Minecraft"],
+        [Platform.Rsi] = ["RSI Launcher"],
     };
 
     public IReadOnlyList<string> LauncherProcessNames => LauncherProcesses.GetValueOrDefault(Id, []);

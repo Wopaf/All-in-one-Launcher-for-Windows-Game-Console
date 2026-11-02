@@ -43,6 +43,7 @@ public partial class ExploreView : UserControl
 
     /// <summary>Nombre de jeux affichés dans la section Nouveautés (la liste complète reste sur son bouton).</summary>
     private const int NewGamesShown = 8;
+    private const string WishlistTile = "wishlist";
     private const string SearchPlaceholder = "Rechercher un jeu sur Steam et GOG…";
 
     /// <summary>A sur la barre : ouvrir le clavier.</summary>
@@ -54,6 +55,11 @@ public partial class ExploreView : UserControl
     public event Action<FreeGame>? OpenFree;
     /// <summary>Tuile de tendances : ouvre la page des tendances sur cette liste.</summary>
     public event Action<string>? OpenTrends;
+    /// <summary>Tuile « Ma liste de souhaits ».</summary>
+    public event Action? WishlistRequested;
+    /// <summary>Y sur un jeu de la section Nouveautés, ou sur un résultat.</summary>
+    public event Action<DiscoverGame>? WishNewGame;
+    public event Action<SearchHit>? WishHit;
     public event Action<string?>? HeroRequested;
 
     private readonly List<DiscoverTile> _tiles =
@@ -62,10 +68,16 @@ public partial class ExploreView : UserControl
         new("new", "Nouveautés", "Sorties récentes populaires", Color.FromRgb(0x2D, 0x8C, 0xFF)),
         new("sellers", "Meilleures ventes", "Les plus achetés sur Steam", Color.FromRgb(0x22, 0xB0, 0x63)),
         new("soon", "Prochainement", "Les sorties les plus attendues", Color.FromRgb(0xA6, 0x5C, 0xFF)),
+        new(WishlistTile, "Ma liste de souhaits", "Les jeux que tu veux garder à l'œil", Color.FromRgb(0xFF, 0x5C, 0x8A)),
     ];
     private List<DiscoverGame> _newGames = [];
     private List<FreeGame> _free = [];
     private string _query = "";
+    /// <summary>Les résultats affichés sont la liste de souhaits.</summary>
+    private bool _wishlistShown;
+
+    /// <summary>Dit si un jeu est dans la liste de souhaits (pour les cœurs sur les jaquettes).</summary>
+    public Func<string, bool>? IsWished { get; set; }
     private object? _selected;
     private Button? _lastFocused;
 
@@ -108,6 +120,7 @@ public partial class ExploreView : UserControl
         var hadFocus = NewGames.IsKeyboardFocusWithin;
         if (_selected is DiscoverGame) Select(null);
         _newGames = sections.FirstOrDefault(s => s.Key == "new")?.Games.Take(NewGamesShown).ToList() ?? [];
+        RefreshWishMarks();
         NewGames.ItemsSource = _newGames;
         if (_query.Length == 0) ShowNewSection();
         if (hadFocus && _newGames.Count > 0) FocusIn(NewGames, 0);
@@ -133,9 +146,11 @@ public partial class ExploreView : UserControl
     public void BeginSearch(string query)
     {
         _query = query.Trim();
+        _wishlistShown = false;
         QueryText.Text = _query.Length > 0 ? _query : SearchPlaceholder;
         QueryText.Foreground = (Brush)FindResource(_query.Length > 0 ? "TextPrimary" : "TextMuted");
         ResetButton.IsEnabled = _query.Length > 0;
+        RefreshWishMarks();
         Hits.ItemsSource = null;
         if (_query.Length == 0)
         {
@@ -154,6 +169,7 @@ public partial class ExploreView : UserControl
         var focusedIndex = Hits.ItemsSource is List<SearchHit> old && _selected is SearchHit sel ? old.IndexOf(sel) : -1;
         var hadFocus = Hits.IsKeyboardFocusWithin;
         Hits.ItemsSource = hits;
+        RefreshWishMarks();
         HitsScroll.ScrollToHorizontalOffset(0);
         var counts = hits.GroupBy(h => h.Owned is not null ? "Bibliothèque" : h.Platform.Name).Select(g => $"{g.Key} {g.Count()}");
         ResultsCount.Text = hits.Count == 0 ? "" : string.Join("  ·  ", counts);
@@ -168,6 +184,45 @@ public partial class ExploreView : UserControl
         ShowHit(hits[Math.Clamp(focusedIndex, 0, hits.Count - 1)]);
         if (hadFocus) FocusIn(Hits, Math.Max(0, focusedIndex));
     }
+
+    /// <summary>Remet à jour les cœurs des jaquettes affichées.</summary>
+    public void RefreshWishMarks()
+    {
+        if (IsWished is null) return;
+        foreach (var game in _newGames) game.IsWished = IsWished(game.WishKey);
+        if (Hits.ItemsSource is List<SearchHit> hits)
+            foreach (var hit in hits) hit.IsWished = hit.WishKey is { } key && IsWished(key);
+    }
+
+    /// <summary>Affiche la liste de souhaits à la place des nouveautés ; la sélection y entre si on le demande.</summary>
+    public void ShowWishlist(List<SearchHit> hits, bool focus)
+    {
+        var keepIndex = Hits.ItemsSource is List<SearchHit> old && _selected is SearchHit sel ? old.IndexOf(sel) : 0;
+        var hadFocus = Hits.IsKeyboardFocusWithin;
+        _wishlistShown = true;
+        _query = "";
+        QueryText.Text = SearchPlaceholder;
+        QueryText.Foreground = (Brush)FindResource("TextMuted");
+        ResetButton.IsEnabled = true;
+        Hits.ItemsSource = hits;
+        RefreshWishMarks();
+        ResultsLabel.Text = "MA LISTE DE SOUHAITS";
+        ResultsCount.Text = hits.Count == 0 ? "" : $"{hits.Count} jeu{(hits.Count > 1 ? "x" : "")}";
+        if (hits.Count == 0)
+        {
+            Select(null);
+            ShowMessage("Ta liste de souhaits est vide", "Appuie sur Y sur une jaquette de cette page, ou utilise le bouton de la fiche d'un jeu, pour l'y ajouter.");
+            if (hadFocus) FocusNav.Focus(SearchButton);
+            return;
+        }
+        EmptyState.Visibility = NewScroll.Visibility = Visibility.Collapsed;
+        HitsScroll.Visibility = HitInfo.Visibility = Visibility.Visible;
+        var index = Math.Clamp(keepIndex, 0, hits.Count - 1);
+        ShowHit(hits[index]);
+        if (focus || hadFocus) FocusIn(Hits, index);
+    }
+
+    public bool WishlistShown => _wishlistShown;
 
     /// <summary>Après la recherche : la sélection passe sur le premier résultat.</summary>
     public void FocusResults()
@@ -282,7 +337,9 @@ public partial class ExploreView : UserControl
 
     private void Tile_Click(object sender, RoutedEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is DiscoverTile t) OpenTrends?.Invoke(t.Key);
+        if ((sender as FrameworkElement)?.DataContext is not DiscoverTile t) return;
+        if (t.Key == WishlistTile) WishlistRequested?.Invoke();
+        else OpenTrends?.Invoke(t.Key);
     }
 
     private void Search_Focus(object sender, KeyboardFocusChangedEventArgs e)
@@ -312,7 +369,11 @@ public partial class ExploreView : UserControl
     public string Hints => Keyboard.FocusedElement == ResetButton ? "A:Effacer la recherche"
         : Keyboard.FocusedElement == SearchButton
         ? (_query.Length > 0 ? "A:Modifier la recherche|X:Effacer" : "A:Rechercher")
-        : _selected is SearchHit ? "A:Ouvrir|X:Nouvelle recherche" : "A:Ouvrir|X:Rechercher";
+        : _wishlistShown && _selected is SearchHit ? "A:Ouvrir|Y:Retirer|B:Retour"
+        : _selected is SearchHit { WishKey: not null } ? "A:Ouvrir|Y:Souhait|X:Nouvelle recherche"
+        : _selected is SearchHit ? "A:Ouvrir|X:Nouvelle recherche"
+        : _selected is DiscoverGame ? "A:Ouvrir|Y:Souhait|X:Rechercher"
+        : "A:Ouvrir|X:Rechercher";
 
     public event Action? HintsChanged;
 
@@ -408,6 +469,13 @@ public partial class ExploreView : UserControl
                 return MoveFocus(action) || action != NavAction.Left;
             case NavAction.Accept:
                 FocusNav.Activate();
+                return true;
+            case NavAction.Secondary:
+                if (_selected is SearchHit hit) WishHit?.Invoke(hit);
+                else if (_selected is DiscoverGame game && game.Owned is null) WishNewGame?.Invoke(game);
+                return true;
+            case NavAction.Back when _wishlistShown:
+                Reset_Click(this, new RoutedEventArgs());
                 return true;
             case NavAction.Option:
                 // Sur la barre avec une recherche : X l'efface ; ailleurs, X relance une recherche.

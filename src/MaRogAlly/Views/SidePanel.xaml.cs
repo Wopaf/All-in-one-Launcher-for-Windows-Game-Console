@@ -100,7 +100,7 @@ public partial class SidePanel : OverlayBase
     }
 
     /// <summary>Ligne d'application : son icône Windows (chargée après coup), son nom ; ou un glyphe si elle n'a pas d'icône.</summary>
-    public Button AddApp(string label, string? iconSource, Action onClick, string? glyph = null)
+    public Button AddApp(string label, string? iconSource, Action onClick, string? glyph = null, object? tag = null, bool star = false)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         if (glyph is not null)
@@ -112,10 +112,13 @@ public partial class SidePanel : OverlayBase
             row.Children.Add(icon);
             if (iconSource is not null) LoadIcon(icon, iconSource);
         }
-        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 320 });
+        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 300 });
+        if (star)
+            row.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 12, Foreground = (Brush)FindResource("Gold"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) });
 
         var b = new Button { Content = row, Style = (Style)FindResource("RowButton") };
         Track(b);
+        Tagged(b, tag);
         b.Click += (_, _) => onClick();
         Items.Children.Add(b);
         return b;
@@ -123,18 +126,54 @@ public partial class SidePanel : OverlayBase
 
     private bool _hasGrid;
 
-    /// <summary>Grille d'icônes (logo et nom dessous) ; chaque case se sélectionne comme une ligne.</summary>
-    public void AddIconGrid(int columns, IEnumerable<(string Logo, string Label, Action OnClick)> items)
+    /// <summary>Action sur l'élément sélectionné (Y, ou clic droit) : reçoit le Tag de sa ligne ou de sa case.</summary>
+    public Action<object>? SecondaryAction { get; set; }
+
+    private void Tagged(ButtonBase b, object? tag)
+    {
+        if (tag is null) return;
+        b.Tag = tag;
+        b.MouseRightButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            SecondaryAction?.Invoke(tag);
+        };
+    }
+
+    /// <summary>Sélectionne la dernière ligne portant ce Tag (celle de la liste, plutôt que sa case en haut), sinon la première.</summary>
+    public void FocusTag(object tag) => Dispatcher.BeginInvoke(() =>
+    {
+        var buttons = new List<ButtonBase>();
+        foreach (var child in Items.Children)
+        {
+            if (child is ButtonBase row) buttons.Add(row);
+            else if (child is UniformGrid g) buttons.AddRange(g.Children.OfType<ButtonBase>());
+        }
+        if (buttons.LastOrDefault(b => tag.Equals(b.Tag)) is { } target) FocusNav.Focus(target);
+        else FocusNav.FocusFirst(this);
+    }, System.Windows.Threading.DispatcherPriority.Loaded);
+
+    /// <summary>Grille d'icônes : logo vectoriel ou icône Windows, et le nom dessous ; chaque case se sélectionne comme une ligne.</summary>
+    public void AddIconGrid(int columns, IEnumerable<(string? Logo, string? IconSource, string Label, Action OnClick, object? Tag)> items)
     {
         var grid = new UniformGrid { Columns = columns };
-        foreach (var (logo, label, onClick) in items)
+        foreach (var (logo, iconSource, label, onClick, tag) in items)
         {
             var content = new StackPanel { Width = 86 };
-            content.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse(logo), Fill = Brushes.White, Stretch = Stretch.Uniform, Width = 26, Height = 26, HorizontalAlignment = HorizontalAlignment.Center });
+            if (logo is not null)
+                content.Children.Add(new System.Windows.Shapes.Path { Data = Geometry.Parse(logo), Fill = Brushes.White, Stretch = Stretch.Uniform, Width = 26, Height = 26, HorizontalAlignment = HorizontalAlignment.Center });
+            else
+            {
+                var icon = new Image { Width = 26, Height = 26, HorizontalAlignment = HorizontalAlignment.Center };
+                RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
+                content.Children.Add(icon);
+                if (iconSource is not null) LoadIcon(icon, iconSource);
+            }
             content.Children.Add(new TextBlock { Text = label, FontSize = 12, TextAlignment = TextAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 7, 0, 0) });
             var b = new Button { Content = content, Style = (Style)FindResource("RowButton"), Padding = new Thickness(0, 10, 0, 10) };
             RowOptions.SetNoBar(b, true);
             Track(b);
+            Tagged(b, tag);
             b.Click += (_, _) => onClick();
             grid.Children.Add(b);
         }
@@ -145,6 +184,11 @@ public partial class SidePanel : OverlayBase
     /// <summary>Avec une grille, le déplacement est explicite : la prédiction de WPF s'y perd entre lignes et cases.</summary>
     public override bool Handle(Input.NavAction action)
     {
+        if (action == Input.NavAction.Secondary)
+        {
+            if (Keyboard.FocusedElement is FrameworkElement { Tag: { } tag }) SecondaryAction?.Invoke(tag);
+            return true;
+        }
         if (!_hasGrid || action is not (Input.NavAction.Up or Input.NavAction.Down or Input.NavAction.Left or Input.NavAction.Right))
             return base.Handle(action);
 

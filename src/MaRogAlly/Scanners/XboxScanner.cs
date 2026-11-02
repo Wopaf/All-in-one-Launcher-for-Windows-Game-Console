@@ -30,6 +30,8 @@ public sealed partial class XboxScanner : GameScanner
                 try
                 {
                     if (pkg.IsFramework || pkg.IsResourcePackage) continue;
+                    // Le lanceur Minecraft a sa propre plateforme.
+                    if (pkg.Id.Name.StartsWith(MinecraftScanner.PackagePrefix, StringComparison.OrdinalIgnoreCase)) continue;
                     var dir = pkg.InstalledLocation?.Path;
                     if (dir is null) continue;
                     var config = Path.Combine(dir, "MicrosoftGame.config");

@@ -14,7 +14,7 @@ public static class GameCategories
     /// <summary>Boutons affichés par défaut.</summary>
     public static readonly string[] Defaults = ["fps", "rogue", "narrative", "online", "indie", "survival", "cozy", "strategy"];
 
-    public const int MaxButtons = 8;
+    public const int MaxButtons = 12;
     private const string TagPrefix = "tag:";
     private const int RawTagDepth = 10;
 
@@ -68,6 +68,8 @@ public static class GameCategories
         ["dofus"] = ["online", "rpg", "strategy"],
         ["dofus retro"] = ["online", "rpg", "strategy"],
         ["minecraft for windows"] = ["survival", "building", "openworld"],
+        ["minecraft"] = ["survival", "building", "openworld"],
+        ["star citizen"] = ["online", "fps", "simulation", "openworld"],
     };
 
     /// <summary>Logiciels vendus sur Steam (ex. Lossless Scaling, tagué FPS) : hors catégories de jeux.</summary>

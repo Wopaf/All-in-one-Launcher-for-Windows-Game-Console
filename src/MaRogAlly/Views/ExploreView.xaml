@@ -63,6 +63,11 @@
                             Background="#E60A0C11" Visibility="{Binding Badge, Converter={StaticResource VisibleIf}}">
                         <TextBlock Text="{Binding Badge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
                     </Border>
+                    <!-- Dans la liste de souhaits -->
+                    <Border CornerRadius="11" Width="22" Height="22" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#E60A0C11"
+                            Visibility="{Binding IsWished, Converter={StaticResource VisibleIf}}">
+                        <TextBlock Text="&#xEB52;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="#FF5C8A" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
                     <Border VerticalAlignment="Bottom" Padding="10,26,10,9">
                         <Border.Background>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
@@ -135,6 +140,11 @@
                     <TextBlock Text="{Binding Name}" Margin="10" TextWrapping="Wrap" VerticalAlignment="Center" TextAlignment="Center"
                                FontSize="14" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
                     <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
+                    <!-- Dans la liste de souhaits -->
+                    <Border CornerRadius="11" Width="22" Height="22" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#E60A0C11"
+                            Visibility="{Binding IsWished, Converter={StaticResource VisibleIf}}">
+                        <TextBlock Text="&#xEB52;" FontFamily="{StaticResource Icons}" FontSize="12" Foreground="#FF5C8A" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
                     <Border x:Name="PriceBadge" CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Bottom"
                             Background="#E60A0C11" Visibility="{Binding CardBadge, Converter={StaticResource VisibleIf}}">
                         <TextBlock Text="{Binding CardBadge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>

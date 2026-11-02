@@ -29,6 +29,12 @@ public sealed class SearchHit : ObservableObject
     /// <summary>Badge de la jaquette : « Installé » / « Possédé », sinon le prix.</summary>
     public string? Badge => Owned is { } g ? (g.IsInstalled ? "Installé" : "Possédé") : Price;
     public bool IsOwned => Owned is not null;
+
+    private bool _isWished;
+    /// <summary>Dans la liste de souhaits (cœur sur la jaquette).</summary>
+    public bool IsWished { get => _isWished; set => Set(ref _isWished, value); }
+    /// <summary>Identifiant dans la liste de souhaits ; null pour un jeu déjà possédé.</summary>
+    public string? WishKey => Owned is not null ? null : Steam?.WishKey ?? StoreUrl;
     /// <summary>Ligne d'information sous les résultats pour le jeu sélectionné.</summary>
     public string Info => string.Join(" · ", new[]
     {

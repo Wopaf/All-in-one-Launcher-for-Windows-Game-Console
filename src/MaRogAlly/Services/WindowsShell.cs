@@ -330,13 +330,32 @@ public static class WindowsShell
         _ => c,
     }));
 
-    /// <summary>Lanceur de jeux d'après son nom (à écarter des dernières applications).</summary>
+    /// <summary>Plateforme dont cette application est le lanceur, d'après son nom dans la liste de Windows.</summary>
+    public static Platform? LauncherPlatform(string name)
+    {
+        var n = Text.Normalize(name);
+        if (n == "steam") return Platform.Steam;
+        if (n.Contains("epic games")) return Platform.Epic;
+        if (n.Contains("gog galaxy")) return Platform.Gog;
+        if (n is "ea" or "ea app" or "origin") return Platform.Ea;
+        if (n.Contains("ubisoft connect")) return Platform.Ubisoft;
+        if (n is "battle" or "battlenet" or "battle net") return Platform.BattleNet;
+        if (n == "xbox") return Platform.Xbox;
+        if (n.Contains("amazon games")) return Platform.Amazon;
+        if (n.Contains("riot client") || n.Contains("client riot")) return Platform.Riot;
+        if (n == "itch") return Platform.Itch;
+        if (n.Contains("rockstar games launcher")) return Platform.Rockstar;
+        if (n.Contains("ankama launcher")) return Platform.Ankama;
+        if (n.Contains("minecraft launcher")) return Platform.Minecraft;
+        if (n.Contains("rsi launcher")) return Platform.Rsi;
+        return null;
+    }
+
+    /// <summary>Lanceur de jeux d'après son nom : une plateforme connue, ou tout autre lanceur (Minecraft, RSI, Playnite…).</summary>
     public static bool IsGameLauncher(string name)
     {
         var n = Text.Normalize(name);
-        return n.Contains("launcher") || n.Contains("steam") || n.Contains("epic games") || n.Contains("gog galaxy") || n is "ea" or "ea app" or "origin"
-            || n.Contains("ubisoft") || n.Contains("battle net") || n.Contains("battlenet") || n.Contains("xbox") || n.Contains("amazon games")
-            || n.Contains("riot client") || n.Contains("itch") || n.Contains("rockstar games") || n.Contains("ankama");
+        return LauncherPlatform(name) is not null || n.Contains("launcher") || n.Contains("curseforge") || n.Contains("modrinth") || n.Contains("playnite");
     }
 
     public static bool LaunchApp(InstalledApp app) => GameLauncher.Open($@"shell:AppsFolder\{app.Id}");

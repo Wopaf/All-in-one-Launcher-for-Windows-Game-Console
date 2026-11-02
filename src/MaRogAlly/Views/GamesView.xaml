@@ -223,10 +223,12 @@
         </StackPanel>
 
         <!-- ====== Catégories (Bibliothèque) : le cadre de sélection glisse d'un bouton à l'autre ====== -->
-        <Grid x:Name="CategoryHost" Grid.Row="1" Margin="64,0,64,0" HorizontalAlignment="Left" Visibility="Collapsed">
-            <StackPanel x:Name="CategoryBar" Orientation="Horizontal"/>
-            <Border x:Name="CategoryHighlight" CornerRadius="17" BorderBrush="White" BorderThickness="2"/>
-        </Grid>
+        <ScrollViewer Grid.Row="1" Style="{StaticResource RowScroll}" Margin="0">
+            <Grid x:Name="CategoryHost" Margin="64,0,64,0" HorizontalAlignment="Left" Visibility="Collapsed">
+                <StackPanel x:Name="CategoryBar" Orientation="Horizontal"/>
+                <Border x:Name="CategoryHighlight" CornerRadius="17" BorderBrush="White" BorderThickness="2"/>
+            </Grid>
+        </ScrollViewer>
 
         <!-- ====== Grille (rangées virtualisées) ====== -->
         <Grid Grid.Row="2" x:Name="GridHost" Margin="0,14,0,0">
@@ -262,12 +264,5 @@
             </StackPanel>
         </Grid>
 
-        <!-- Saut alphabétique (LT / RT) -->
-        <Border x:Name="LetterBadge" Grid.RowSpan="3" Width="150" Height="150" CornerRadius="28" Background="#E6161A23"
-                BorderBrush="#33FFFFFF" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Opacity="0" IsHitTestVisible="False">
-            <TextBlock x:Name="LetterText" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="84"
-                       Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
     </Grid>
 </UserControl>
