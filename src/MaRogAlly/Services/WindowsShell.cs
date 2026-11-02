@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using MaRogAlly.Core;
 using MaRogAlly.Models;
+using MaRogAlly.UI;
 using Microsoft.Win32;
 
 namespace MaRogAlly.Services;
@@ -71,6 +72,22 @@ public static class WindowsShell
     }
 
     public static void Minimize(IntPtr hwnd) => ShowWindow(hwnd, SW_MINIMIZE);
+
+    /// <summary>Fenêtre d'application au premier plan, hors volets du système (menu Démarrer, notifications…).</summary>
+    public static OpenWindow? ForegroundApp(IntPtr self)
+    {
+        var foreground = GetForegroundWindow();
+        return Enumerate(self).FirstOrDefault(w => w.Handle == foreground);
+    }
+
+    /// <summary>Sans barre de titre et sur tout le moniteur : un jeu, ou une vidéo en plein écran.</summary>
+    public static bool IsFullscreen(IntPtr hwnd)
+    {
+        if ((GetWindowLongPtr(hwnd, GWL_STYLE).ToInt64() & WS_CAPTION) == WS_CAPTION || !GetWindowRect(hwnd, out var window)) return false;
+        var monitor = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        return GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), ref monitor)
+            && window.Left <= monitor.Screen.Left && window.Top <= monitor.Screen.Top && window.Right >= monitor.Screen.Right && window.Bottom >= monitor.Screen.Bottom;
+    }
     /// <summary>Demande polie : l'application peut proposer d'enregistrer avant de se fermer.</summary>
     public static void Close(IntPtr hwnd) => PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
 
@@ -209,14 +226,16 @@ public static class WindowsShell
 
     /// <summary>Icône d'un programme (chemin) ou d'une application (shell:AppsFolder\…), une seule fois par source.</summary>
     public static Task<ImageSource?> IconAsync(string source)
-        => Icons.GetOrAdd(source, s => OnShellThread(() =>
+        => Icons.GetOrAdd(source, s => OnShellThread<ImageSource?>(() =>
         {
-            try { return LoadIcon(s); }
-            catch { return null; }
+            try { return LoadIcon(s) ?? AppIcons.Fallback; }
+            catch { return AppIcons.Fallback; }
         }));
 
     private static ImageSource? LoadIcon(string source)
     {
+        // Programme sans icône : Windows donnerait sa fenêtre bleue générique.
+        if (source.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(source) && ExtractIconEx(source, -1, IntPtr.Zero, IntPtr.Zero, 0) == 0) return null;
         var iid = typeof(IShellItemImageFactory).GUID;
         if (SHCreateItemFromParsingName(source, IntPtr.Zero, ref iid, out var factory) != 0) return null;
         try
@@ -376,41 +395,21 @@ public static class WindowsShell
         keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
     }
 
-    /// <summary>Volet Wi-Fi, Bluetooth, volume et luminosité (Win + A).</summary>
-    public static void ShowQuickSettings() => WinShortcut((byte)'A');
     /// <summary>Volet des notifications (Win + N).</summary>
     public static void ShowNotifications() => WinShortcut((byte)'N');
     /// <summary>Bureau de Windows (Win + D).</summary>
     public static void ShowDesktop() => WinShortcut((byte)'D');
     public static void ShowStartMenu() => WinShortcut(null);
 
-    /// <summary>Clavier tactile de Windows : le service TabTip, puis sa commande d'affichage.</summary>
-    public static async Task ToggleTouchKeyboardAsync()
-    {
-        try
-        {
-            if (Process.GetProcessesByName("TabTip").Length == 0)
-            {
-                var tip = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles), @"microsoft shared\ink\TabTip.exe");
-                Process.Start(new ProcessStartInfo(tip) { UseShellExecute = true });
-                await Task.Delay(500);
-            }
-            await OnShellThread(() =>
-            {
-                var invocation = (ITipInvocation)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("4CE576FA-83DC-4F88-951C-9D0782B4E376"))!)!;
-                invocation.Toggle(GetDesktopWindow());
-                Marshal.ReleaseComObject(invocation);
-                return true;
-            });
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Clavier tactile de Windows", ex);
-            GameLauncher.Open("osk.exe"); // clavier visuel classique, en secours
-        }
-    }
-
     // ---------------- Windows ----------------
+
+    private const int GWL_STYLE = -16, MONITOR_DEFAULTTONEAREST = 2;
+    private const long WS_CAPTION = 0xC00000;
+
+    [StructLayout(LayoutKind.Sequential)] private struct WindowRect { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo { public int Size; public WindowRect Screen, Work; public uint Flags; }
 
     private const int GWL_EXSTYLE = -20, DWMWA_CLOAKED = 14, SW_RESTORE = 9, SW_MINIMIZE = 6;
     private const long WS_EX_TOOLWINDOW = 0x80, WS_EX_APPWINDOW = 0x40000, WS_EX_NOACTIVATE = 0x8000000;
@@ -453,12 +452,6 @@ public static class WindowsShell
         [PreserveSig] int GetImage(NativeSize size, int flags, out IntPtr bitmap);
     }
 
-    [ComImport, Guid("37C994E7-432B-4834-A2F7-DCE1F13B834B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface ITipInvocation
-    {
-        void Toggle(IntPtr desktop);
-    }
-
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc proc, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
@@ -471,7 +464,6 @@ public static class WindowsShell
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int cmd);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
-    [DllImport("user32.dll")] private static extern IntPtr GetDesktopWindow();
     [DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extraInfo);
     [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
     [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
@@ -479,6 +471,11 @@ public static class WindowsShell
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "QueryFullProcessImageNameW")] private static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder name, ref int size);
     [DllImport("shell32.dll")] private static extern int SHGetPropertyStoreForWindow(IntPtr hwnd, ref Guid iid, out IPropertyStore store);
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)] private static extern int SHCreateItemFromParsingName(string path, IntPtr context, ref Guid iid, out IShellItemImageFactory item);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out WindowRect rect);
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, int flags);
+    [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW")] private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "ExtractIconExW")] private static extern uint ExtractIconEx(string file, int index, IntPtr large, IntPtr small, uint count);
     [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PropVariant value);
     [DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr handle);
     [DllImport("gdi32.dll", EntryPoint = "GetObjectW")] private static extern int GetObject(IntPtr handle, int size, out DibSection value);

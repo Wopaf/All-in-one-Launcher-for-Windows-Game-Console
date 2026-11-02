@@ -32,12 +32,11 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <Border Grid.RowSpan="4" Background="{DynamicResource Bg}"/>
-        <Border Grid.RowSpan="4" Background="{DynamicResource PanelBg}" BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,1,0"/>
+        <Border Grid.RowSpan="3" Background="{DynamicResource Bg}"/>
+        <Border Grid.RowSpan="3" Background="{DynamicResource PanelBg}" BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,1,0"/>
         <!-- Cadre de sélection : glisse d'un bouton à l'autre -->
-        <Border x:Name="Highlight" Grid.RowSpan="4" CornerRadius="14" Background="#24FFFFFF" BorderBrush="White" BorderThickness="2"/>
+        <Border x:Name="Highlight" Grid.RowSpan="3" CornerRadius="14" Background="#24FFFFFF" BorderBrush="White" BorderThickness="2"/>
 
         <!-- Menu Windows maison : petite maison -->
         <Button x:Name="MenuButton" Style="{StaticResource DockButton}" Margin="0,14,0,8" Click="Menu_Click" ToolTip="Menu Windows">
@@ -50,17 +49,12 @@
         </ScrollViewer>
 
         <!-- Applications en arrière-plan (lancées sans fenêtre) -->
-        <Button x:Name="BackgroundButton" Grid.Row="2" Style="{StaticResource DockButton}" Margin="0,8,0,3" Click="Background_Click" ToolTip="Applications en arrière-plan">
+        <Button x:Name="BackgroundButton" Grid.Row="2" Style="{StaticResource DockButton}" Margin="0,8,0,14" Click="Background_Click" ToolTip="Applications en arrière-plan">
             <TextBlock Text="&#xE712;" FontFamily="{StaticResource Icons}" FontSize="20"/>
         </Button>
 
-        <!-- Options : volets de Windows, clavier, bureau -->
-        <Button x:Name="OptionsButton" Grid.Row="3" Style="{StaticResource DockButton}" Margin="0,3,0,14" Click="Options_Click" ToolTip="Options">
-            <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="20"/>
-        </Button>
-
         <!-- Infobulle : nom du bouton sélectionné ou survolé, à droite de la barre (animée en code) -->
-        <Canvas Grid.RowSpan="4" IsHitTestVisible="False">
+        <Canvas Grid.RowSpan="3" IsHitTestVisible="False">
             <Border x:Name="Label" Canvas.Left="78" CornerRadius="10" Background="{DynamicResource Bg}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
                     Padding="12,7" MaxWidth="420" Visibility="Collapsed" Opacity="0">
                 <Border.RenderTransform><TranslateTransform x:Name="LabelMove"/></Border.RenderTransform>

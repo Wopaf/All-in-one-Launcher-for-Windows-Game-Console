@@ -90,6 +90,10 @@ public partial class SettingsView : UserControl
             "Sons de l'interface", "Un son léger quand tu te déplaces, valides ou reviens en arrière, un autre à l'ouverture de l'application et quand une recherche aboutit.");
         Switch("Réduire au lancement d'un jeu", () => _settings.MinimizeOnLaunch, v => _settings.MinimizeOnLaunch = v,
             "Réduire au lancement", "Réduit l'application dans la barre des tâches dès qu'un jeu est lancé.");
+        Switch("Réduire les autres applications avec B", () => _settings.MinimizeWithB, v => _settings.MinimizeWithB = v,
+            "Réduire avec B", "Le bouton B de la manette réduit l'application au premier plan, si ce n'est pas Ma ROG Ally. Il reste sans effet dans un jeu de ta bibliothèque et dans toute fenêtre en plein écran.\n\nDésactive cette option si B réduit par erreur un jeu en fenêtre qui n'est pas dans ta bibliothèque.");
+        Switch("Masquer la barre des tâches de Windows", () => _settings.HideWindowsTaskbar, v => { _settings.HideWindowsTaskbar = v; WindowsTaskbar.Apply(_settings); },
+            "Barre des tâches de Windows", "Active le masquage automatique de Windows tant que l'application tourne : la barre ne repasse plus devant les autres applications, qui gagnent aussi sa place à l'écran. Elle reste accessible en glissant depuis le bas de l'écran. Ton réglage d'origine revient quand tu quittes l'application.");
 
         Header("Mises à jour de l'application");
         Switch("Chercher les nouvelles versions", () => _settings.CheckAppUpdates, v => _settings.CheckAppUpdates = v,
@@ -272,10 +276,10 @@ public partial class SettingsView : UserControl
                 VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0),
             });
             label.Children.Add(new TextBlock { Text = info.Name, VerticalAlignment = VerticalAlignment.Center });
-            Switch(label, () => !_settings.DisabledLaunchers.Contains(id), v =>
+            Switch(label, () => _settings.StartupLaunchers.Contains(id), v =>
             {
-                if (v) _settings.DisabledLaunchers.Remove(id);
-                else _settings.DisabledLaunchers.Add(id);
+                if (v) _settings.StartupLaunchers.Add(id);
+                else _settings.StartupLaunchers.Remove(id);
             }, info.Name, $"{info.Name} s'ouvre en arrière-plan avec Ma ROG Ally, s'il ne tourne pas déjà : tes jeux démarrent ensuite plus vite.\n\n" +
                (id is Platform.Steam or Platform.Epic
                    ? "Sa fenêtre est réduite pendant le chargement, puis fermée une fois le lanceur prêt (il reste actif dans la zone de notification)."

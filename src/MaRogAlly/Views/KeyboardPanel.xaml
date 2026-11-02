@@ -34,11 +34,15 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#26FFFFFF"/>
                             </Trigger>
-                            <!-- Sélectionnée : le fond laisse voir le cadre d'accent -->
-                            <Trigger Property="IsKeyboardFocused" Value="True">
+                            <!-- Sélectionnée à la manette : le fond laisse voir le cadre d'accent -->
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource Self}}" Value="True"/>
+                                    <Condition Binding="{Binding PadSelection, RelativeSource={RelativeSource AncestorType=v:KeyboardPanel}}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
                                 <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
                                 <Setter Property="Foreground" Value="White"/>
-                            </Trigger>
+                            </MultiDataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -86,14 +90,9 @@
                     </Ellipse.Fill>
                 </Ellipse>
                 <StackPanel>
-                    <!-- Titre et champ de saisie -->
+                    <!-- Champ de saisie -->
                     <Grid Margin="5,0,5,14">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="TitleText" Style="{StaticResource Label}" FontSize="13" VerticalAlignment="Center" Margin="4,0,18,0"/>
-                        <Border Grid.Column="1" CornerRadius="16" Background="#1AFFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Padding="20,0" Height="56">
+                        <Border CornerRadius="16" Background="#1AFFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Padding="20,0" Height="56">
                             <Grid VerticalAlignment="Center">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock x:Name="ValueText" FontFamily="{StaticResource Display}" FontSize="26" Foreground="{StaticResource TextPrimary}"
@@ -130,7 +129,8 @@
                     <Grid x:Name="Specials">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="5*"/>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="4*"/>
                             <ColumnDefinition Width="2*"/>
                             <ColumnDefinition Width="2*"/>
                             <ColumnDefinition Width="3*"/>
@@ -141,14 +141,16 @@
                                 <TextBlock x:Name="ShiftText" Text="Maj" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
-                        <Button Grid.Column="1" Style="{StaticResource FnKey}" Click="Space_Click">
+                        <!-- Caractères spéciaux : la même touche ramène aux lettres -->
+                        <Button x:Name="SymbolsButton" Grid.Column="1" Style="{StaticResource FnKey}" Content="@" Click="Symbols_Click"/>
+                        <Button Grid.Column="2" Style="{StaticResource FnKey}" Click="Space_Click">
                             <Border Width="120" Height="4" CornerRadius="2" Background="#55FFFFFF"/>
                         </Button>
-                        <Button Grid.Column="2" Style="{StaticResource FnKey}" Click="Backspace_Click">
+                        <Button Grid.Column="3" Style="{StaticResource FnKey}" Click="Backspace_Click">
                             <TextBlock Text="&#xE750;" FontFamily="{StaticResource Icons}" FontSize="20"/>
                         </Button>
-                        <Button x:Name="ExtraButton" Grid.Column="3" Style="{StaticResource FnKey}" Content="Effacer" Click="Clear_Click"/>
-                        <Button Grid.Column="4" Style="{StaticResource OkKey}" Click="Ok_Click">
+                        <Button x:Name="ExtraButton" Grid.Column="4" Style="{StaticResource FnKey}" Content="Effacer" Click="Clear_Click"/>
+                        <Button Grid.Column="5" Style="{StaticResource OkKey}" Click="Ok_Click">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE73E;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                 <TextBlock Text="Valider" VerticalAlignment="Center"/>

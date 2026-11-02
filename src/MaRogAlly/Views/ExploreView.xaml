@@ -95,8 +95,8 @@
 
         <!-- Jeu offert par Epic : visuel large, titre et compte à rebours ; badge GRATUIT, BIENTÔT ou OBTENU -->
         <DataTemplate x:Key="FreeCard" DataType="{x:Type s:FreeGame}">
-            <Button Style="{StaticResource MediaCard}" Tag="10" Margin="0,0,18,0" Click="Free_Click" GotKeyboardFocus="Free_Focus"
-                    Width="{Binding FreeWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+            <Button Style="{StaticResource MediaCard}" Tag="10" Margin="6" Click="Free_Click" GotKeyboardFocus="Free_Focus"
+                    Width="{Binding FreeCardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
                     Height="{Binding FreeHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
                 <Grid>
                     <TextBlock Text="{Binding Title}" Margin="12" TextWrapping="Wrap" VerticalAlignment="Center" TextAlignment="Center"
@@ -111,7 +111,7 @@
                         </Border.Background>
                         <StackPanel>
                             <TextBlock Text="{Binding Title}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="14"
-                                       Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+                                       Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" MaxHeight="38" TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{Binding Countdown}" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,1,0,0"/>
                         </StackPanel>
                     </Border>
@@ -181,7 +181,7 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <!-- Recherche, jeux et tendances forment un bloc centré verticalement -->
+    <!-- De haut en bas : recherche, accès aux listes, puis les jeux à voir (nouveautés à gauche, offres Epic à droite) -->
     <Grid x:Name="Root" VerticalAlignment="Center">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -190,7 +190,7 @@
         </Grid.RowDefinitions>
 
         <!-- ====== Recherche ====== -->
-        <Grid Margin="64,0,64,0" MaxWidth="892">
+        <Grid Margin="64,0,64,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -221,59 +221,46 @@
             </Button>
         </Grid>
 
-        <!-- ====== Nouveautés, ou résultats de la recherche ====== -->
-        <Grid Grid.Row="1" x:Name="ResultsArea" Margin="0,22,0,0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <Grid Margin="64,0,64,14">
-                <TextBlock x:Name="ResultsLabel" Style="{StaticResource Label}" Text="RÉSULTATS"/>
-                <TextBlock x:Name="ResultsCount" HorizontalAlignment="Right" FontSize="13" Foreground="{StaticResource TextMuted}"/>
-            </Grid>
+        <!-- ====== Accès aux listes ====== -->
+        <!-- Marge droite réduite de l'écart entre tuiles : la dernière s'aligne sur le bord -->
+        <!-- Sans arrondi de la mise en page : des colonnes à largeur fractionnaire feraient couper le cadre de la sélection à la rangée -->
+        <ItemsControl x:Name="Tiles" Grid.Row="1" ItemTemplate="{StaticResource TrendTile}" Focusable="False" Margin="64,14,46,0" UseLayoutRounding="False">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+        </ItemsControl>
 
-            <ScrollViewer x:Name="HitsScroll" Grid.Row="1" Style="{StaticResource RowScroll}">
-                <ItemsControl x:Name="Hits" ItemTemplate="{StaticResource HitCard}" Focusable="False" Margin="64,26,64,26">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </ScrollViewer>
+        <Grid x:Name="MainArea" Grid.Row="2" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-            <ScrollViewer x:Name="NewScroll" Grid.Row="1" Style="{StaticResource RowScroll}">
-                <ItemsControl x:Name="NewGames" ItemTemplate="{StaticResource NewCard}" Focusable="False" Margin="64,26,64,26">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </ScrollViewer>
+            <!-- ====== Nouveautés, ou résultats de la recherche ====== -->
+            <Grid x:Name="ResultsArea">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <!-- Le jeu sélectionné s'affiche sur la ligne du titre : la rangée de jaquettes ne bouge jamais -->
+                <Grid Margin="64,0,0,14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="ResultsLabel" Style="{StaticResource Label}" Text="RÉSULTATS" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ResultsCount" Grid.Column="1" Margin="24,0,0,0" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13"
+                               Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="HitInfo" Grid.Column="1" Margin="24,0,0,0" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13"
+                               TextTrimming="CharacterEllipsis" Visibility="Collapsed">
+                        <Run x:Name="HitTitle" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextPrimary}"/><Run x:Name="HitDetail" Foreground="{StaticResource TextSecondary}"/>
+                    </TextBlock>
+                </Grid>
 
-            <!-- Jeu sélectionné : nom et informations en une ligne -->
-            <StackPanel x:Name="HitInfo" Grid.Row="2" Margin="64,14,64,0">
-                <TextBlock x:Name="HitTitle" Style="{StaticResource H2}" FontSize="22" TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="HitDetail" FontSize="14" Foreground="{StaticResource TextSecondary}" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
-            </StackPanel>
-
-            <!-- Aucun résultat / recherche en cours / chargement -->
-            <StackPanel x:Name="EmptyState" Grid.Row="1" Grid.RowSpan="3" Margin="64,0,64,0" VerticalAlignment="Center">
-                <TextBlock x:Name="EmptyTitle" Style="{StaticResource H2}" FontSize="22"/>
-                <TextBlock x:Name="EmptyHint" Style="{StaticResource BodyText}" FontSize="15" Margin="0,6,0,0" TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- ====== Listes de tendances Steam ====== -->
-        <StackPanel Grid.Row="2">
-            <!-- Jeux offerts par Epic -->
-            <StackPanel x:Name="FreeSection" Visibility="Collapsed">
-                <TextBlock x:Name="FreeLabel" Text="OFFERTS PAR EPIC GAMES" Style="{StaticResource Label}" Margin="64,14,0,10"/>
-                <ScrollViewer Style="{StaticResource RowScroll}">
-                    <ItemsControl x:Name="FreeGames" ItemTemplate="{StaticResource FreeCard}" Focusable="False" Margin="64,26,64,26">
+                <ScrollViewer x:Name="HitsScroll" Grid.Row="1" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
+                    <ItemsControl x:Name="Hits" ItemTemplate="{StaticResource HitCard}" Focusable="False" Margin="64,26,26,26">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
                                 <StackPanel Orientation="Horizontal"/>
@@ -281,16 +268,40 @@
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
                 </ScrollViewer>
+
+                <ScrollViewer x:Name="NewScroll" Grid.Row="1" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
+                    <ItemsControl x:Name="NewGames" ItemTemplate="{StaticResource NewCard}" Focusable="False" Margin="64,26,26,26">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Aucun résultat / recherche en cours / chargement -->
+                <StackPanel x:Name="EmptyState" Grid.Row="1" Margin="64,0,64,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="EmptyTitle" Style="{StaticResource H2}" FontSize="22"/>
+                    <TextBlock x:Name="EmptyHint" Style="{StaticResource BodyText}" FontSize="15" Margin="0,6,0,0" TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- ====== Jeux offerts par Epic (masqués pendant une recherche, pour laisser la place aux résultats) ====== -->
+            <StackPanel x:Name="FreeSection" Grid.Column="1" Margin="36,0,64,0" Visibility="Collapsed"
+                        Width="{Binding FreeWidth, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                <TextBlock Text="OFFERTS PAR EPIC GAMES" Style="{StaticResource Label}" Margin="0,0,0,12"/>
+                <!-- Marges opposées : le halo de la sélection n'est pas coupé -->
+                <ScrollViewer Margin="-26,-26,-26,-26" Focusable="False" PanningMode="VerticalOnly" Height="{Binding FreeScrollHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                              VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="FreeGames" ItemTemplate="{StaticResource FreeCard}" Focusable="False" Margin="20">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
             </StackPanel>
-            <TextBlock x:Name="TrendsLabel" Text="TENDANCES STEAM" Style="{StaticResource Label}" Margin="64,24,0,12"/>
-            <!-- Marge droite réduite de l'écart entre tuiles : la dernière s'aligne sur le bord -->
-            <ItemsControl x:Name="Tiles" ItemTemplate="{StaticResource TrendTile}" Focusable="False" Margin="64,0,46,0">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <UniformGrid Rows="1"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-            </ItemsControl>
-        </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>

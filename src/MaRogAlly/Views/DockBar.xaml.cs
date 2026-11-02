@@ -11,11 +11,11 @@ namespace MaRogAlly.Views;
 
 /// <summary>
 /// Barre de gauche, à la place de celle de Windows : menu Windows maison en haut, applications ouvertes,
-/// puis les applications en arrière-plan et les options en bas. Le bouton Select de la manette y entre et en sort.
+/// puis les applications en arrière-plan en bas.
 /// </summary>
 public partial class DockBar : UserControl
 {
-    public event Action? WindowsMenuRequested, BackgroundRequested, OptionsRequested, HintsChanged, LeaveRequested;
+    public event Action? WindowsMenuRequested, BackgroundRequested, HintsChanged, LeaveRequested;
     public event Action<OpenWindow>? AppRequested, MinimizeRequested, CloseRequested;
 
     private readonly SlideHighlight _highlight;
@@ -24,7 +24,7 @@ public partial class DockBar : UserControl
     {
         InitializeComponent();
         _highlight = new SlideHighlight(Highlight, Host);
-        foreach (var b in new[] { MenuButton, BackgroundButton, OptionsButton }) Track(b);
+        foreach (var b in new[] { MenuButton, BackgroundButton }) Track(b);
         LostKeyboardFocus += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             if (IsKeyboardFocusWithin) return;
@@ -83,7 +83,7 @@ public partial class DockBar : UserControl
         // Icône déjà chargée : on la réutilise pour éviter un clignotement.
         var image = existing?.Content is Grid { Children: [Image known, ..] } ? known.Source : null;
         var grid = new Grid { Width = 28, Height = 28 };
-        var icon = new Image { Width = 26, Height = 26, Source = image, Stretch = Stretch.Uniform };
+        var icon = new Image { Width = 26, Height = 26, Source = image ?? AppIcons.Fallback, Stretch = Stretch.Uniform };
         RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
         grid.Children.Add(icon);
         if (image is null && w.IconSource is { } source) LoadIcon(icon, source);
@@ -180,7 +180,6 @@ public partial class DockBar : UserControl
 
     private void Menu_Click(object sender, RoutedEventArgs e) => WindowsMenuRequested?.Invoke();
     private void Background_Click(object sender, RoutedEventArgs e) => BackgroundRequested?.Invoke();
-    private void Options_Click(object sender, RoutedEventArgs e) => OptionsRequested?.Invoke();
 
     // ---------------- Navigation ----------------
 
@@ -189,13 +188,11 @@ public partial class DockBar : UserControl
         var list = new List<Button> { MenuButton };
         list.AddRange(Apps.Children.OfType<Button>());
         list.Add(BackgroundButton);
-        list.Add(OptionsButton);
         return list;
     }
 
     /// <summary>Entre dans la barre, sur le bouton du menu Windows.</summary>
     public void Enter() => FocusNav.Focus(MenuButton);
-    public bool IsOnMenu => MenuButton.IsKeyboardFocused;
 
     public bool Handle(NavAction action)
     {

@@ -98,6 +98,15 @@
                     <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
                 <TextBlock x:Name="ClockText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center"/>
+                <!-- Bouton Menu de la manette (aussi cliquable) -->
+                <Border Margin="16,0,0,0" CornerRadius="20" Background="{DynamicResource Bg}" Padding="7,5,16,5" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonUp="MenuHint_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Style="{StaticResource PadGlyph}">
+                            <TextBlock Text="≡" Style="{StaticResource PadGlyphText}"/>
+                        </Border>
+                        <TextBlock Text="Menu" FontSize="14" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Grid>
 
@@ -121,7 +130,7 @@
 
         <!-- ====== Activité en cours (scan, fiches, offres Epic…) ====== -->
         <Border x:Name="ActivityCard" Grid.RowSpan="3" Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="64,0,0,16"
-                Width="400" CornerRadius="14" Background="#F2161A23" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                Width="400" CornerRadius="14" Background="{DynamicResource Bg}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
                 Padding="16,12,18,14" Opacity="0" Visibility="Collapsed" IsHitTestVisible="False">
             <Grid>
                 <Grid.ColumnDefinitions>

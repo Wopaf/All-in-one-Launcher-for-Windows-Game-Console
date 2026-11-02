@@ -223,12 +223,27 @@
         </StackPanel>
 
         <!-- ====== Catégories (Bibliothèque) : le cadre de sélection glisse d'un bouton à l'autre ====== -->
-        <ScrollViewer Grid.Row="1" Style="{StaticResource RowScroll}" Margin="0">
-            <Grid x:Name="CategoryHost" Margin="64,0,64,0" HorizontalAlignment="Left" Visibility="Collapsed">
-                <StackPanel x:Name="CategoryBar" Orientation="Horizontal"/>
-                <Border x:Name="CategoryHighlight" CornerRadius="17" BorderBrush="White" BorderThickness="2"/>
-            </Grid>
-        </ScrollViewer>
+        <Grid Grid.Row="1" Margin="64,0,64,0" HorizontalAlignment="Left">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Border Style="{StaticResource PadGlyph}" Margin="0,0,10,0" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonUp="PrevCategory_Click"
+                    Visibility="{Binding Visibility, ElementName=CategoryHost}">
+                <TextBlock Text="LT" Style="{StaticResource PadGlyphText}"/>
+            </Border>
+            <ScrollViewer Grid.Column="1" Style="{StaticResource RowScroll}" Margin="0">
+                <Grid x:Name="CategoryHost" HorizontalAlignment="Left" Visibility="Collapsed">
+                    <StackPanel x:Name="CategoryBar" Orientation="Horizontal"/>
+                    <Border x:Name="CategoryHighlight" CornerRadius="17" BorderBrush="White" BorderThickness="2"/>
+                </Grid>
+            </ScrollViewer>
+            <Border Grid.Column="2" Style="{StaticResource PadGlyph}" Margin="10,0,0,0" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonUp="NextCategory_Click"
+                    Visibility="{Binding Visibility, ElementName=CategoryHost}">
+                <TextBlock Text="RT" Style="{StaticResource PadGlyphText}"/>
+            </Border>
+        </Grid>
 
         <!-- ====== Grille (rangées virtualisées) ====== -->
         <Grid Grid.Row="2" x:Name="GridHost" Margin="0,14,0,0">

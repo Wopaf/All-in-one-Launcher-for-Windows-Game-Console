@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using MaRogAlly.Input;
 using MaRogAlly.Services;
 using MaRogAlly.UI;
 
@@ -29,7 +30,7 @@ public partial class MainMenu : OverlayBase
 
     protected override FrameworkElement AnimatedPart => Panel;
     protected override FrameworkElement FocusScope => Items;
-    public override string Hints => "A:Valider|B:Fermer";
+    public override string Hints => _brightnessRow?.IsKeyboardFocused == true ? "←→:Luminosité|B:Fermer" : "A:Valider|B:Fermer";
 
     private void UpdateHeader()
     {
@@ -105,6 +106,124 @@ public partial class MainMenu : OverlayBase
         };
         Track(b, onClick);
         Items.Children.Add(b);
+    }
+
+    /// <summary>Rangée de boutons de même largeur, sans texte (le nom reste en infobulle).</summary>
+    public void AddIconButtons(params (string Icon, string Title, Action OnClick)[] buttons)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            var (icon, title, onClick) = buttons[i];
+            var b = new Button
+            {
+                Style = (Style)FindResource("RowButton"),
+                Padding = new Thickness(0),
+                Height = 56,
+                ToolTip = title,
+                Margin = new Thickness(i == 0 ? 0 : 4, 0, i == buttons.Length - 1 ? 0 : 4, 0),
+                Content = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
+                    CornerRadius = new CornerRadius(14),
+                    Height = 56,
+                    Child = new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                },
+            };
+            Track(b, onClick);
+            Grid.SetColumn(b, i);
+            row.Children.Add(b);
+        }
+        Items.Children.Add(row);
+    }
+
+    private const int BrightnessMin = 5, BrightnessStep = 5;
+    private Button? _brightnessRow;
+    private Border? _brightnessFill;
+    private FrameworkElement? _brightnessBar;
+    private TextBlock? _brightnessText;
+    private Action<int>? _applyBrightness;
+    private int _brightness;
+
+    /// <summary>Curseur de luminosité : gauche et droite à la manette, ou glissement au doigt et à la souris. Jamais tout à fait noir.</summary>
+    public void AddBrightness(int percent, Action<int> apply)
+    {
+        _applyBrightness = apply;
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
+        grid.Children.Add(new TextBlock { Text = "\uE706", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 18, VerticalAlignment = VerticalAlignment.Center });
+        // Fond transparent : toute la hauteur de la barre répond au doigt.
+        var bar = new Grid { Background = Brushes.Transparent, Height = 32 };
+        bar.Children.Add(new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)) });
+        _brightnessFill = new Border { Height = 6, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Background = (Brush)FindResource("Accent") };
+        bar.Children.Add(_brightnessFill);
+        Grid.SetColumn(bar, 1);
+        grid.Children.Add(bar);
+        _brightnessText = new TextBlock { FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 15, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(_brightnessText, 2);
+        grid.Children.Add(_brightnessText);
+        _brightnessBar = bar;
+        bar.SizeChanged += (_, _) => ShowBrightness(_brightness);
+
+        _brightnessRow = new Button
+        {
+            Style = (Style)FindResource("RowButton"),
+            Padding = new Thickness(0),
+            Height = 56,
+            ToolTip = "Luminosité",
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(20, 0, 20, 0),
+                Height = 56,
+                Child = grid,
+            },
+        };
+        Track(_brightnessRow, () => { });
+        _brightnessRow.GotKeyboardFocus += (_, _) => RaiseHintsChanged();
+        _brightnessRow.LostKeyboardFocus += (_, _) => RaiseHintsChanged();
+        bar.MouseLeftButtonDown += (_, e) =>
+        {
+            FocusNav.Focus(_brightnessRow);
+            bar.CaptureMouse();
+            DragBrightness(e.GetPosition(bar).X);
+            e.Handled = true;
+        };
+        bar.MouseMove += (_, e) => { if (bar.IsMouseCaptured) DragBrightness(e.GetPosition(bar).X); };
+        bar.MouseLeftButtonUp += (_, e) =>
+        {
+            bar.ReleaseMouseCapture();
+            e.Handled = true;
+        };
+        Items.Children.Add(_brightnessRow);
+        ShowBrightness(percent);
+    }
+
+    private void DragBrightness(double x)
+    {
+        if (_brightnessBar is { ActualWidth: > 0 } bar) ChangeBrightness((int)Math.Round(x / bar.ActualWidth * 100 / BrightnessStep) * BrightnessStep);
+    }
+
+    private void ChangeBrightness(int percent)
+    {
+        percent = Math.Clamp(percent, BrightnessMin, 100);
+        if (percent == _brightness) return;
+        ShowBrightness(percent);
+        _applyBrightness?.Invoke(percent);
+    }
+
+    /// <summary>Affiche un niveau sans le modifier (ex. changé entre-temps par les touches de la machine).</summary>
+    public void ShowBrightness(int percent)
+    {
+        if (_brightnessFill is null || _brightnessBar is null || _brightnessText is null) return;
+        _brightness = percent;
+        _brightnessFill.Width = _brightnessBar.ActualWidth * percent / 100;
+        _brightnessText.Text = $"{percent} %";
     }
 
     /// <summary>Boutons d'alimentation : pastille colorée avec l'icône, libellé à côté, côte à côte.</summary>
@@ -290,6 +409,44 @@ public partial class MainMenu : OverlayBase
         if (!checkedYet) return ("Vérification…", Idle);
         if (app is null) return ("Non installé", Idle);
         return ($"Version {app.Version}", Ok);
+    }
+
+    // ---------------- Navigation ----------------
+
+    /// <summary>Rangées de boutons, de haut en bas (un bouton seul, ou ceux d'une rangée de tuiles).</summary>
+    private List<List<Button>> NavRows() => Items.Children.OfType<FrameworkElement>()
+        .Select(e => e is Button b ? [b] : e is Grid g ? g.Children.OfType<Button>().ToList() : [])
+        .Where(r => r.Count > 0).ToList();
+
+    public override bool Handle(NavAction action)
+    {
+        if (action is not (NavAction.Up or NavAction.Down or NavAction.Left or NavAction.Right)) return base.Handle(action);
+        if (action is NavAction.Left or NavAction.Right && _brightnessRow?.IsKeyboardFocused == true)
+        {
+            ChangeBrightness(_brightness + (action == NavAction.Left ? -BrightnessStep : BrightnessStep));
+            return true;
+        }
+        var rows = NavRows();
+        var current = Keyboard.FocusedElement as Button;
+        var r = rows.FindIndex(row => current is not null && row.Contains(current));
+        if (r < 0)
+        {
+            FocusNav.Focus(rows[0][0]);
+            return true;
+        }
+        double CenterX(Button b) => b.TranslatePoint(new Point(b.ActualWidth / 2, 0), ItemsHost).X;
+        // Depuis un bouton pleine largeur, on arrive sur le premier de la rangée.
+        Button? Nearest(List<Button>? row) => rows[r].Count == 1 ? row?[0] : row?.MinBy(b => Math.Abs(CenterX(b) - CenterX(current!)));
+        var c = rows[r].IndexOf(current!);
+        var target = action switch
+        {
+            NavAction.Left => rows[r].ElementAtOrDefault(c - 1),
+            NavAction.Right => rows[r].ElementAtOrDefault(c + 1),
+            NavAction.Up => Nearest(rows.ElementAtOrDefault(r - 1)),
+            _ => Nearest(rows.ElementAtOrDefault(r + 1)),
+        };
+        if (target is not null) FocusNav.Focus(target);
+        return true;
     }
 
     private void Backdrop_Click(object sender, MouseButtonEventArgs e) => Close();

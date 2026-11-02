@@ -19,8 +19,14 @@ public sealed class AppSettings
 
     public bool StartWithWindows { get; set; } = true;
     public bool MinimizeOnLaunch { get; set; } = false;
-    /// <summary>Lanceurs à ne pas ouvrir avec l'application (par défaut, tous les lanceurs installés s'ouvrent).</summary>
-    public HashSet<Platform> DisabledLaunchers { get; set; } = [];
+    /// <summary>Masque automatiquement la barre des tâches de Windows tant que l'application tourne.</summary>
+    public bool HideWindowsTaskbar { get; set; } = true;
+    /// <summary>Réglage de Windows à remettre en partant (conservé si l'application s'arrête brutalement).</summary>
+    public bool? TaskbarAutoHideBefore { get; set; }
+    /// <summary>Le bouton B de la manette réduit l'application au premier plan (jamais un jeu).</summary>
+    public bool MinimizeWithB { get; set; } = true;
+    /// <summary>Lanceurs ouverts avec l'application, s'ils sont installés.</summary>
+    public HashSet<Platform> StartupLaunchers { get; set; } = [Platform.Steam, Platform.Epic];
     /// <summary>Cherche toute seule une nouvelle version sur GitHub (l'installation reste toujours à valider).</summary>
     public bool CheckAppUpdates { get; set; } = true;
     /// <summary>Sons de navigation (déplacement, validation, ouverture).</summary>

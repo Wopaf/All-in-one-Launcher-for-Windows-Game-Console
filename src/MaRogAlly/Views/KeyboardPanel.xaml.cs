@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using MaRogAlly.Input;
 using MaRogAlly.UI;
 
@@ -20,11 +22,23 @@ public partial class KeyboardPanel : OverlayBase
         "WXCVBN-':.",
     ];
 
+    private static readonly string[] Symbols =
+    [
+        "1234567890",
+        "@#&_-+=/\\*",
+        "!?()[]<>~|",
+        "\"',;:.%€$°",
+    ];
+
+    /// <summary>Faux dès qu'on touche le clavier au doigt ou à la souris : le cadre coloré ne sert qu'à la manette.</summary>
+    public static readonly DependencyProperty PadSelectionProperty = DependencyProperty.Register(nameof(PadSelection), typeof(bool), typeof(KeyboardPanel), new PropertyMetadata(true));
+    public bool PadSelection { get => (bool)GetValue(PadSelectionProperty); set => SetValue(PadSelectionProperty, value); }
+
     private string _value = "";
     private bool _lowercase;
     /// <summary>Majuscule automatique pour la première lettre uniquement (pas pour les clés d'API).</summary>
     private readonly bool _autoCapital;
-    private readonly List<Button> _letters = [];
+    private bool _symbols;
     private readonly SlideHighlight _highlight;
     private Button? _lastKey;
 
@@ -33,31 +47,31 @@ public partial class KeyboardPanel : OverlayBase
     /// <summary>Appelé à la validation (OK ou Start).</summary>
     public event Action<string>? Submitted;
 
-    public KeyboardPanel(string title, string initial, string placeholder = "", bool lowercase = false)
+    public KeyboardPanel(string initial, string placeholder = "", bool lowercase = false)
     {
         InitializeComponent();
         _lowercase = lowercase;
         _autoCapital = !lowercase;
         _highlight = new SlideHighlight(KeyHighlight, KeysHost);
-        TitleText.Text = title.ToUpperInvariant();
         Placeholder.Text = placeholder;
 
-        foreach (var row in Layout)
-        foreach (var ch in row)
+        foreach (var _ in Layout.SelectMany(row => row))
         {
-            var b = new Button { Content = ch.ToString(), Style = (Style)FindResource("Key") };
+            var b = new Button { Style = (Style)FindResource("Key") };
             b.Click += (_, _) => Type((string)b.Content);
-            if (char.IsLetter(ch)) _letters.Add(b);
             Keys.Children.Add(b);
         }
-        // La sélection glisse d'une touche à l'autre (ce cadre est commun à tout le clavier).
+        // À la manette, la sélection glisse d'une touche à l'autre (ce cadre est commun à tout le clavier) ; au doigt ou à la souris, la touche s'enfonce.
         foreach (var b in KeyRows().SelectMany(r => r))
+        {
             b.GotKeyboardFocus += (_, _) =>
             {
                 _lastKey = b;
-                _highlight.MoveTo(b);
+                if (PadSelection) _highlight.MoveTo(b);
             };
-        ApplyCase();
+            AddPressAnimation(b);
+        }
+        ApplyKeys();
 
         // Pour les clés d'API (longues), « Coller » est bien plus pratique qu'« Effacer ».
         if (lowercase)
@@ -75,19 +89,63 @@ public partial class KeyboardPanel : OverlayBase
         // Le clavier monte depuis le bas de l'écran.
         Anim.Enter(Panel, 0, 90, 380);
     }
-    public override string Hints => "A:Taper|X:Effacer|Y:Espace|LB:Maj/min|≡:Valider|B:Fermer";
+    public override string Hints => "A:Taper|X:Effacer|Y:Espace|LB:Maj/min|RB:Symboles|≡:Valider|B:Fermer";
 
-    private void ApplyCase()
+    private const double PressedScale = 0.9;
+
+    /// <summary>La touche s'enfonce à l'appui et revient au relâchement (le retour part toujours du fond : un appui bref se voit aussi).</summary>
+    private void AddPressAnimation(Button key)
     {
-        foreach (var b in _letters)
-            b.Content = _lowercase ? ((string)b.Content).ToLowerInvariant() : ((string)b.Content).ToUpperInvariant();
+        var scale = new ScaleTransform();
+        key.RenderTransform = scale;
+        key.RenderTransformOrigin = new Point(0.5, 0.5);
+        void Animate(DoubleAnimation animation)
+        {
+            scale.BeginAnimation(ScaleTransform.ScaleXProperty, animation);
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, animation);
+        }
+        key.PreviewMouseLeftButtonDown += (_, _) =>
+        {
+            ShowPointerMode();
+            Animate(new DoubleAnimation(PressedScale, Anim.Ms(50)) { EasingFunction = Anim.Out });
+        };
+        key.PreviewMouseLeftButtonUp += (_, _) => Animate(new DoubleAnimation(PressedScale, 1, Anim.Ms(170)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 } });
+    }
+
+    private void ShowPointerMode()
+    {
+        if (!PadSelection) return;
+        PadSelection = false;
+        _highlight.Hide();
+    }
+
+    /// <summary>Retour à la manette : le cadre coloré réapparaît sur la touche sélectionnée.</summary>
+    private void ShowPadMode()
+    {
+        if (PadSelection) return;
+        PadSelection = true;
+        if (Keyboard.FocusedElement is Button key && KeyRows().Any(r => r.Contains(key))) _highlight.MoveTo(key);
+    }
+
+    private void ApplyKeys()
+    {
+        var labels = string.Concat(_symbols ? Symbols : Layout);
+        foreach (var (key, label) in Keys.Children.OfType<Button>().Zip(labels))
+            key.Content = _lowercase ? char.ToLowerInvariant(label).ToString() : label.ToString();
         ShiftText.Text = _lowercase ? "Maj" : "MAJ";
+        SymbolsButton.Content = _symbols ? "ABC" : "@";
     }
 
     private void ToggleCase()
     {
         _lowercase = !_lowercase;
-        ApplyCase();
+        ApplyKeys();
+    }
+
+    private void ToggleSymbols()
+    {
+        _symbols = !_symbols;
+        ApplyKeys();
     }
 
     public string Value => _value;
@@ -102,7 +160,7 @@ public partial class KeyboardPanel : OverlayBase
         if (_autoCapital && _lowercase != value.Length > 0)
         {
             _lowercase = value.Length > 0;
-            ApplyCase();
+            ApplyKeys();
         }
         Placeholder.Visibility = value.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         ValueChanged?.Invoke(value);
@@ -118,9 +176,11 @@ public partial class KeyboardPanel : OverlayBase
         switch (action)
         {
             case NavAction.Up or NavAction.Down or NavAction.Left or NavAction.Right:
+                ShowPadMode();
                 MoveFocus(action);
                 return true;
             case NavAction.Accept when Keyboard.FocusedElement is not Button:
+                ShowPadMode();
                 MoveFocus(action);
                 return true;
             case NavAction.Option:
@@ -132,8 +192,14 @@ public partial class KeyboardPanel : OverlayBase
             case NavAction.Menu:
                 Submit();
                 return true;
-            case NavAction.PrevTab or NavAction.NextTab:
+            case NavAction.Accept:
+                ShowPadMode();
+                break;
+            case NavAction.PrevTab:
                 ToggleCase();
+                return true;
+            case NavAction.NextTab:
+                ToggleSymbols();
                 return true;
         }
         return base.Handle(action);
@@ -199,4 +265,5 @@ public partial class KeyboardPanel : OverlayBase
     private void Clear_Click(object sender, RoutedEventArgs e) => Set("");
     private void Ok_Click(object sender, RoutedEventArgs e) => Submit();
     private void Shift_Click(object sender, RoutedEventArgs e) => ToggleCase();
+    private void Symbols_Click(object sender, RoutedEventArgs e) => ToggleSymbols();
 }

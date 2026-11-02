@@ -82,6 +82,33 @@ public sealed class AnkamaScanner : GameScanner
         }
     }
 
+    /// <summary>
+    /// Jeux déjà joués d'après le journal du lanceur, avec leur temps de jeu (même désinstallés : ils restent dans la Bibliothèque).
+    /// Dofus 2 a laissé la place à Dofus 3 : si sa version n'est plus installée, son temps s'ajoute à celui de Dofus.
+    /// </summary>
     public override Task<IReadOnlyList<Game>> ScanOwnedAsync(ScanContext ctx, CancellationToken ct)
-        => Task.FromResult<IReadOnlyList<Game>>([]);
+    {
+        var plays = AnkamaHistory.Read();
+        // Son dossier peut subsister sans le jeu : seul le scan dit s'il est encore installé.
+        if (plays.TryGetValue("dofus-main", out var dofus2) && !ScanInstalled(ctx).Any(g => g.PlatformId == "dofus-main") && plays.Remove("dofus-main"))
+            plays["dofus-dofus3"] = plays.TryGetValue("dofus-dofus3", out var dofus3)
+                ? new AnkamaPlay(dofus3.Minutes + dofus2.Minutes, dofus3.LastPlayed > dofus2.LastPlayed ? dofus3.LastPlayed : dofus2.LastPlayed)
+                : dofus2;
+
+        var games = new List<Game>();
+        foreach (var (key, play) in plays)
+        {
+            if (key.Split('-') is not [var uid, var release] || !Names.TryGetValue($"{uid}/{release}", out var title)) continue;
+            games.Add(new Game
+            {
+                Platform = Platform.Ankama,
+                PlatformId = key,
+                Title = title,
+                PlaytimeMinutes = play.Minutes,
+                PlatformLastPlayed = play.LastPlayed,
+                InstallUri = $"zaap://app/{uid}/{release}",
+            });
+        }
+        return Task.FromResult<IReadOnlyList<Game>>(games);
+    }
 }

@@ -133,7 +133,7 @@ public partial class GamesView : UserControl
         else
         {
             EmptyTitle.Text = "Aucun jeu ne correspond";
-            EmptyHint.Text = "Appuie sur X pour modifier les filtres, ou ⧉ pour changer la recherche.";
+            EmptyHint.Text = "Appuie sur X pour modifier les filtres.";
         }
     }
 
@@ -404,7 +404,7 @@ public partial class GamesView : UserControl
     /// <summary>Boutons affichés au-dessus de la grille, puis le bouton + tout à droite.</summary>
     public void SetCategories(IReadOnlyList<string> keys)
     {
-        var chips = keys.Select(key => Chip(GameCategories.Label(key), key)).ToList();
+        var chips = keys.Select(key => Chip(GameCategories.Label(key), key)).Prepend(Chip("Toutes", AllCategories)).ToList();
         var plus = Chip("", null);
         plus.FontFamily = (FontFamily)FindResource("Icons");
         plus.Margin = new Thickness(0);
@@ -417,6 +417,10 @@ public partial class GamesView : UserControl
         Relayout();
     }
 
+    /// <summary>Clé du bouton « Toutes » : aucun filtre de catégorie.</summary>
+    private const string AllCategories = "";
+    private string ActiveChip => Filter.Category ?? AllCategories;
+
     private Button Chip(string label, string? key)
     {
         var chip = new Button { Content = label, Tag = key, Style = (Style)FindResource("CategoryChip") };
@@ -424,7 +428,7 @@ public partial class GamesView : UserControl
         {
             if (key is null) { CategoriesRequested?.Invoke(); return; }
             // Bouton déjà actif : on revoit tous les jeux.
-            Filter.Category = Filter.Category == key ? null : key;
+            Filter.Category = key == AllCategories || Filter.Category == key ? null : key;
             Refresh(toTop: true);
         };
         chip.GotKeyboardFocus += (_, _) =>
@@ -441,25 +445,26 @@ public partial class GamesView : UserControl
         return chip;
     }
 
-    /// <summary>LT / RT : catégorie précédente ou suivante ; après la dernière (ou avant la première), tous les jeux.</summary>
+    private void PrevCategory_Click(object sender, MouseButtonEventArgs e) => CycleCategory(-1);
+    private void NextCategory_Click(object sender, MouseButtonEventArgs e) => CycleCategory(+1);
+
+    /// <summary>LT / RT : catégorie précédente ou suivante, en boucle (« Toutes » compris).</summary>
     private void CycleCategory(int direction)
     {
         if (CategoryHost.Visibility != Visibility.Visible) return;
         var chips = CategoryBar.Children.OfType<Button>().Where(c => c.Tag is string).ToList();
         if (chips.Count == 0) return;
-        var current = chips.FindIndex(c => (string)c.Tag == Filter.Category);
-        // Tous les jeux occupent une place de plus dans le cycle, juste avant la première catégorie.
-        var next = (current + 1 + direction + chips.Count + 1) % (chips.Count + 1) - 1;
-        Filter.Category = next < 0 ? null : (string)chips[next].Tag;
+        var next = (chips.FindIndex(c => (string)c.Tag == ActiveChip) + direction + chips.Count) % chips.Count;
+        Filter.Category = (string)chips[next].Tag == AllCategories ? null : (string)chips[next].Tag;
         Refresh(toTop: true);
-        if (next >= 0) chips[next].BringIntoView();
+        chips[next].BringIntoView();
     }
 
     private void UpdateCategoryBar()
     {
         foreach (var chip in CategoryBar.Children.OfType<Button>())
         {
-            var active = chip.Tag is string key && key == Filter.Category;
+            var active = chip.Tag is string key && key == ActiveChip;
             chip.Background = new SolidColorBrush(active ? Color.FromRgb(0xF3, 0xF5, 0xF9) : Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
             chip.Foreground = active ? new SolidColorBrush(Color.FromRgb(0x0A, 0x0C, 0x11)) : (Brush)FindResource("TextSecondary");
         }
@@ -477,7 +482,7 @@ public partial class GamesView : UserControl
     private void FocusBar()
     {
         var chips = CategoryBar.Children.OfType<Button>().ToList();
-        var target = chips.FirstOrDefault(c => c == _lastChip) ?? chips.FirstOrDefault(c => c.Tag is string key && key == Filter.Category) ?? chips.FirstOrDefault();
+        var target = chips.FirstOrDefault(c => c == _lastChip) ?? chips.FirstOrDefault(c => c.Tag is string key && key == ActiveChip) ?? chips.FirstOrDefault();
         if (target is not null) FocusNav.Focus(target);
     }
 

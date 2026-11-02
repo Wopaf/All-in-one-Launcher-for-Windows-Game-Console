@@ -46,7 +46,9 @@ public sealed class MetadataService
     public void ApplyCached(Game game)
     {
         var key = game.MetadataKey;
-        if (Cached(key) is { NotFound: false } meta) game.Meta = meta;
+        var cached = Cached(key);
+        if (game.Platform == Platform.Ankama) cached = AnkamaCatalog.Complete(game.Title, cached);
+        if (cached is { NotFound: false } meta) game.Meta = meta;
         game.CoverPath = ImageCache.Existing(key, "cover");
         game.HeroPath = ImageCache.Existing(key, "hero");
         game.LogoPath = ImageCache.Existing(key, "logo");
@@ -145,6 +147,8 @@ public sealed class MetadataService
         if (meta is null || meta.NotFound || DateTime.Now - meta.FetchedAt > RetryNotFound) meta = new GameMetadata();
         // Visuel toujours manquant : on refait la recherche complète (forcée, ou au plus une fois par jour).
         else if (MissingImages(games) && (retryMissing || DateTime.Now - meta.FetchedAt > TimeSpan.FromDays(1))) meta = new GameMetadata();
+
+        if (first.Platform == Platform.Ankama) meta = AnkamaCatalog.Complete(first.Title, meta)!;
 
         var missing = MissingSources(meta).ToList();
         if (missing.Contains("Steam"))

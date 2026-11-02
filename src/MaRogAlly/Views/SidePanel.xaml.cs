@@ -102,7 +102,7 @@ public partial class SidePanel : OverlayBase
     /// <summary>Ligne d'application : son icône Windows (chargée après coup), son nom ; ou un glyphe si elle n'a pas d'icône.</summary>
     public Button AddApp(string label, string? iconSource, Action onClick, string? glyph = null, object? tag = null, bool star = false)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var row = new Grid { ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } } };
         if (glyph is not null)
             row.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, Width = 26, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) });
         else
@@ -112,9 +112,15 @@ public partial class SidePanel : OverlayBase
             row.Children.Add(icon);
             if (iconSource is not null) LoadIcon(icon, iconSource);
         }
-        row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 300 });
+        var name = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        Grid.SetColumn(name, 1);
+        row.Children.Add(name);
         if (star)
-            row.Children.Add(new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 12, Foreground = (Brush)FindResource("Gold"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) });
+        {
+            var mark = new TextBlock { Text = "", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 12, Foreground = (Brush)FindResource("TextSecondary"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            Grid.SetColumn(mark, 2);
+            row.Children.Add(mark);
+        }
 
         var b = new Button { Content = row, Style = (Style)FindResource("RowButton") };
         Track(b);

@@ -59,7 +59,11 @@ public sealed class DiscoverGame : ObservableObject
     public string? CardBadge => IsOwned ? "Possédé"
         : PriceText is { } price ? (DiscountText is { } d ? $"{d}  {price}" : price)
         : null;
-    [JsonIgnore] public bool IsDiscounted => DiscountPercent > 0 || IsFree;
+    [JsonIgnore] public bool IsDiscounted => DiscountPercent > 0 || IsFree || StoreDiscounted;
+    /// <summary>Liste de souhaits : jeu d'une autre boutique que Steam (sa page, sa plateforme, sa promotion).</summary>
+    [JsonIgnore] public string? OtherStoreUrl { get; init; }
+    [JsonIgnore] public Platform StorePlatform { get; init; } = Platform.Steam;
+    [JsonIgnore] public bool StoreDiscounted { get; init; }
     /// <summary>Recherche Instant Gaming limitée aux versions PC Steam (jamais de console).</summary>
     [JsonIgnore]
     public string InstantGamingUrl => "https://www.instant-gaming.com/fr/rechercher/?q=" + Uri.EscapeDataString(Name)
@@ -78,7 +82,7 @@ public sealed class DiscoverGame : ObservableObject
     private bool _isWished;
     /// <summary>Dans la liste de souhaits (cœur sur la jaquette).</summary>
     [JsonIgnore] public bool IsWished { get => _isWished; set => Set(ref _isWished, value); }
-    [JsonIgnore] public string WishKey => $"steam-{AppId}";
+    [JsonIgnore] public string WishKey => OtherStoreUrl ?? $"steam-{AppId}";
 }
 
 public sealed class DiscoverSection

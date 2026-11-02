@@ -33,6 +33,7 @@ public sealed class DesktopHost
         };
     }
 
+    public IntPtr Handle => _hwnd;
     public bool IsForeground => _hwnd != IntPtr.Zero && GetForegroundWindow() == _hwnd;
 
     /// <summary>Place la fenêtre sur tout le moniteur où elle se trouve (pixels physiques).</summary>

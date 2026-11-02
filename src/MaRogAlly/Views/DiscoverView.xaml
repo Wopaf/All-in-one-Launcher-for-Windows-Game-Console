@@ -79,7 +79,7 @@
         </Grid>
 
         <!-- ====== Jeux de la catégorie ====== -->
-        <Grid Grid.Row="2" Margin="0,24,0,22">
+        <Grid x:Name="CoversHost" Grid.Row="2" Margin="0,24,0,22">
             <ScrollViewer x:Name="RowScroller" Style="{StaticResource RowScroll}">
                 <ItemsControl x:Name="Covers" ItemTemplate="{StaticResource DiscoverCard}" Focusable="False" Margin="64,26,64,26">
                     <ItemsControl.ItemsPanel>

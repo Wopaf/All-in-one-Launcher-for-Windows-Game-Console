@@ -43,6 +43,8 @@ public partial class MainWindow : Window
     private readonly TagService _tags;
     private readonly AppUpdater _appUpdater;
     private readonly WishlistService _wishlist = new();
+    /// <summary>Luminosité de l'écran ; null si elle ne se règle pas depuis l'application (écran externe).</summary>
+    private int? _brightness;
     private CancellationTokenSource? _searchCts;
     private readonly PlatformsView _platforms = new();
     private readonly AchievementsView _achievementsView = new();
@@ -110,6 +112,7 @@ public partial class MainWindow : Window
         _pad.IsActive = () => _desktop.IsForeground;
         _pad.Action += OnNav;
         _pad.ReturnRequested += _desktop.BringToFront;
+        _pad.MinimizeRequested += MinimizeForegroundApp;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
 
         _heroTimer.Tick += (_, _) => { _heroTimer.Stop(); ShowHero(); };
@@ -143,6 +146,7 @@ public partial class MainWindow : Window
     {
         UiSounds.Enabled = _settings.UiSounds && !Environment.GetCommandLineArgs().Contains("--render");
         UiSounds.PlayOpen();
+        _ = ScreenBrightness.ReadAsync().ContinueWith(read => _brightness = read.Result, TaskScheduler.FromCurrentSynchronizationContext());
         if (UpdateSnapshot.Load() is { } updates)
         {
             _windowsUpdates = updates.Windows;
@@ -174,6 +178,11 @@ public partial class MainWindow : Window
         SetGames(cached);
         // « --tab N » ouvre directement un onglet (0 à 4) : pratique pour vérifier une page.
         var args = Environment.GetCommandLineArgs();
+        if (!args.Contains("--render"))
+        {
+            WindowsTaskbar.Apply(_settings);
+            Application.Current.Exit += (_, _) => WindowsTaskbar.Restore(_settings);
+        }
         var tabArg = Array.IndexOf(args, "--tab");
         var startPage = tabArg >= 0 && tabArg + 1 < args.Length && int.TryParse(args[tabArg + 1], out var t) ? t : 0;
         ShowPage(startPage, animate: false);
@@ -244,13 +253,14 @@ public partial class MainWindow : Window
                 if (button == "enter") Dock.Enter();
                 else if (button is "left" or "right") OnNav(button == "left" ? NavAction.Left : NavAction.Right);
                 else if (button == "wait") await Task.Delay(3000);
-                else if (button == "wishlist") await ShowWishlistAsync();
+                else if (button == "wishlist") OpenDiscover(DiscoverView.WishlistKey);
                 else if (button == "lt" || button == "rt") OnNav(button == "lt" ? NavAction.PrevLetter : NavAction.NextLetter);
                 else if (button == "down") OnNav(NavAction.Down);
+                else if (button == "a") OnNav(NavAction.Accept);
+                else if (button == "rb") OnNav(NavAction.NextTab);
                 else if (button == "y") OnNav(NavAction.Secondary);
                 else if (button == "windows") ToggleDockPanel(WindowsMenu, OpenWindowsMenu);
                 else if (button == "background") ToggleDockPanel(BackgroundApps, OpenBackgroundApps);
-                else ToggleDockPanel(DockOptions, OpenDockOptions);
             }
         }
         if (args.Contains("--settings"))
@@ -273,13 +283,13 @@ public partial class MainWindow : Window
     /// <summary>Derrière toutes les fenêtres (« --render »).</summary>
     public void SendToBackNow() => _desktop.SendToBack();
 
-    /// <summary>Lanceurs installés : proposés dans les réglages, et ouverts avec l'application sauf ceux désactivés.</summary>
+    /// <summary>Lanceurs installés : proposés dans les réglages, et ouverts avec l'application s'ils y sont activés.</summary>
     private async Task LoadLaunchersAsync(bool start)
     {
         var installed = await Task.Run(LibraryService.InstalledLaunchers);
         _settingsView.SetLaunchers(installed);
         if (start)
-            LauncherWarmup.Start(installed.Where(p => !_settings.DisabledLaunchers.Contains(p.Id)), () => Dispatcher.BeginInvoke(() => Activate()));
+            LauncherWarmup.Start(installed.Where(p => _settings.StartupLaunchers.Contains(p.Id)), () => Dispatcher.BeginInvoke(() => Activate()));
     }
 
     private void PlayIntro()
@@ -1016,8 +1026,8 @@ public partial class MainWindow : Window
         if (label.ActualWidth == 0) return;
         var x = label.TranslatePoint(new Point(0, 0), Tabs).X;
         var t = (TranslateTransform)TabIndicator.RenderTransform;
-        t.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, Anim.Ms(380)) { EasingFunction = Anim.Spring });
-        TabIndicator.BeginAnimation(WidthProperty, new DoubleAnimation(label.ActualWidth, Anim.Ms(380)) { EasingFunction = Anim.Out });
+        t.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, Anim.Ms(170)) { EasingFunction = Anim.Out });
+        TabIndicator.BeginAnimation(WidthProperty, new DoubleAnimation(label.ActualWidth, Anim.Ms(170)) { EasingFunction = Anim.Out });
         TabIndicator.Height = label.ActualHeight;
         TabIndicator.VerticalAlignment = VerticalAlignment.Center;
     }
@@ -1027,6 +1037,7 @@ public partial class MainWindow : Window
     {
         _discoverView.ShowSection(key);
         OpenSubPage(_discoverView);
+        _ = RefreshWishlistAsync();
     }
 
     /// <summary>La barre d'onglets s'efface dans les Réglages et les Plateformes (et sous les pages plein écran).</summary>
@@ -1094,7 +1105,6 @@ public partial class MainWindow : Window
         Dock.CloseRequested += w => WindowsShell.Close(w.Handle);
         Dock.WindowsMenuRequested += () => ToggleDockPanel(WindowsMenu, OpenWindowsMenu);
         Dock.BackgroundRequested += () => ToggleDockPanel(BackgroundApps, OpenBackgroundApps);
-        Dock.OptionsRequested += () => ToggleDockPanel(DockOptions, OpenDockOptions);
         Dock.HintsChanged += UpdateHints;
         Dock.LeaveRequested += LeaveDock;
         Dock.PreviewGotKeyboardFocus += (_, e) =>
@@ -1140,7 +1150,6 @@ public partial class MainWindow : Window
         };
         _explore.OpenTrends += OpenDiscover;
         _explore.IsWished = _wishlist.Contains;
-        _explore.WishlistRequested += () => _ = ShowWishlistAsync();
         _explore.WishNewGame += d => ToggleWish(WishOf(d), d.Name);
         _explore.WishHit += h =>
         {
@@ -1156,7 +1165,17 @@ public partial class MainWindow : Window
 
         _discoverView.OpenGame += OpenDetail;
         _discoverView.OpenStore += OpenStorePage;
-        _discoverView.OpenDetails += OpenStoreDetail;
+        _discoverView.OpenDetails += d =>
+        {
+            if (d.OtherStoreUrl is { } url) OpenStorePrompt(d.Name, PlatformInfo.Of(d.StorePlatform), () => GameLauncher.Open(url));
+            else OpenStoreDetail(d);
+        };
+        _discoverView.RemoveWish += d =>
+        {
+            if (_wishlist.Items.FirstOrDefault(i => i.Key == d.WishKey) is { } item) ToggleWish(item, item.Title);
+        };
+        _discoverView.HintsChanged += UpdateHints;
+        ShowWishlistGames();
 
         _achievementsView.HintsChanged += () => { if (CurrentView == _achievementsView && _overlays.Count == 0) UpdateHints(); };
         _achievementsView.IconLoader = url => _achievements.IconAsync(url, CancellationToken.None);
@@ -1165,7 +1184,7 @@ public partial class MainWindow : Window
 
         _settingsView.EditRequested += (title, value, apply) =>
         {
-            var kb = new KeyboardPanel(title, value, "Saisis ou colle la valeur", lowercase: true);
+            var kb = new KeyboardPanel(value, $"{title} : saisis ou colle la valeur", lowercase: true);
             kb.Submitted += apply;
             OpenOverlay(kb);
         };
@@ -1299,18 +1318,6 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Select : la sélection passe sur le bouton du menu Windows (les volets ouverts se ferment).
-        if (action == NavAction.View && _overlays.All(o => o is not (DetailView or StatsView or WebPreview)))
-        {
-            var fromDockPanel = _dockPanel is not null;
-            CloseFlyouts();
-            // Déjà sur ce bouton : Select ressort de la barre.
-            if (Dock.IsOnMenu && !fromDockPanel) LeaveDock();
-            else Dock.Enter();
-            UpdateHints();
-            return;
-        }
-
         if (_overlays.Count > 0)
         {
             // Start referme le menu système.
@@ -1382,7 +1389,6 @@ public partial class MainWindow : Window
             // Échap ouvre le menu Start quand il n'y a rien à refermer.
             Key.Escape => _overlays.Count == 0 && _subView is null ? NavAction.Menu : NavAction.Back,
             Key.Back => typing ? NavAction.Option : NavAction.Back,
-            Key.F2 => NavAction.View,
             Key.Tab => Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? NavAction.PrevTab : NavAction.NextTab,
             Key.PageUp => NavAction.PrevLetter,
             Key.PageDown => NavAction.NextLetter,
@@ -1819,7 +1825,7 @@ public partial class MainWindow : Window
 
     // ---- Barre de gauche ----
 
-    private const string WindowsMenu = "Windows", BackgroundApps = "Applications en arrière-plan", DockOptions = "Options";
+    private const string WindowsMenu = "Windows", BackgroundApps = "Applications en arrière-plan";
     private SidePanel? _dockPanel;
     private string? _dockKind;
     private bool _refreshingDock;
@@ -1900,22 +1906,6 @@ public partial class MainWindow : Window
         OpenOverlay(panel);
     }
 
-    /// <summary>Options : volets de Windows, clavier tactile, bureau.</summary>
-    private void OpenDockOptions()
-    {
-        var panel = DockPanelOf(DockOptions, bottom: true);
-        void Add(string glyph, string label, Action run) => panel.AddApp(label, null, () =>
-        {
-            panel.Close();
-            run();
-        }, glyph);
-        Add("", "Wi-Fi, Bluetooth, volume et luminosité", WindowsShell.ShowQuickSettings);
-        Add("", "Notifications", WindowsShell.ShowNotifications);
-        Add("", "Clavier de Windows", () => _ = WindowsShell.ToggleTouchKeyboardAsync());
-        Add("", "Bureau de Windows", WindowsShell.ShowDesktop);
-        OpenOverlay(panel);
-    }
-
     private (List<InstalledApp>? Apps, List<PlatformInfo> Launchers, List<InstalledApp> Recent) _windowsMenuData = (null, [], []);
 
     /// <summary>Menu Windows maison : accès rapides, puis recherche et liste de toutes les applications.</summary>
@@ -1950,7 +1940,7 @@ public partial class MainWindow : Window
             panel.Clear();
             panel.AddApp(string.IsNullOrEmpty(search) ? "Rechercher une application" : $"« {search} »", null, () =>
             {
-                var keyboard = new KeyboardPanel("Rechercher une application", search, "Nom de l'application…");
+                var keyboard = new KeyboardPanel(search, "Nom de l'application…");
                 keyboard.ValueChanged += v =>
                 {
                     search = v;
@@ -2066,6 +2056,14 @@ public partial class MainWindow : Window
     private MainMenu? _systemMenu;
 
     /// <summary>Bouton Start (ou Échap) : menu principal à droite.</summary>
+    /// <summary>Niveau changé par les touches de la machine depuis le dernier relevé.</summary>
+    private async Task SyncBrightnessAsync(MainMenu menu)
+    {
+        if (await ScreenBrightness.ReadAsync() is not int level) return;
+        _brightness = level;
+        menu.ShowBrightness(level);
+    }
+
     private void OpenSystemMenu()
     {
         var menu = new MainMenu();
@@ -2116,6 +2114,22 @@ public partial class MainWindow : Window
             OpenSubPage(_platforms);
         });
 
+        menu.AddIconButtons(
+            ("\uE701", "Wi-Fi", () => { menu.Close(); GameLauncher.Open("ms-settings:network-wifi"); }),
+            ("\uE702", "Bluetooth", () => { menu.Close(); GameLauncher.Open("ms-settings:bluetooth"); }),
+            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }),
+            ("\uE7F4", "Retour au bureau", () => { menu.Close(); WindowsShell.ShowDesktop(); }));
+
+        if (_brightness is int brightness)
+        {
+            menu.AddBrightness(brightness, level =>
+            {
+                _brightness = level;
+                ScreenBrightness.Set(level);
+            });
+            _ = SyncBrightnessAsync(menu);
+        }
+
         menu.AddDrives();
 
         menu.AddSection("Alimentation");
@@ -2148,7 +2162,7 @@ public partial class MainWindow : Window
 
     private void OpenStoreSearchKeyboard()
     {
-        var kb = new KeyboardPanel("Rechercher un jeu", _explore.Query, "Nom du jeu…");
+        var kb = new KeyboardPanel(_explore.Query, "Nom du jeu…");
         kb.Submitted += q => _ = SearchStoresAsync(q);
         OpenOverlay(kb);
     }
@@ -2252,33 +2266,35 @@ public partial class MainWindow : Window
     {
         var added = _wishlist.Toggle(item);
         Toast("", added ? $"{title} ajouté à ta liste de souhaits" : $"{title} retiré de ta liste de souhaits");
-        if (_explore.WishlistShown) _explore.ShowWishlist(WishlistHits(), focus: false);
+        ShowWishlistGames();
         _explore.RefreshWishMarks();
         return added;
     }
 
-    /// <summary>Un jeu acheté entre-temps est signalé « Possédé » et ouvre sa fiche de la bibliothèque.</summary>
-    private List<SearchHit> WishlistHits() => _wishlist.Items.Select(i =>
+    /// <summary>Copie sans classement ni joueurs : ceux d'une liste de tendances n'ont pas de sens ici.</summary>
+    private static DiscoverGame WishGame(WishItem i)
     {
-        var owned = _games.FirstOrDefault(g => (i.AppId is int id && (g.SteamAppId == id || g.Meta?.SteamAppId == id)) || Text.Normalize(g.Title) == Text.Normalize(i.Title));
-        if (i.Steam is { } steam && owned is null)
+        var s = i.Steam;
+        return new DiscoverGame
         {
-            var hit = SteamHit(steam);
-            hit.CoverPath ??= i.CoverPath;
-            hit.HeroPath ??= i.HeroPath;
-            return hit;
-        }
-        return new SearchHit
-        {
-            Title = i.Title, Platform = PlatformInfo.Of(i.Platform), Owned = owned, Steam = i.Steam, StoreUrl = i.StoreUrl,
-            Price = i.Price, IsDiscounted = i.IsDiscounted, CoverPath = owned?.CoverPath ?? i.CoverPath, HeroPath = owned?.HeroPath ?? i.HeroPath,
+            AppId = s?.AppId ?? 0, Name = i.Title, Description = s?.Description ?? "", Release = s?.Release, ComingSoon = s?.ComingSoon ?? false,
+            ReviewPercent = s?.ReviewPercent, ReviewLabel = s?.ReviewLabel, IsFree = s?.IsFree ?? false, Price = s?.Price ?? i.Price,
+            OriginalPrice = s?.OriginalPrice, DiscountPercent = s?.DiscountPercent ?? 0, Genres = s?.Genres ?? [], CoverUrls = s?.CoverUrls ?? [], HeroUrls = s?.HeroUrls ?? [],
+            CoverPath = s?.CoverPath ?? i.CoverPath, HeroPath = s?.HeroPath ?? i.HeroPath ?? s?.CoverPath ?? i.CoverPath,
+            OtherStoreUrl = i.StoreUrl, StorePlatform = i.Platform, StoreDiscounted = s is null && i.IsDiscounted,
         };
-    }).ToList();
+    }
 
-    /// <summary>Affiche la liste tout de suite, puis met à jour les prix et les jaquettes depuis le magasin Steam.</summary>
-    private async Task ShowWishlistAsync()
+    private void ShowWishlistGames()
     {
-        _explore.ShowWishlist(WishlistHits(), focus: true);
+        var games = _wishlist.Items.Select(WishGame).ToList();
+        _discoverView.SetWishlist(games);
+        _explore.SetWishlist(games);
+    }
+
+    /// <summary>Met à jour les prix et les jaquettes de la liste de souhaits depuis le magasin Steam.</summary>
+    private async Task RefreshWishlistAsync()
+    {
         var items = _wishlist.Items.Where(i => i.AppId is not null).ToList();
         if (items.Count == 0) return;
         var fresh = await _discover.DetailsOfAsync(items.Select(i => i.AppId!.Value).ToList(), CancellationToken.None);
@@ -2293,7 +2309,7 @@ public partial class MainWindow : Window
             item.HeroPath = game.HeroPath ?? item.HeroPath;
         }
         _wishlist.Save();
-        if (_explore.WishlistShown) _explore.ShowWishlist(WishlistHits(), focus: false);
+        ShowWishlistGames();
     }
 
     private void OpenSearchHit(SearchHit h)
@@ -2305,7 +2321,7 @@ public partial class MainWindow : Window
 
     private void OpenSearch(GamesView view)
     {
-        var kb = new KeyboardPanel("Rechercher un jeu", view.Filter.Search, "Titre du jeu…");
+        var kb = new KeyboardPanel(view.Filter.Search, "Titre du jeu…");
         kb.ValueChanged += v =>
         {
             view.Filter.Search = v;
@@ -2466,6 +2482,21 @@ public partial class MainWindow : Window
         return left.TotalMinutes < 1 ? "moins d'une minute" : $"environ {Math.Ceiling(left.TotalMinutes):0} min restantes";
     }
 
+    private void MenuHint_Click(object sender, MouseButtonEventArgs e) => OnNav(NavAction.Menu);
+
+    /// <summary>B depuis une autre application : elle se réduit, sauf si c'est un jeu (B y sert à jouer).</summary>
+    private void MinimizeForegroundApp()
+    {
+        if (!_settings.MinimizeWithB) return;
+        if (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || WindowsShell.IsFullscreen(app.Handle) || IsGameWindow(app)) return;
+        WindowsShell.Minimize(app.Handle);
+        // Plus aucune fenêtre affichée : on revient sur l'application plutôt que sur le bureau.
+        if (WindowsShell.Enumerate(_desktop.Handle).All(w => w.Minimized)) _desktop.BringToFront();
+    }
+
+    private bool IsGameWindow(OpenWindow window)
+        => window.IconSource is { } path && _games.Any(g => g.InstallDir is { Length: > 0 } dir && path.StartsWith(dir.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase));
+
     private void UpdateClock()
     {
         ClockText.Text = DateTime.Now.ToString("HH:mm");
@@ -2485,15 +2516,13 @@ public partial class MainWindow : Window
         var hints = _overlays.LastOrDefault()?.Hints ?? (Dock.IsKeyboardFocusWithin ? Dock.Hints : null) ?? CurrentView switch
         {
             GamesView gv => gv.Hints,
-            DiscoverView => "A:Ouvrir|Y:Page Steam|↑↓:Catégorie|B:Retour",
+            DiscoverView dv => dv.Hints,
             ExploreView ev => ev.Hints,
             PlatformsView => "Y:Ouvrir le lanceur|B:Retour",
             AchievementsView av => av.Hints,
             SettingsView => "A:Valider|Y:Ouvrir le site|B:Retour",
             _ => "",
         };
-
-        if (_overlays.Count == 0) hints += Dock.IsKeyboardFocusWithin ? "|≡:Menu" : "|⧉:Applications|≡:Menu";
 
         HintsBox.Visibility = string.IsNullOrEmpty(hints) ? Visibility.Collapsed : Visibility.Visible;
         HintsBar.Children.Clear();

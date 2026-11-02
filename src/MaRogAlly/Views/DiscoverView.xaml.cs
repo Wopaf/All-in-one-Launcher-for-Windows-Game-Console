@@ -10,7 +10,7 @@ using MaRogAlly.UI;
 
 namespace MaRogAlly.Views;
 
-/// <summary>Tendances Steam par catégorie (les plus joués, nouveautés, ventes, à venir), ouvertes depuis l'onglet Découverte.</summary>
+/// <summary>Tendances Steam par catégorie (les plus joués, nouveautés, ventes, à venir) et liste de souhaits, ouvertes depuis l'onglet Découverte.</summary>
 public partial class DiscoverView : UserControl
 {
     public static readonly DependencyProperty CoverWidthProperty = DependencyProperty.Register(nameof(CoverWidth), typeof(double), typeof(DiscoverView), new PropertyMetadata(140.0));
@@ -26,10 +26,17 @@ public partial class DiscoverView : UserControl
     public event Action<DiscoverGame>? OpenDetails;
     /// <summary>Y : page du magasin Steam directement.</summary>
     public event Action<DiscoverGame>? OpenStore;
+    /// <summary>Y dans la liste de souhaits : retire le jeu.</summary>
+    public event Action<DiscoverGame>? RemoveWish;
+    public event Action? HintsChanged;
 
+    public const string WishlistKey = "wishlist";
+    /// <summary>Toujours présente, avant les tendances, même sans connexion.</summary>
+    private readonly DiscoverSection _wish = new() { Key = WishlistKey, Title = "Ma liste de souhaits", Subtitle = "Les jeux que tu veux garder à l'œil" };
+    private bool _loaded;
     private List<DiscoverSection> _sections = [];
     private readonly Dictionary<string, int> _lastIndex = [];
-    private int _section;
+    private int _section = -1;
     /// <summary>Catégorie demandée depuis l'onglet Découverte, à retrouver quand les données arrivent.</summary>
     private string? _pendingKey;
     private DiscoverGame? _selected;
@@ -39,7 +46,8 @@ public partial class DiscoverView : UserControl
     public DiscoverView()
     {
         InitializeComponent();
-        KickerLogo.Data = Geometry.Parse(PlatformInfo.Of(Platform.Steam).Logo);
+        _sections = [_wish];
+        BuildTabs();
         SizeChanged += (_, _) => Relayout();
     }
 
@@ -49,6 +57,7 @@ public partial class DiscoverView : UserControl
         var compact = ActualHeight < 760;
         CoverHeight = Math.Clamp(Math.Floor(ActualHeight * (compact ? 0.3 : 0.32)), 120, 340);
         CoverWidth = Math.Floor(CoverHeight / 1.5);
+        CoversHost.MinHeight = CoverHeight; // les onglets restent en place sur une liste vide
         TitleText.FontSize = compact ? 32 : 46;
         TitleText.LineHeight = compact ? 36 : 52;
         TitleText.MaxHeight = TitleText.LineHeight * 2;
@@ -60,19 +69,33 @@ public partial class DiscoverView : UserControl
 
     public void SetSections(List<DiscoverSection> sections, bool loaded)
     {
-        var key = _sections.ElementAtOrDefault(_section)?.Key ?? _pendingKey;
-        _sections = sections;
+        var key = _pendingKey ?? _sections.ElementAtOrDefault(_section)?.Key;
+        _loaded = loaded;
+        _sections = [_wish, .. sections];
         MatchOwned(_library);
-        EmptyText.Text = loaded ? "Impossible de récupérer les tendances Steam pour le moment." : "Chargement des tendances Steam…";
-        EmptyText.Visibility = sections.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         BuildTabs();
-        var keep = sections.FindIndex(s => s.Key == key);
+        var keep = _sections.FindIndex(s => s.Key == key);
+        if (keep >= 0) _pendingKey = null;
+        else if (sections.Count > 0) keep = 1;
         // Les données arrivent souvent après l'affichage : on sélectionne si rien d'autre n'a le focus (ex. une fiche ouverte).
         var focus = IsVisible && (IsKeyboardFocusWithin || Keyboard.FocusedElement is null or Window);
-        ShowSection(keep >= 0 ? keep : 0, 0, focus);
+        ShowSection(keep, 0, focus);
     }
 
-    public IEnumerable<DiscoverGame> AllGames => _sections.SelectMany(s => s.Games);
+    /// <summary>Remplace les jeux de la liste de souhaits ; la sélection garde sa place si la liste est affichée.</summary>
+    public void SetWishlist(List<DiscoverGame> games)
+    {
+        var shown = ReferenceEquals(_sections.ElementAtOrDefault(_section), _wish);
+        if (_selected is { } sel && _wish.Games.IndexOf(sel) is var index and >= 0) _lastIndex[WishlistKey] = index;
+        var focus = shown && IsVisible && (IsKeyboardFocusWithin || Keyboard.FocusedElement is null or Window);
+        if (shown) _selected = null;
+        _wish.Games = games;
+        MatchOwned(_library);
+        if (shown) ShowSection(_section, 0, focus);
+    }
+
+    /// <summary>Jeux des tendances (la liste de souhaits a ses propres mises à jour).</summary>
+    public IEnumerable<DiscoverGame> AllGames => _sections.Where(s => s != _wish).SelectMany(s => s.Games);
 
     /// <summary>Repère les jeux déjà présents dans la bibliothèque (identifiant Steam, sinon titre).</summary>
     public void MatchOwned(IReadOnlyList<Game> library)
@@ -86,7 +109,7 @@ public partial class DiscoverView : UserControl
         }
         var byTitle = library.GroupBy(g => Text.Normalize(g.Title))
             .ToDictionary(x => x.Key, x => x.OrderByDescending(g => g.IsInstalled).First());
-        foreach (var d in AllGames)
+        foreach (var d in _sections.SelectMany(s => s.Games))
             d.Owned = bySteam.GetValueOrDefault(d.AppId) ?? byTitle.GetValueOrDefault(Text.Normalize(d.Name));
         if (_selected is { } s) Show(s, animate: false);
     }
@@ -135,34 +158,40 @@ public partial class DiscoverView : UserControl
     /// <summary>Ouverture depuis l'onglet Découverte : affiche la catégorie demandée (sinon la première).</summary>
     public void ShowSection(string key)
     {
-        _pendingKey = key;
-        ShowSection(Math.Max(0, _sections.FindIndex(s => s.Key == key)), 0, focus: true);
+        var index = _sections.FindIndex(s => s.Key == key);
+        _pendingKey = index < 0 ? key : null;
+        ShowSection(index, 0, focus: true);
     }
 
     private void ShowSection(int index, int direction, bool focus)
     {
-        if (_sections.Count == 0)
-        {
-            Covers.ItemsSource = null;
-            DetailPanel.Visibility = Visibility.Hidden;
-            HeroRequested?.Invoke(null);
-            return;
-        }
         // On mémorise la position dans la catégorie quittée.
         if (_selected is { } sel && _sections.ElementAtOrDefault(_section) is { } old && old.Games.IndexOf(sel) is var oi and >= 0)
             _lastIndex[old.Key] = oi;
 
-        _section = Math.Clamp(index, 0, _sections.Count - 1);
-        var section = _sections[_section];
+        _section = index;
+        var section = _sections.ElementAtOrDefault(index);
+        var games = section?.Games ?? [];
         UpdateTabs();
-        SectionSubtitle.Text = section.Subtitle;
-        DetailPanel.Visibility = Visibility.Visible;
-        Covers.ItemsSource = section.Games;
+        SectionSubtitle.Text = section?.Subtitle ?? "";
+        DetailPanel.Visibility = games.Count > 0 ? Visibility.Visible : Visibility.Hidden;
+        Covers.ItemsSource = games;
         RowScroller.ScrollToHorizontalOffset(0);
         if (direction != 0) Anim.Enter(Covers, 0, 24 * direction, 300);
+        EmptyText.Text = section == _wish ? "Ta liste de souhaits est vide. Appuie sur Y sur une jaquette de l'onglet Découverte, ou utilise le bouton de la fiche d'un jeu."
+            : _loaded ? "Impossible de récupérer les tendances Steam pour le moment." : "Chargement des tendances Steam…";
+        EmptyText.Visibility = games.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (games.Count == 0)
+        {
+            _selected = null;
+            HeroRequested?.Invoke(null);
+            HintsChanged?.Invoke();
+            return;
+        }
 
-        var target = Math.Clamp(_lastIndex.GetValueOrDefault(section.Key), 0, Math.Max(0, section.Games.Count - 1));
-        if (section.Games.Count > 0) Show(section.Games[target], animate: true);
+        var target = Math.Clamp(_lastIndex.GetValueOrDefault(section!.Key), 0, games.Count - 1);
+        Show(games[target], animate: true);
+        HintsChanged?.Invoke();
         if (focus) FocusAt(target);
     }
 
@@ -194,6 +223,7 @@ public partial class DiscoverView : UserControl
         var changed = !ReferenceEquals(g, _selected);
         _selected = g;
         var section = _sections.ElementAtOrDefault(_section);
+        KickerLogo.Data = Geometry.Parse(PlatformInfo.Of(g.StorePlatform).Logo);
         KickerText.Text = (g.Rank is int r ? $"{section?.Title} · N° {r}" : section?.Title ?? "").ToUpperInvariant();
         TitleText.Text = g.Name;
         DescText.Text = g.Description;
@@ -276,6 +306,10 @@ public partial class DiscoverView : UserControl
         FocusAt(index);
     }
 
+    public string Hints => !ReferenceEquals(_sections.ElementAtOrDefault(_section), _wish) ? "A:Ouvrir|Y:Page Steam|↑↓:Catégorie|B:Retour"
+        : _selected is null ? "↑↓:Catégorie|B:Retour"
+        : "A:Ouvrir|Y:Retirer|↑↓:Catégorie|B:Retour";
+
     public bool Handle(NavAction action)
     {
         switch (action)
@@ -292,7 +326,9 @@ public partial class DiscoverView : UserControl
                 FocusNav.Activate();
                 return true;
             case NavAction.Secondary:
-                if (_selected is { } g) OpenStore?.Invoke(g);
+                if (_selected is not { } g) return true;
+                if (ReferenceEquals(_sections.ElementAtOrDefault(_section), _wish)) RemoveWish?.Invoke(g);
+                else OpenStore?.Invoke(g);
                 return true;
         }
         return false;
