@@ -1,0 +1,96 @@
+<UserControl x:Class="MaRogAlly.Views.DiscoverView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:MaRogAlly.UI"
+             xmlns:s="clr-namespace:MaRogAlly.Services"
+             Focusable="False">
+    <UserControl.Resources>
+        <!-- Jaquette d'un jeu en tendance -->
+        <DataTemplate x:Key="DiscoverCard" DataType="{x:Type s:DiscoverGame}">
+            <Button Style="{StaticResource MediaCard}" Tag="8" Margin="0,0,18,0" Click="Card_Click" GotKeyboardFocus="Card_Focus"
+                    Width="{Binding CoverWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                    Height="{Binding CoverHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                <Grid>
+                    <TextBlock Text="{Binding Name}" Margin="10" TextWrapping="Wrap" VerticalAlignment="Center" TextAlignment="Center"
+                               FontSize="14" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
+                    <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
+                    <!-- Classement (les plus joués) -->
+                    <Border CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
+                            Background="#E60A0C11" Visibility="{Binding RankText, Converter={StaticResource VisibleIf}}">
+                        <TextBlock Text="{Binding Rank}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="13" Foreground="White"/>
+                    </Border>
+                    <!-- Prix (vert en promotion ou gratuit), ou « Possédé » (bleu) -->
+                    <Border x:Name="PriceBadge" CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                            Background="#E60A0C11" Visibility="{Binding CardBadge, Converter={StaticResource VisibleIf}}">
+                        <TextBlock Text="{Binding CardBadge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
+                    </Border>
+                </Grid>
+            </Button>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsDiscounted}" Value="True">
+                    <Setter TargetName="PriceBadge" Property="Background" Value="{StaticResource FreeGreen}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsOwned}" Value="True">
+                    <Setter TargetName="PriceBadge" Property="Background" Value="#2D7FF9"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <Style x:Key="InfoBadge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Background" Value="#1FFFFFFF"/>
+            <Setter Property="BorderBrush" Value="#14FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ====== Fiche du jeu sélectionné ====== -->
+        <StackPanel x:Name="DetailPanel" Margin="64,0,64,28" VerticalAlignment="Bottom" HorizontalAlignment="Left" MaxWidth="900">
+            <StackPanel Orientation="Horizontal">
+                <Path x:Name="KickerLogo" Width="16" Height="16" Stretch="Uniform" Fill="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <TextBlock x:Name="KickerText" Style="{StaticResource Label}" FontSize="14" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock x:Name="TitleText" Style="{StaticResource H1}" FontSize="46" TextWrapping="Wrap" Margin="0,10,0,0"
+                       LineStackingStrategy="BlockLineHeight" LineHeight="52" TextTrimming="CharacterEllipsis" MaxHeight="104"/>
+            <StackPanel x:Name="Badges" Orientation="Horizontal" Margin="0,14,0,0" Height="30" ClipToBounds="True"/>
+            <TextBlock x:Name="DescText" Style="{StaticResource BodyText}" Margin="0,14,0,0" MaxWidth="780" HorizontalAlignment="Left"
+                       MaxHeight="72" TextTrimming="WordEllipsis"/>
+        </StackPanel>
+
+        <!-- ====== Catégories (↑ ↓ pour changer) ====== -->
+        <Grid Grid.Row="1" Margin="64,0,64,0">
+            <StackPanel Orientation="Horizontal">
+                <Border Style="{StaticResource PadGlyph}" VerticalAlignment="Center" Margin="0,0,12,0">
+                    <TextBlock Text="↑↓" Style="{StaticResource PadGlyphText}"/>
+                </Border>
+                <StackPanel x:Name="SectionTabs" Orientation="Horizontal"/>
+            </StackPanel>
+            <TextBlock x:Name="SectionSubtitle" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13" Foreground="{StaticResource TextMuted}"/>
+        </Grid>
+
+        <!-- ====== Jeux de la catégorie ====== -->
+        <Grid Grid.Row="2" Margin="0,24,0,22">
+            <ScrollViewer x:Name="RowScroller" Style="{StaticResource RowScroll}">
+                <ItemsControl x:Name="Covers" ItemTemplate="{StaticResource DiscoverCard}" Focusable="False" Margin="64,26,64,26">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+            <TextBlock x:Name="EmptyText" Style="{StaticResource BodyText}" FontSize="15" Margin="64,0,0,0" VerticalAlignment="Center"
+                       Text="Chargement des tendances Steam…"/>
+        </Grid>
+    </Grid>
+</UserControl>

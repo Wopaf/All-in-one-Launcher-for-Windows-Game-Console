@@ -1,0 +1,56 @@
+using System.Windows;
+using System.Windows.Controls;
+using MaRogAlly.Input;
+using MaRogAlly.UI;
+
+namespace MaRogAlly.Views;
+
+/// <summary>Panneau affiché par-dessus l'interface (fiche, filtres, tri, clavier). B le referme.</summary>
+public class OverlayBase : UserControl
+{
+    public event Action<OverlayBase>? CloseRequested;
+    /// <summary>Les aides de bas d'écran ont changé (mode interne du panneau).</summary>
+    public event Action? HintsChanged;
+    protected void RaiseHintsChanged() => HintsChanged?.Invoke();
+
+    /// <summary>Élément animé à l'ouverture (glisse depuis la droite par défaut).</summary>
+    protected virtual FrameworkElement? AnimatedPart => null;
+    protected virtual double EnterFromX => 60;
+
+    public OverlayBase()
+    {
+        Focusable = false;
+    }
+
+    public virtual void OnOpened()
+    {
+        Anim.Enter(this, 0, 0, 220);
+        if (AnimatedPart is { } part) Anim.Enter(part, EnterFromX, 0, 360);
+        Dispatcher.BeginInvoke(() => FocusNav.FocusFirst(FocusScope), System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Zone où le focus circule (par défaut tout le panneau).</summary>
+    protected virtual FrameworkElement FocusScope => this;
+
+    public virtual bool Handle(NavAction action)
+    {
+        switch (action)
+        {
+            case NavAction.Back:
+                Close();
+                return true;
+            case NavAction.Accept:
+                FocusNav.Activate();
+                return true;
+            case NavAction.Up or NavAction.Down or NavAction.Left or NavAction.Right:
+                FocusNav.Move(action, FocusScope);
+                return true;
+        }
+        return false;
+    }
+
+    public void Close() => CloseRequested?.Invoke(this);
+
+    /// <summary>Aides en bas d'écran, au format « Bouton:Libellé|… ».</summary>
+    public virtual string Hints => "A:Valider|B:Retour";
+}

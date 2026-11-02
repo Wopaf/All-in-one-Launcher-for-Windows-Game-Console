@@ -1,0 +1,215 @@
+<UserControl x:Class="MaRogAlly.Views.AchievementsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False">
+    <UserControl.Resources>
+        <!-- Commande pilotée par un bouton de la manette : pastille du bouton + libellé (cliquable à la souris) -->
+        <Style x:Key="ControlPill" TargetType="Border">
+            <Setter Property="CornerRadius" Value="16"/>
+            <Setter Property="Padding" Value="5,4,14,4"/>
+            <Setter Property="Margin" Value="0,0,8,0"/>
+            <Setter Property="Background" Value="#14FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#1AFFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style x:Key="PillText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <!-- Carte de chiffre clé du jeu sélectionné -->
+        <Style x:Key="StatCard" TargetType="Border">
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Padding" Value="14,10,16,10"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+            <Setter Property="Background" Value="#12FFFFFF"/>
+            <Setter Property="BorderBrush" Value="#14FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style x:Key="StatValue" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Margin" Value="0,3,0,0"/>
+        </Style>
+
+        <!-- Fondu en bas des listes : masque vers la transparence (le fond reste visible) -->
+        <LinearGradientBrush x:Key="FadeBottom" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FF000000" Offset="0"/>
+            <GradientStop Color="#FF000000" Offset="0.88"/>
+            <GradientStop Color="#00000000" Offset="1"/>
+        </LinearGradientBrush>
+    </UserControl.Resources>
+
+    <Grid Margin="64,8,64,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="ListColumn" Width="390"/>
+            <ColumnDefinition x:Name="GapColumn" Width="48"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- ====== Jeux ====== -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <StackPanel Margin="18,0,0,12">
+                <TextBlock x:Name="ListTitle" Text="Succès" Style="{StaticResource H1}" FontSize="34"/>
+                <!-- Bilan global, en une ligne -->
+                <TextBlock x:Name="SummaryText" FontSize="14" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+
+                <!-- Profil Steam privé : explication et accès direct aux paramètres de confidentialité -->
+                <StackPanel x:Name="PrivateNote" Margin="0,10,12,0" Visibility="Collapsed">
+                    <TextBlock FontSize="13" Foreground="{StaticResource Gold}" TextWrapping="Wrap"
+                               Text="Profil Steam privé : tes succès Steam ne sont pas à jour."/>
+                    <Button x:Name="PrivacyButton" Style="{StaticResource PillButton}" Click="Privacy_Click" HorizontalAlignment="Left"
+                            Height="34" Padding="14,0" Margin="0,8,0,0" FontSize="13" Background="#14FFFFFF">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE72E;" FontFamily="{StaticResource Icons}" FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="Ouvrir la confidentialité Steam" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Tri (Y) et filtre (X) de la liste des jeux -->
+                <StackPanel x:Name="GameControls" Orientation="Horizontal" Margin="0,12,0,0">
+                    <Border x:Name="GameSortPill" Style="{StaticResource ControlPill}" MouseLeftButtonUp="GameSort_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Style="{StaticResource PadGlyph}" Margin="0,0,8,0">
+                                <TextBlock Text="Y" Style="{StaticResource PadGlyphText}" Foreground="#FFD24D"/>
+                            </Border>
+                            <TextBlock x:Name="GameSortText" Style="{StaticResource PillText}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="GameFilterPill" Style="{StaticResource ControlPill}" MouseLeftButtonUp="GameFilter_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <Border Style="{StaticResource PadGlyph}" Margin="0,0,8,0">
+                                <TextBlock Text="X" Style="{StaticResource PadGlyphText}" Foreground="#4DA3FF"/>
+                            </Border>
+                            <TextBlock x:Name="GameFilterText" Style="{StaticResource PillText}"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+            <ScrollViewer x:Name="ListScroll" Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly"
+                          OpacityMask="{StaticResource FadeBottom}">
+                <Grid x:Name="ListHost" Margin="0,0,0,60">
+                    <Border x:Name="ListHighlight" CornerRadius="12" Background="#24FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                    <StackPanel x:Name="List"/>
+                </Grid>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- ====== Succès du jeu sélectionné ====== -->
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel x:Name="Header" Margin="0,4,0,0">
+                <StackPanel Orientation="Horizontal">
+                    <Path x:Name="PlatformLogo" Width="15" Height="15" Stretch="Uniform" Fill="White" VerticalAlignment="Center" Margin="0,0,9,0"/>
+                    <TextBlock x:Name="PlatformText" Style="{StaticResource Label}" FontSize="13" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                    <!-- Jeu terminé à 100 % -->
+                    <Border x:Name="PlatinumBadge" CornerRadius="6" Padding="8,2" Margin="12,0,0,0" Background="#33FFC83D" VerticalAlignment="Center" Visibility="Collapsed">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE735;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Gold}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock Text="PLATINE" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource Gold}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                <TextBlock x:Name="TitleText" Style="{StaticResource H1}" FontSize="38" Margin="0,6,0,0" TextTrimming="CharacterEllipsis"/>
+
+                <!-- Progression : pourcentage en grand, barre, compte -->
+                <Grid Margin="0,10,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="PercentText" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="30"
+                               Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                    <Grid x:Name="ProgressBar" Grid.Column="1" Height="8" VerticalAlignment="Center">
+                        <Border CornerRadius="4" Background="#1FFFFFFF"/>
+                        <Border x:Name="ProgressFill" CornerRadius="4" HorizontalAlignment="Left" Width="0" Background="#E6FFFFFF"/>
+                    </Grid>
+                    <TextBlock x:Name="CountText" Grid.Column="2" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15"
+                               Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="18,0,0,0"/>
+                </Grid>
+
+                <!-- Chiffres clés -->
+                <Grid x:Name="StatCards" Margin="0,14,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition/>
+                        <ColumnDefinition Width="1.6*"/>
+                        <ColumnDefinition/>
+                    </Grid.ColumnDefinitions>
+                    <Border Style="{StaticResource StatCard}">
+                        <StackPanel>
+                            <TextBlock Text="DERNIER SUCCÈS" Style="{StaticResource Label}" FontSize="11"/>
+                            <TextBlock x:Name="LastValue" Style="{StaticResource StatValue}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="1" Style="{StaticResource StatCard}">
+                        <StackPanel>
+                            <TextBlock Text="LE PLUS RARE OBTENU" Style="{StaticResource Label}" FontSize="11"/>
+                            <TextBlock x:Name="RareValue" Style="{StaticResource StatValue}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" Style="{StaticResource StatCard}" Margin="0">
+                        <StackPanel>
+                            <TextBlock Text="RESTANTS" Style="{StaticResource Label}" FontSize="11"/>
+                            <TextBlock x:Name="LeftValue" Style="{StaticResource StatValue}"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </StackPanel>
+
+            <!-- Affichage (LT / RT) et tri (Y) des succès du jeu -->
+            <Grid x:Name="ItemsBar" Grid.Row="1" Margin="0,18,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal">
+                    <Border Style="{StaticResource PadGlyph}" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBlock Text="LT" Style="{StaticResource PadGlyphText}"/>
+                    </Border>
+                    <Border CornerRadius="17" Background="#12FFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" Padding="3">
+                        <StackPanel x:Name="Segments" Orientation="Horizontal"/>
+                    </Border>
+                    <Border Style="{StaticResource PadGlyph}" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="RT" Style="{StaticResource PadGlyphText}"/>
+                    </Border>
+                </StackPanel>
+                <Border x:Name="ItemSortPill" Grid.Column="1" Style="{StaticResource ControlPill}" Margin="0" VerticalAlignment="Center" MouseLeftButtonUp="ItemSort_Click">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Style="{StaticResource PadGlyph}" Margin="0,0,8,0">
+                            <TextBlock Text="Y" Style="{StaticResource PadGlyphText}" Foreground="#FFD24D"/>
+                        </Border>
+                        <TextBlock x:Name="ItemSortText" Style="{StaticResource PillText}"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <ScrollViewer x:Name="ItemsScroll" Grid.Row="2" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly"
+                          OpacityMask="{StaticResource FadeBottom}">
+                <Grid x:Name="ItemsHost" Margin="0,0,0,60">
+                    <Border x:Name="ItemsHighlight" CornerRadius="12" Background="#24FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                    <StackPanel x:Name="Items"/>
+                </Grid>
+            </ScrollViewer>
+
+            <TextBlock x:Name="EmptyText" Grid.Row="2" Style="{StaticResource BodyText}" FontSize="16" Margin="4,0,0,0"
+                       TextWrapping="Wrap" MaxWidth="620" HorizontalAlignment="Left" VerticalAlignment="Top" Visibility="Collapsed"/>
+        </Grid>
+    </Grid>
+</UserControl>

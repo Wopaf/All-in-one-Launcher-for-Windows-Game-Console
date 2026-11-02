@@ -1,0 +1,56 @@
+<v:OverlayBase x:Class="MaRogAlly.Views.WebPreview"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:v="clr-namespace:MaRogAlly.Views"
+               xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf">
+    <Grid>
+        <Rectangle Fill="#CC000000"/>
+        <Border x:Name="Body" CornerRadius="18" Background="{DynamicResource PanelBg}" Margin="90,40,90,30"
+                MaxWidth="1180" Padding="28,22,28,22">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- En-tête : site et recherche -->
+                <StackPanel Margin="4,0,0,16">
+                    <TextBlock x:Name="SiteText" Style="{StaticResource Label}" FontSize="13" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock x:Name="QueryText" Style="{StaticResource H2}" FontSize="26" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+
+                <!-- Page web (lecture seule : les clics sont désactivés, on défile à la manette) -->
+                <Grid Grid.Row="1" ClipToBounds="True">
+                    <wv:WebView2 x:Name="Web" DefaultBackgroundColor="Transparent" Visibility="Hidden"/>
+                    <StackPanel x:Name="Loading" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock x:Name="LoadingIcon" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="30" HorizontalAlignment="Center"
+                                   Foreground="{StaticResource TextSecondary}" RenderTransformOrigin="0.5,0.5">
+                            <TextBlock.RenderTransform>
+                                <RotateTransform x:Name="Spin"/>
+                            </TextBlock.RenderTransform>
+                        </TextBlock>
+                        <TextBlock x:Name="LoadingText" Text="Recherche en cours…" FontSize="15" Foreground="{StaticResource TextSecondary}" Margin="0,14,0,0"
+                                   HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="520"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Actions -->
+                <StackPanel x:Name="Actions" Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,18,0,0">
+                    <Button x:Name="BackButton" Style="{StaticResource PillButton}" Click="Back_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE72B;" FontFamily="{StaticResource Icons}" FontSize="15" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Text="Retour" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="OpenButton" Style="{StaticResource PillButton}" Click="Open_Click" Margin="0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource Icons}" FontSize="15" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock x:Name="OpenText" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</v:OverlayBase>

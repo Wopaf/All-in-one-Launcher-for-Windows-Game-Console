@@ -1,0 +1,48 @@
+<v:OverlayBase x:Class="MaRogAlly.Views.MainMenu"
+               xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:v="clr-namespace:MaRogAlly.Views">
+    <Grid>
+        <Rectangle Fill="#99000000" MouseLeftButtonUp="Backdrop_Click"/>
+        <Grid x:Name="Panel" Width="540" HorizontalAlignment="Right">
+            <!-- Ombre portée sur un calque à part : l'effet ne dégrade pas le texte du menu -->
+            <Border Background="Black" IsHitTestVisible="False">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="70" ShadowDepth="0" Opacity="0.85" Color="Black"/>
+                </Border.Effect>
+            </Border>
+            <!-- Fond opaque : la couleur du thème sous la teinte (translucide) des panneaux -->
+            <Border Background="{DynamicResource Bg}"/>
+            <Border Background="{DynamicResource PanelBg}">
+            <Grid Margin="36,40,36,24">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- ====== En-tête : heure, date, batterie ====== -->
+                <Grid Margin="4,0,4,8">
+                    <StackPanel>
+                        <TextBlock x:Name="ClockText" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="54"
+                                   Foreground="{StaticResource TextPrimary}" LineHeight="58" LineStackingStrategy="BlockLineHeight"/>
+                        <TextBlock x:Name="DateText" FontSize="16" Foreground="{StaticResource TextSecondary}" Margin="2,2,0,0"/>
+                    </StackPanel>
+                    <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,0,0">
+                        <TextBlock x:Name="BatteryIcon" FontFamily="{StaticResource Icons}" FontSize="18" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16"
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ====== Tuiles (le cadre de sélection glisse de l'une à l'autre) ====== -->
+                <ScrollViewer x:Name="Scroll" Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+                    <Grid x:Name="ItemsHost" Margin="0,0,0,12">
+                        <Border x:Name="Highlight" CornerRadius="14" Background="Transparent" BorderBrush="#E6FFFFFF" BorderThickness="2"/>
+                        <StackPanel x:Name="Items" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</v:OverlayBase>

@@ -1,0 +1,202 @@
+<Window x:Class="MaRogAlly.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:v="clr-namespace:MaRogAlly.Views"
+        Title="Ma ROG Ally" Icon="Assets/app.ico"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="True"
+        Width="1280" Height="800" WindowStartupLocation="Manual" Left="0" Top="0"
+        Background="{DynamicResource Bg}" Foreground="{StaticResource TextPrimary}"
+        FontFamily="{StaticResource Body}" UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType">
+
+    <Grid x:Name="RootGrid" ClipToBounds="True">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ====== Fond : visuel du jeu sélectionné en fondu enchaîné ====== -->
+        <Grid Grid.RowSpan="3" Grid.ColumnSpan="2" IsHitTestVisible="False">
+            <!-- Lueurs du thème (aucune pour les thèmes sobres) -->
+            <Rectangle Fill="{DynamicResource Ambient}"/>
+            <!-- Lueur d'ambiance discrète -->
+            <Ellipse Width="1400" Height="900" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="-500,0,0,-500" Opacity="0.35">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="{DynamicResource AccentGlowColor}" Offset="0"/>
+                        <GradientStop Color="{DynamicResource AccentClearColor}" Offset="1"/>
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+            <!-- Seconde lueur, en haut à droite, plus discrète -->
+            <Ellipse Width="1200" Height="800" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-420,-420,0" Opacity="0.22">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="{DynamicResource AccentGlowColor}" Offset="0"/>
+                        <GradientStop Color="{DynamicResource AccentClearColor}" Offset="1"/>
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+
+            <!-- Motif en nid d'abeille, au-dessus des lueurs ; masqué en fondu quand un visuel de jeu est en fond -->
+            <Rectangle x:Name="Pattern" Fill="{StaticResource BackdropPattern}"/>
+
+            <!-- Visuel du jeu. Pour la lisibilité, il s'efface vers la transparence (à gauche et en bas)
+                 au lieu d'être assombri : lueurs et motif du fond restent visibles à ces endroits.
+                 Deux masques imbriqués (horizontal puis vertical) se multiplient. -->
+            <Grid>
+                <Grid.OpacityMask>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#0D000000" Offset="0"/>
+                        <GradientStop Color="#4D000000" Offset="0.38"/>
+                        <GradientStop Color="#CC000000" Offset="0.75"/>
+                        <GradientStop Color="#E6000000" Offset="1"/>
+                    </LinearGradientBrush>
+                </Grid.OpacityMask>
+                <Grid x:Name="HeroHost" HorizontalAlignment="Right" Width="{Binding ActualWidth, ElementName=RootGrid}">
+                    <Grid.OpacityMask>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#66000000" Offset="0"/>
+                            <GradientStop Color="#FF000000" Offset="0.22"/>
+                            <GradientStop Color="#BF000000" Offset="0.45"/>
+                            <GradientStop Color="#0A000000" Offset="0.72"/>
+                            <GradientStop Color="#00000000" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Grid.OpacityMask>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- ====== Barre du haut : onglets, batterie, heure ====== -->
+        <Grid x:Name="TopBar" Grid.Row="0" Grid.Column="1" Margin="64,42,64,32">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Style="{StaticResource PadGlyph}" Margin="0,0,22,0" MouseLeftButtonUp="PrevTab_Click" Cursor="Hand">
+                    <TextBlock Text="LB" Style="{StaticResource PadGlyphText}"/>
+                </Border>
+                <Grid>
+                    <!-- Badge de l'onglet actif : glisse d'un onglet à l'autre, derrière les libellés -->
+                    <Border x:Name="TabIndicator" Background="#24FFFFFF" BorderBrush="#2EFFFFFF" BorderThickness="1" HorizontalAlignment="Left" Width="40"
+                            CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}">
+                        <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+                    </Border>
+                    <StackPanel x:Name="Tabs" Orientation="Horizontal"/>
+                </Grid>
+                <Border Style="{StaticResource PadGlyph}" Margin="12,0,0,0" MouseLeftButtonUp="NextTab_Click" Cursor="Hand">
+                    <TextBlock Text="RB" Style="{StaticResource PadGlyphText}"/>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,24,0">
+                    <!-- Icône bien visible ; couleur selon le niveau (vert, orange < 30 %, rouge < 15 %) -->
+                    <TextBlock x:Name="BatteryIcon" FontFamily="{StaticResource Icons}" FontSize="32" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+                <TextBlock x:Name="ClockText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+
+        <!-- ====== Pages ====== -->
+        <Grid x:Name="Pages" Grid.Row="1" Grid.Column="1"/>
+        <!-- Reçoit le focus quand la sélection n'est sur aucun bouton (grille de jeux, pilotée sans focus) -->
+        <Border x:Name="FocusSink" Grid.Row="1" Grid.Column="1" Focusable="True" FocusVisualStyle="{x:Null}" Width="0" Height="0"/>
+
+        <!-- ====== Panneaux superposés ====== -->
+        <Grid x:Name="OverlayHost" Grid.RowSpan="3" Grid.Column="1"/>
+
+        <!-- ====== Aides manette ====== -->
+        <!-- Aides de la manette : sur un fond arrondi, lisibles quel que soit le visuel derrière -->
+        <!-- Fond de la couleur du thème ; pastilles des boutons à égale distance du bord (haut, bas, gauche) -->
+        <Border x:Name="HintsBox" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" Margin="64,6,64,20" CornerRadius="21"
+                Background="{DynamicResource Bg}" Padding="7,7,18,7">
+            <!-- Clavier ouvert : la barre glisse en haut de l'écran (sans changer la mise en page dessous) -->
+            <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+            <StackPanel x:Name="HintsBar" Orientation="Horizontal"/>
+        </Border>
+
+        <!-- ====== Activité en cours (scan, fiches, offres Epic…) ====== -->
+        <Border x:Name="ActivityCard" Grid.RowSpan="3" Grid.Column="1" VerticalAlignment="Bottom" HorizontalAlignment="Left" Margin="64,0,0,16"
+                Width="400" CornerRadius="14" Background="#F2161A23" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                Padding="16,12,18,14" Opacity="0" Visibility="Collapsed" IsHitTestVisible="False">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <TextBlock x:Name="ActivityIcon" Text="&#xE72C;" FontFamily="{StaticResource Icons}" FontSize="15" Grid.RowSpan="2"
+                           Foreground="{DynamicResource Accent}" VerticalAlignment="Top" Margin="0,2,12,0" RenderTransformOrigin="0.5,0.5">
+                    <TextBlock.RenderTransform><RotateTransform/></TextBlock.RenderTransform>
+                </TextBlock>
+                <TextBlock x:Name="ActivityTitle" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="ActivityPercent" Grid.Column="2" FontFamily="{StaticResource Display}" FontSize="14" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextSecondary}" Margin="12,0,0,0"/>
+                <TextBlock x:Name="ActivityDetail" Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="1" FontSize="13"
+                           Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                <!-- Barre : déterminée (largeur) ou indéterminée (segment qui glisse) -->
+                <Grid x:Name="ActivityTrack" Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="2" Height="4" Margin="0,10,0,0" ClipToBounds="True">
+                    <Border CornerRadius="2" Background="#1FFFFFFF"/>
+                    <Border x:Name="ActivityFill" CornerRadius="2" Background="{DynamicResource Accent}" HorizontalAlignment="Left" Width="0">
+                        <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ====== Notification ====== -->
+        <Border x:Name="ToastBox" Grid.RowSpan="3" Grid.Column="1" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,84,0,0"
+                CornerRadius="14" Background="#F21C2130" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                Padding="20,12" Opacity="0" IsHitTestVisible="False">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="ToastIcon" FontFamily="{StaticResource Icons}" FontSize="16" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                <TextBlock x:Name="ToastText" FontSize="15" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ====== Barre de gauche : applications ouvertes (à la place de celle de Windows) ====== -->
+        <v:DockBar x:Name="Dock" Grid.RowSpan="3"/>
+
+        <!-- ====== Écran de lancement d'un jeu ====== -->
+        <Grid x:Name="LaunchSplash" Grid.RowSpan="3" Grid.ColumnSpan="2" Visibility="Collapsed" Background="#F20A0C11">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Image x:Name="LaunchLogo" MaxWidth="560" MaxHeight="200" Stretch="Uniform" RenderTransformOrigin="0.5,0.5">
+                    <Image.RenderTransform><ScaleTransform/></Image.RenderTransform>
+                </Image>
+                <TextBlock x:Name="LaunchTitle" Style="{StaticResource H1}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="900"/>
+                <TextBlock x:Name="LaunchSub" Style="{StaticResource BodyText}" HorizontalAlignment="Center" Margin="0,18,0,22"/>
+                <Border Width="260" Height="4" CornerRadius="2" Background="#22FFFFFF" ClipToBounds="True">
+                    <Border x:Name="LaunchBar" Width="90" CornerRadius="2" Background="{DynamicResource Accent}" HorizontalAlignment="Left">
+                        <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
+                    </Border>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- ====== Intro ====== -->
+        <Grid x:Name="Intro" Grid.RowSpan="3" Grid.ColumnSpan="2" Background="{DynamicResource Bg}" IsHitTestVisible="False">
+            <!-- Motif hexagonal révélé par une vague qui part du centre (masque animé en code) -->
+            <Rectangle x:Name="IntroWave" Fill="{StaticResource IntroPattern}"/>
+            <StackPanel x:Name="IntroContent" VerticalAlignment="Center" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5">
+                <StackPanel.RenderTransform><ScaleTransform/></StackPanel.RenderTransform>
+                <!-- Logo ROG (Simple Icons, CC0) -->
+                <Path Width="240" Height="240" Stretch="Uniform" Fill="White" HorizontalAlignment="Center"
+                      Data="F1 M21.3906 5.5833c-1.3467.0115-3.4338.19541-5.9375.97657-1.6024.49851-3.916 2.74203-8.22459 6.90823-.56973.3204-2.67017-.8912-3.88085-1.461 0 0 1.9929 3.1699 2.70507 4.0957 1.06825 1.46 3.02735 2.3145 3.02735 2.3145-.17804-.1781-1.53019-1.6029-1.92188-2.4219-.24926-.3917.03418-.9624 1.95703-2.3867C10.86 12.3268 17.0569 7.09358 23.0391 5.66924c0 0-.601-.09488-1.6485-.08593V5.5833ZM24 7.7708c-2.0653.21366-4.06.81878-5.9473 1.70899C14.2783 11.2602 7.9043 15.8177 7.9043 15.8177c.28486.178.5706.3556.85546.498 3.06234 1.3531 7.58484 2.1716 8.43944 1.8867 2.3858-.7833 5.056-5.8026 5.875-8.1172 0 0-2.4933.9968-5.0215 2.1719-2.1009.9971-4.414 2.1368-4.414 2.1368l5.875-1.7813s-1.5676 3.7036-3.6328 4.1309c-2.0653.4273-5.6973-1.0332-5.6973-1.0332.2849-.2493 4.1302-3.0629 13.1035-6.73051.3917-.28487.6417-.74608.7129-1.20898V7.7708ZM0 11.2942c.35608.9615.8194 1.8525 1.35352 2.7071.64094.819 3.27477 1.4952 3.63086 1.5664C3.34638 14.4282 0 11.2942 0 11.2942Z">
+                    <Path.Effect>
+                        <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="40" ShadowDepth="0" Opacity="0.9"/>
+                    </Path.Effect>
+                </Path>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,71 @@
+<UserControl x:Class="MaRogAlly.Views.DockBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False">
+    <UserControl.Resources>
+        <Style x:Key="DockButton" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="Width" Value="52"/>
+            <Setter Property="Height" Value="52"/>
+            <Setter Property="Margin" Value="0,3"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" CornerRadius="14" Background="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1CFFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid x:Name="Host" Width="72">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Border Grid.RowSpan="4" Background="{DynamicResource Bg}"/>
+        <Border Grid.RowSpan="4" Background="{DynamicResource PanelBg}" BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,1,0"/>
+        <!-- Cadre de sélection : glisse d'un bouton à l'autre -->
+        <Border x:Name="Highlight" Grid.RowSpan="4" CornerRadius="14" Background="#24FFFFFF" BorderBrush="White" BorderThickness="2"/>
+
+        <!-- Menu Windows maison : petite maison -->
+        <Button x:Name="MenuButton" Style="{StaticResource DockButton}" Margin="0,14,0,8" Click="Menu_Click" ToolTip="Menu Windows">
+            <TextBlock Text="&#xE80F;" FontFamily="{StaticResource Icons}" FontSize="22"/>
+        </Button>
+
+        <!-- Applications ouvertes -->
+        <ScrollViewer x:Name="AppsScroll" Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+            <StackPanel x:Name="Apps" HorizontalAlignment="Center"/>
+        </ScrollViewer>
+
+        <!-- Applications en arrière-plan (lancées sans fenêtre) -->
+        <Button x:Name="BackgroundButton" Grid.Row="2" Style="{StaticResource DockButton}" Margin="0,8,0,3" Click="Background_Click" ToolTip="Applications en arrière-plan">
+            <TextBlock Text="&#xE712;" FontFamily="{StaticResource Icons}" FontSize="20"/>
+        </Button>
+
+        <!-- Options : volets de Windows, clavier, bureau -->
+        <Button x:Name="OptionsButton" Grid.Row="3" Style="{StaticResource DockButton}" Margin="0,3,0,14" Click="Options_Click" ToolTip="Options">
+            <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="20"/>
+        </Button>
+
+        <!-- Infobulle : nom du bouton sélectionné ou survolé, à droite de la barre (animée en code) -->
+        <Canvas Grid.RowSpan="4" IsHitTestVisible="False">
+            <Border x:Name="Label" Canvas.Left="78" CornerRadius="10" Background="{DynamicResource Bg}" BorderBrush="{StaticResource Stroke}" BorderThickness="1"
+                    Padding="12,7" MaxWidth="420" Visibility="Collapsed" Opacity="0">
+                <Border.RenderTransform><TranslateTransform x:Name="LabelMove"/></Border.RenderTransform>
+                <TextBlock x:Name="LabelText" FontSize="14" Foreground="{StaticResource TextPrimary}" TextTrimming="CharacterEllipsis"/>
+            </Border>
+        </Canvas>
+    </Grid>
+</UserControl>

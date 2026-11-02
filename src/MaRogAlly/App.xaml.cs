@@ -1,0 +1,92 @@
+using System.Windows;
+using System.Windows.Threading;
+using MaRogAlly.Core;
+using MaRogAlly.Models;
+using MaRogAlly.Services;
+
+namespace MaRogAlly;
+
+public partial class App : Application
+{
+    private const string MutexName = "MaRogAlly.SingleInstance";
+    private const string ShowEventName = "MaRogAlly.Show";
+
+    private Mutex? _mutex;
+    private EventWaitHandle? _showEvent;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        // « --render » : capture de vérification, à côté de l'application éventuellement ouverte et sans jamais la déranger.
+        var rendering = e.Args.Contains("--render");
+
+        // Une seule instance : relancer l'application ramène simplement la fenêtre existante.
+        _mutex = new Mutex(true, MutexName, out var isFirst);
+        _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        // Relancée par une mise à jour : l'ancienne instance est en train de se fermer, on attend qu'elle libère la place.
+        if (!isFirst && e.Args.Contains(AppUpdater.UpdatedArg))
+        {
+            try { isFirst = _mutex.WaitOne(TimeSpan.FromSeconds(15)); }
+            catch (AbandonedMutexException) { isFirst = true; }
+        }
+        if (!isFirst && !rendering)
+        {
+            _showEvent.Set();
+            Shutdown();
+            return;
+        }
+
+        AppPaths.Ensure();
+        Log.Info($"Démarrage {typeof(App).Assembly.GetName().Version} ({string.Join(' ', e.Args)})");
+        DispatcherUnhandledException += OnUnhandled;
+
+        var settings = AppSettings.Load();
+        UI.AppTheme.Apply(settings.Theme);
+        UI.AccentTheme.Apply(settings.AccentColor);
+#if !DEBUG
+        // Garde la clé « Run » à jour avec l'emplacement actuel de l'exécutable.
+        AutoStart.Apply(settings.StartWithWindows);
+#endif
+
+        base.OnStartup(e);
+        var window = new MainWindow();
+        MainWindow = window;
+        if (rendering)
+        {
+            // Ni focus ni barre des tâches : la fenêtre reste derrière toutes les autres.
+            window.ShowActivated = false;
+            window.ShowInTaskbar = false;
+            window.ContentRendered += (_, _) => window.SendToBackNow();
+            window.Show();
+            window.SendToBackNow();
+            return;
+        }
+        window.Show();
+
+        var desktop = new Thread(() =>
+        {
+            while (_showEvent.WaitOne())
+                Dispatcher.BeginInvoke(() =>
+                {
+                    window.WindowState = WindowState.Normal;
+                    window.Activate();
+                    window.Topmost = true;
+                    window.Topmost = false;
+                });
+        }) { IsBackground = true, Name = "SingleInstanceListener" };
+        desktop.Start();
+    }
+
+    private void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        Log.Error("Erreur non gérée", e.Exception);
+        Log.Info(e.Exception.ToString());
+        e.Handled = true;
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _mutex?.Dispose();
+        _showEvent?.Dispose();
+        base.OnExit(e);
+    }
+}

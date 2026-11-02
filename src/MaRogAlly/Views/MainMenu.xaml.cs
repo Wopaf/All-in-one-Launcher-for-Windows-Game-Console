@@ -1,0 +1,296 @@
+using System.Globalization;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using MaRogAlly.Services;
+using MaRogAlly.UI;
+
+namespace MaRogAlly.Views;
+
+/// <summary>Tuile du menu principal : icône, titre et une ligne de détail (avec pastille d'état éventuelle).</summary>
+public sealed record MenuTile(string Icon, string Title, string Detail, Action OnClick, Color? Dot = null);
+
+/// <summary>
+/// Menu principal (Start ou Échap) : heure, date et batterie en en-tête, puis des tuiles par section
+/// (mises à jour, accès rapides, alimentation). Le cadre de sélection glisse comme dans les Réglages.
+/// </summary>
+public partial class MainMenu : OverlayBase
+{
+    private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
+    private readonly SlideHighlight _highlight;
+
+    public MainMenu()
+    {
+        InitializeComponent();
+        _highlight = new SlideHighlight(Highlight, ItemsHost);
+        UpdateHeader();
+    }
+
+    protected override FrameworkElement AnimatedPart => Panel;
+    protected override FrameworkElement FocusScope => Items;
+    public override string Hints => "A:Valider|B:Fermer";
+
+    private void UpdateHeader()
+    {
+        var now = DateTime.Now;
+        ClockText.Text = now.ToString("HH:mm");
+        var date = now.ToString("dddd d MMMM", Fr);
+        DateText.Text = char.ToUpper(date[0]) + date[1..];
+
+        var power = Power.Read();
+        BatteryPanel.Visibility = power.HasBattery ? Visibility.Visible : Visibility.Collapsed;
+        if (!power.HasBattery) return;
+        BatteryIcon.Text = Power.Glyph(power);
+        BatteryText.Text = $"{power.Percent} %";
+        var level = power.Percent < 15 ? Color.FromRgb(0xFF, 0x3B, 0x4E)
+                  : power.Percent < 30 ? Color.FromRgb(0xFF, 0x9F, 0x1C)
+                  : Color.FromRgb(0x4C, 0xD9, 0x64);
+        BatteryIcon.Foreground = BatteryText.Foreground = new SolidColorBrush(level);
+    }
+
+    public void AddSection(string title)
+        => Items.Children.Add(new TextBlock
+        {
+            Text = title.ToUpperInvariant(),
+            Style = (Style)FindResource("Label"),
+            Margin = new Thickness(4, 22, 0, 10),
+        });
+
+    /// <summary>Rangée de tuiles de même largeur (2 par rangée en général).</summary>
+    public void AddTiles(params MenuTile[] tiles)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        for (var i = 0; i < tiles.Length; i++)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            var b = Tile(tiles[i]);
+            b.Margin = new Thickness(i == 0 ? 0 : 6, 0, i == tiles.Length - 1 ? 0 : 6, 0);
+            Grid.SetColumn(b, i);
+            row.Children.Add(b);
+        }
+        Items.Children.Add(row);
+    }
+
+    /// <summary>Bouton simple en pleine largeur : icône, libellé, chevron.</summary>
+    public void AddButton(string icon, string title, Action onClick)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 18, VerticalAlignment = VerticalAlignment.Center });
+        var label = new TextBlock { Text = title, FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 17, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(label, 1);
+        grid.Children.Add(label);
+        var chevron = new TextBlock { Text = "\uE76C", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 12, Foreground = (Brush)FindResource("TextMuted"), VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(chevron, 2);
+        grid.Children.Add(chevron);
+
+        var b = new Button
+        {
+            Style = (Style)FindResource("RowButton"),
+            Padding = new Thickness(0),
+            Height = 56,
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(20, 0, 20, 0),
+                // Le modèle de ligne centre son contenu : le fond prend toute la hauteur du bouton.
+                Height = 56,
+                Child = grid,
+            },
+        };
+        Track(b, onClick);
+        Items.Children.Add(b);
+    }
+
+    /// <summary>Boutons d'alimentation : pastille colorée avec l'icône, libellé à côté, côte à côte.</summary>
+    public void AddPowerButtons(params (string Icon, string Title, Color Tint, Action OnClick)[] buttons)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            var (icon, title, tint, onClick) = buttons[i];
+            var content = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            content.Children.Add(new Border
+            {
+                Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = new SolidColorBrush(tint),
+                Child = new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 17, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            });
+            content.Children.Add(new TextBlock { Text = title, FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) });
+
+            var b = new Button
+            {
+                Style = (Style)FindResource("RowButton"),
+                Padding = new Thickness(0),
+                Height = 68,
+                Margin = new Thickness(i == 0 ? 0 : 6, 0, i == buttons.Length - 1 ? 0 : 6, 0),
+                Content = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(0x26, tint.R, tint.G, tint.B)),
+                    CornerRadius = new CornerRadius(14),
+                    Padding = new Thickness(14, 0, 18, 0),
+                    Height = 68,
+                    Child = content,
+                },
+            };
+            Track(b, onClick);
+            Grid.SetColumn(b, i);
+            row.Children.Add(b);
+        }
+        Items.Children.Add(row);
+    }
+
+    /// <summary>Disques de la machine : espace libre sur le total, barre d'occupation (orange sous 10 % libres).</summary>
+    public void AddDrives()
+    {
+        var drives = System.IO.DriveInfo.GetDrives().Where(d => d.DriveType == System.IO.DriveType.Fixed && d.IsReady).ToList();
+        if (drives.Count == 0) return;
+        AddSection("Stockage");
+        foreach (var d in drives)
+        {
+            long total, free;
+            string label;
+            try { total = d.TotalSize; free = d.AvailableFreeSpace; label = d.VolumeLabel; }
+            catch { continue; }
+            var used = total == 0 ? 0 : 1 - (double)free / total;
+            var low = total > 0 && (double)free / total < 0.1;
+
+            var head = new Grid();
+            head.ColumnDefinitions.Add(new ColumnDefinition());
+            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var name = new StackPanel { Orientation = Orientation.Horizontal };
+            name.Children.Add(new TextBlock { Text = "\uEDA2", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 15, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) });
+            name.Children.Add(new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(label) ? d.Name.TrimEnd('\\') : $"{d.Name.TrimEnd('\\')}  {label}",
+                FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 15, VerticalAlignment = VerticalAlignment.Center,
+            });
+            head.Children.Add(name);
+            var info = new TextBlock
+            {
+                Text = $"{Size(free)} libres sur {Size(total)}", FontSize = 13, VerticalAlignment = VerticalAlignment.Center,
+                Foreground = low ? new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x1C)) : (Brush)FindResource("TextSecondary"),
+            };
+            Grid.SetColumn(info, 1);
+            head.Children.Add(info);
+
+            var bar = new Grid { Height = 6, Margin = new Thickness(0, 8, 0, 0) };
+            bar.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)) });
+            var fill = new Border
+            {
+                CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left,
+                Background = low ? new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x1C)) : new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)),
+            };
+            bar.SizeChanged += (_, e) => fill.Width = e.NewSize.Width * used;
+            bar.Children.Add(fill);
+
+            var panel = new StackPanel { Margin = new Thickness(4, 0, 4, 14) };
+            panel.Children.Add(head);
+            panel.Children.Add(bar);
+            Items.Children.Add(panel);
+        }
+    }
+
+    private static string Size(long bytes) => bytes >= 1L << 40
+        ? $"{bytes / (double)(1L << 40):0.##} To"
+        : $"{bytes / (double)(1L << 30):0} Go";
+
+    private void Track(Button b, Action onClick)
+    {
+        RowOptions.SetFloating(b, true);
+        b.GotKeyboardFocus += (_, _) => _highlight.MoveTo(b);
+        b.Click += (_, _) => onClick();
+    }
+
+    /// <summary>Pastille et ligne d'état de chaque tuile, pour les mettre à jour menu ouvert.</summary>
+    private readonly Dictionary<string, (Border Dot, TextBlock Text)> _tileStates = [];
+
+    /// <summary>Nouvel état d'une tuile (ex. fin de la vérification des mises à jour).</summary>
+    public void UpdateTile(string title, string detail, Color dot)
+    {
+        if (!_tileStates.TryGetValue(title, out var state)) return;
+        state.Text.Text = detail;
+        state.Dot.Background = new SolidColorBrush(dot);
+        state.Dot.Visibility = Visibility.Visible;
+    }
+
+    private Button Tile(MenuTile t)
+    {
+        var detail = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
+        var dotBorder = new Border
+        {
+            Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(t.Dot ?? Colors.Transparent),
+            Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center,
+            Visibility = t.Dot is null ? Visibility.Collapsed : Visibility.Visible,
+        };
+        detail.Children.Add(dotBorder);
+        var detailText = new TextBlock
+        {
+            Text = t.Detail, FontSize = 13, Foreground = (Brush)FindResource("TextSecondary"),
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
+        };
+        detail.Children.Add(detailText);
+        _tileStates[t.Title] = (dotBorder, detailText);
+
+        var body = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        body.Children.Add(new TextBlock
+        {
+            Text = t.Icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 22,
+            Foreground = (Brush)FindResource("TextPrimary"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 12),
+        });
+        body.Children.Add(new TextBlock
+        {
+            Text = t.Title, FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 17,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        });
+        body.Children.Add(detail);
+
+        var b = new Button
+        {
+            Style = (Style)FindResource("RowButton"),
+            Padding = new Thickness(0),
+            Height = 112,
+            Content = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(20, 16, 16, 16),
+                Height = 112,
+                Child = body,
+            },
+        };
+        RowOptions.SetFloating(b, true);
+        b.GotKeyboardFocus += (_, _) => _highlight.MoveTo(b);
+        b.Click += (_, _) => t.OnClick();
+        return b;
+    }
+
+    // ---------------- Mises à jour ----------------
+
+    private static readonly Color Ok = Color.FromRgb(0x6B, 0xD3, 0x6B), Pending = Color.FromRgb(0xFF, 0xB8, 0x3D), Idle = Color.FromRgb(0x6B, 0x74, 0x84);
+
+    /// <summary>État de Windows Update en une ligne.</summary>
+    public static (string Text, Color Color) WindowsStatus(WindowsUpdateStatus? status)
+    {
+        if (status is null) return ("Vérification…", Idle);
+        if (status.Error is not null) return (status.Error, Idle);
+        if (status.Count > 0) return ($"{status.Count} mise{(status.Count > 1 ? "s" : "")} à jour disponible{(status.Count > 1 ? "s" : "")}", UpdateBadge.ColorFor(status.Count));
+        if (status.RebootRequired) return ("Redémarrage nécessaire", Pending);
+        return ("À jour", Ok);
+    }
+
+    /// <summary>État d'Armoury Crate en une ligne.</summary>
+    public static (string Text, Color Color) AsusStatus(AsusAppInfo? app, bool checkedYet)
+    {
+        if (!checkedYet) return ("Vérification…", Idle);
+        if (app is null) return ("Non installé", Idle);
+        return ($"Version {app.Version}", Ok);
+    }
+
+    private void Backdrop_Click(object sender, MouseButtonEventArgs e) => Close();
+}
