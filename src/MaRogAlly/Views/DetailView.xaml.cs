@@ -17,7 +17,7 @@ public partial class DetailView : OverlayBase
     public event Action<Game>? PlayRequested, FolderRequested, HideRequested, RefreshRequested, PlatformRequested, UninstallRequested;
     /// <summary>Mode magasin (jeu non possédé, depuis la Découverte) : page Steam ou recherche Instant Gaming.</summary>
     public event Action<DiscoverGame>? SteamRequested, InstantGamingRequested, WishRequested;
-    /// <summary>« Voir plus » : les succès de ce jeu dans l'onglet Succès.</summary>
+    /// <summary>Section Succès validée : les succès de ce jeu dans l'onglet Succès.</summary>
     public event Action<AchievementGame>? AchievementsRequested;
 
     /// <summary>Jeu du magasin affiché (jeu non possédé), ou null pour un jeu de la bibliothèque.</summary>
@@ -434,7 +434,7 @@ public partial class DetailView : OverlayBase
         if (await iconLoader(url) is { } path) ImageLoader.SetSource(image, path);
     }
 
-    private void AchievementsMore_Click(object sender, RoutedEventArgs e)
+    private void AchievementSection_Click(object sender, RoutedEventArgs e)
     {
         if (_achievementGame is { } g) AchievementsRequested?.Invoke(g);
     }
@@ -577,7 +577,7 @@ public partial class DetailView : OverlayBase
         }
         var rows = new List<List<Button>> { actions };
         if (MoreButton.Visibility == Visibility.Visible) rows.Add([MoreButton]);
-        if (AchievementSection.Visibility == Visibility.Visible) rows.Add([AchievementsMore]);
+        if (AchievementSection.Visibility == Visibility.Visible) rows.Add([AchievementSection]);
         if (Gallery.Visibility == Visibility.Visible)
         {
             rows.Add(Enumerable.Range(0, Shots.Items.Count)

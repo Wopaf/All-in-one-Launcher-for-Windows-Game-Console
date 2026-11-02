@@ -42,7 +42,7 @@ public partial class GamesView : UserControl
     private int _cols = 7;
     private ScrollViewer? _scroller;
     private DateTime _lastSelectionChange;
-    private SlideHighlight? _categoryHighlight;
+    private SlideHighlight? _categoryHighlight, _categoryPill;
     /// <summary>La sélection est sur la ligne de catégories (et non sur les jeux).</summary>
     private bool _inBar;
     private Button? _lastChip;
@@ -413,6 +413,13 @@ public partial class GamesView : UserControl
         CategoryBar.Children.Add(plus);
         CategoryHost.Visibility = Visibility.Visible;
         _categoryHighlight ??= new SlideHighlight(CategoryHighlight, CategoryHost);
+        if (_categoryPill is null)
+        {
+            _categoryPill = new SlideHighlight(CategoryPill, CategoryHost);
+            // Page affichée ou taille de l'interface changée : le fond reprend sa place.
+            CategoryHost.IsVisibleChanged += (_, _) => MoveCategoryPill();
+            CategoryBar.SizeChanged += (_, _) => MoveCategoryPill();
+        }
         UpdateCategoryBar();
         Relayout();
     }
@@ -462,12 +469,25 @@ public partial class GamesView : UserControl
 
     private void UpdateCategoryBar()
     {
+        var inactive = ((SolidColorBrush)FindResource("TextSecondary")).Color;
         foreach (var chip in CategoryBar.Children.OfType<Button>())
         {
             var active = chip.Tag is string key && key == ActiveChip;
-            chip.Background = new SolidColorBrush(active ? Color.FromRgb(0xF3, 0xF5, 0xF9) : Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
-            chip.Foreground = active ? new SolidColorBrush(Color.FromRgb(0x0A, 0x0C, 0x11)) : (Brush)FindResource("TextSecondary");
+            chip.Background = active ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
+            // Le texte change de couleur pendant que le fond arrive.
+            var text = new SolidColorBrush(chip.Foreground is SolidColorBrush current ? current.Color : inactive);
+            chip.Foreground = text;
+            text.BeginAnimation(SolidColorBrush.ColorProperty, new System.Windows.Media.Animation.ColorAnimation(active ? Color.FromRgb(0x0A, 0x0C, 0x11) : inactive, Anim.Ms(170)));
         }
+        Dispatcher.BeginInvoke(MoveCategoryPill, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void MoveCategoryPill()
+    {
+        if (_categoryPill is null || !CategoryHost.IsVisible) return;
+        var active = CategoryBar.Children.OfType<Button>().FirstOrDefault(c => c.Tag is string key && key == ActiveChip);
+        if (active is null) _categoryPill.Hide();
+        else _categoryPill.MoveTo(active);
     }
 
     private void EnterBar()

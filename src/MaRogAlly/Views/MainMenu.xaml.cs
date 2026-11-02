@@ -167,7 +167,7 @@ public partial class MainMenu : OverlayBase
         // Fond transparent : toute la hauteur de la barre répond au doigt.
         var bar = new Grid { Background = Brushes.Transparent, Height = 32 };
         bar.Children.Add(new Border { Height = 6, CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF)) });
-        _brightnessFill = new Border { Height = 6, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Background = (Brush)FindResource("Accent") };
+        _brightnessFill = new Border { Width = 0, Height = 6, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left, Background = (Brush)FindResource("Accent") };
         bar.Children.Add(_brightnessFill);
         Grid.SetColumn(bar, 1);
         grid.Children.Add(bar);
@@ -210,7 +210,7 @@ public partial class MainMenu : OverlayBase
             e.Handled = true;
         };
         Items.Children.Add(_brightnessRow);
-        ShowBrightness(percent);
+        ShowBrightness(percent, animate: false);
     }
 
     private void DragBrightness(double x)

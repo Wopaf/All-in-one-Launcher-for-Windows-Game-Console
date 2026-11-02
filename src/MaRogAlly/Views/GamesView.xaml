@@ -235,6 +235,8 @@
             </Border>
             <ScrollViewer Grid.Column="1" Style="{StaticResource RowScroll}" Margin="0">
                 <Grid x:Name="CategoryHost" HorizontalAlignment="Left" Visibility="Collapsed">
+                    <!-- Fond du bouton actif : glisse jusqu'au bouton choisi -->
+                    <Border x:Name="CategoryPill" CornerRadius="17" Background="#F3F5F9"/>
                     <StackPanel x:Name="CategoryBar" Orientation="Horizontal"/>
                     <Border x:Name="CategoryHighlight" CornerRadius="17" BorderBrush="White" BorderThickness="2"/>
                 </Grid>

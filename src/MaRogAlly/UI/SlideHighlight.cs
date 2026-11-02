@@ -34,7 +34,7 @@ public sealed class SlideHighlight
         if (!row.IsVisible || row.ActualHeight <= 0)
         {
             // Ligne pas encore mesurée (liste reconstruite) : on réessaie une fois la mise en page faite.
-            row.Dispatcher.BeginInvoke(() => { if (row.ActualHeight > 0) MoveTo(row, opacity); }, System.Windows.Threading.DispatcherPriority.Loaded);
+            row.Dispatcher.BeginInvoke(() => { if (row.IsVisible && row.ActualHeight > 0) MoveTo(row, opacity); }, System.Windows.Threading.DispatcherPriority.Loaded);
             return;
         }
         var at = row.TranslatePoint(new Point(0, 0), _host);

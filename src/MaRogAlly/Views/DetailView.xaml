@@ -201,32 +201,62 @@
                 <WrapPanel x:Name="InfoList"/>
             </Border>
 
-            <!-- Succès du jeu : progression et quelques succès mis en avant ; « Voir plus » mène à l'onglet Succès -->
-            <StackPanel x:Name="AchievementSection" Grid.Row="6" Width="860" HorizontalAlignment="Left" Margin="0,4,0,0" Visibility="Collapsed">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Text="SUCCÈS" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <TextBlock x:Name="AchievementCount" Grid.Column="1" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="14"
-                               Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <Grid x:Name="AchievementBar" Grid.Column="2" Width="170" Height="5" HorizontalAlignment="Left" VerticalAlignment="Center">
-                        <Border CornerRadius="2.5" Background="#1FFFFFFF"/>
-                        <Border x:Name="AchievementFill" CornerRadius="2.5" HorizontalAlignment="Left" Background="#E6FFFFFF"/>
+            <!-- Succès du jeu : progression et quelques succès mis en avant ; toute la section se sélectionne et mène à l'onglet Succès.
+                 Marges opposées au Padding : le contenu reste aligné sur le reste de la fiche, le cadre déborde autour. -->
+            <Button x:Name="AchievementSection" Grid.Row="6" Width="884" HorizontalAlignment="Left" Margin="-12,-6,0,-10" Padding="12,10"
+                    Visibility="Collapsed" FocusVisualStyle="{x:Null}" Cursor="Hand" Foreground="{StaticResource TextPrimary}"
+                    HorizontalContentAlignment="Stretch" Click="AchievementSection_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Grid Background="Transparent">
+                            <Border x:Name="Fill" CornerRadius="16" Background="Transparent"/>
+                            <Border x:Name="Frame" CornerRadius="16" BorderBrush="#E6FFFFFF" BorderThickness="2" Opacity="0"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="#0AFFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Fill" Property="Background" Value="#12FFFFFF"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.14"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="SUCCÈS" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                        <TextBlock x:Name="AchievementCount" Grid.Column="1" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="14"
+                                   Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                        <Grid x:Name="AchievementBar" Grid.Column="2" Width="170" Height="5" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <Border CornerRadius="2.5" Background="#1FFFFFFF"/>
+                            <Border x:Name="AchievementFill" CornerRadius="2.5" HorizontalAlignment="Left" Background="#E6FFFFFF"/>
+                        </Grid>
+                        <TextBlock Grid.Column="3" Text="&#xE76C;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center"/>
                     </Grid>
-                    <Button x:Name="AchievementsMore" Grid.Column="3" Style="{StaticResource PillButton}" Click="AchievementsMore_Click"
-                            Height="34" Padding="16,0" Margin="0" FontSize="14" Background="#14FFFFFF">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="Voir plus" VerticalAlignment="Center"/>
-                            <TextBlock Text="&#xE76C;" FontFamily="{StaticResource Icons}" FontSize="11" VerticalAlignment="Center" Margin="8,1,0,0"/>
-                        </StackPanel>
-                    </Button>
-                </Grid>
-                <UniformGrid x:Name="AchievementCards" Rows="1" Columns="3" Margin="0,8,-10,0"/>
-            </StackPanel>
+                    <UniformGrid x:Name="AchievementCards" Rows="1" Columns="3" Margin="0,8,-10,0"/>
+                </StackPanel>
+            </Button>
 
             <!-- Galerie : captures -->
             <StackPanel x:Name="Gallery" Grid.Row="7" Orientation="Horizontal" Margin="0,22,0,0" VerticalAlignment="Top">

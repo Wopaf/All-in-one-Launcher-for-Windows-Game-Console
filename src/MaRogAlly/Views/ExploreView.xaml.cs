@@ -88,6 +88,8 @@ public partial class ExploreView : UserControl
         Tiles.ItemsSource = _tiles;
         QueryText.Text = SearchPlaceholder;
         SizeChanged += (_, _) => Relayout();
+        // Le défilement est animé par FocusNav : sans ça, WPF saute d'abord jusqu'à la jaquette et l'animation repart de l'ancienne position.
+        foreach (var list in new[] { Hits, NewGames, FreeGames }) list.RequestBringIntoView += (_, e) => e.Handled = true;
         ShowNewSection();
     }
 
@@ -99,7 +101,7 @@ public partial class ExploreView : UserControl
         var compact = ActualHeight < 760;
         var gap = compact ? 14 : 24;
         SearchButton.Height = compact ? 50 : 60;
-        TileHeight = compact ? 72 : 96;
+        TileHeight = compact ? 88 : 116;
         TileTitleSize = compact ? 17 : 20;
         Tiles.Margin = new Thickness(64, gap, 46, 0);
         MainArea.Margin = new Thickness(0, gap, 0, 0);

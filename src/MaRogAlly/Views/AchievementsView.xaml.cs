@@ -246,9 +246,6 @@ public partial class AchievementsView : UserControl
     {
         Header.Visibility = Visibility.Visible;
         EmptyText.Visibility = Visibility.Collapsed;
-        var info = PlatformInfo.Of(g.Platform);
-        PlatformLogo.Data = Geometry.Parse(info.Logo);
-        PlatformText.Text = info.Name.ToUpperInvariant();
         PlatinumBadge.Visibility = g.Completed ? Visibility.Visible : Visibility.Collapsed;
         TitleText.Text = g.DisplayTitle;
 

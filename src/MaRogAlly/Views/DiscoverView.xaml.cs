@@ -46,6 +46,8 @@ public partial class DiscoverView : UserControl
     public DiscoverView()
     {
         InitializeComponent();
+        // Le défilement est animé par FocusNav : sans ça, WPF saute d'abord jusqu'à la jaquette et l'animation repart de l'ancienne position.
+        Covers.RequestBringIntoView += (_, e) => e.Handled = true;
         _sections = [_wish];
         BuildTabs();
         SizeChanged += (_, _) => Relayout();
@@ -125,7 +127,7 @@ public partial class DiscoverView : UserControl
             var tab = new Border
             {
                 CornerRadius = new CornerRadius(15),
-                Padding = new Thickness(14, 5, 14, 5),
+                Padding = new Thickness(16, 9, 16, 9),
                 Margin = new Thickness(0, 0, 8, 0),
                 Cursor = Cursors.Hand,
                 Child = new TextBlock
