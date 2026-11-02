@@ -135,6 +135,7 @@ public partial class MainWindow : Window
         Activated += OnActivated;
         PreviewKeyDown += OnKeyDown;
         PreviewTextInput += OnTextInput;
+        PreviewGotKeyboardFocus += KeepFocusInOverlay;
         Closed += (_, _) => { _pad.Dispose(); _enrichCts?.Cancel(); };
     }
 
@@ -151,6 +152,7 @@ public partial class MainWindow : Window
         {
             _windowsUpdates = updates.Windows;
             _asusApp = updates.Asus;
+            SyncUpdateBadge();
         }
         _ = UiSounds.InitAsync();
         PlayIntro();
@@ -187,6 +189,7 @@ public partial class MainWindow : Window
         var startPage = tabArg >= 0 && tabArg + 1 < args.Length && int.TryParse(args[tabArg + 1], out var t) ? t : 0;
         ShowPage(startPage, animate: false);
         if (args.Contains("--stats")) OpenStats();
+        if (args.Contains("--storage")) OpenStorage();
         if (args.Contains("--detail") && _installed.Source.FirstOrDefault() is { } firstGame) OpenDetail(firstGame);
         if (args.Contains("--menu")) OpenSystemMenu();
         if (args.Contains("--store"))
@@ -661,6 +664,13 @@ public partial class MainWindow : Window
     // Mises à jour (Windows Update, Armoury Crate)
     // =====================================================================
 
+    /// <summary>Pastille du bouton Menu : mises à jour Windows (ou redémarrage qui les termine) et nouvelle version de l'application.</summary>
+    private void SyncUpdateBadge()
+    {
+        var windows = _windowsUpdates is { } w ? Math.Max(w.Count, w.RebootRequired ? 1 : 0) : 0;
+        MenuBadge.Count = windows + (_appRelease is null ? 0 : 1);
+    }
+
     private DateTime _lastUpdateCheck;
     private AsusAppInfo? _asusApp;
     private WindowsUpdateStatus? _windowsUpdates;
@@ -679,6 +689,7 @@ public partial class MainWindow : Window
             _updatesFailed = status.Error is not null;
             if (!_updatesFailed || _windowsUpdates is null) _windowsUpdates = status;
             new UpdateSnapshot(_windowsUpdates, _asusApp).Save();
+            SyncUpdateBadge();
             // Menu ouvert pendant la vérification : ses tuiles suivent.
             if (_systemMenu is { } menu)
             {
@@ -708,6 +719,7 @@ public partial class MainWindow : Window
         _lastAppUpdateCheck = DateTime.Now;
         var known = _appRelease?.Version;
         _appRelease = await _appUpdater.CheckAsync(CancellationToken.None) ?? _appRelease;
+        SyncUpdateBadge();
         if (_appRelease is not { } release || release.Version == known) return;
         Toast("", $"Ma ROG Ally {release.Version.ToString(3)} est disponible : voir le menu");
         var (text, color) = AppUpdateStatus;
@@ -1043,7 +1055,7 @@ public partial class MainWindow : Window
     /// <summary>La barre d'onglets s'efface dans les Réglages et les Plateformes (et sous les pages plein écran).</summary>
     private void SyncTopBar()
     {
-        var visible = _subView is not (SettingsView or PlatformsView) && !_overlays.Any(o => o is DetailView or StatsView or KeyboardPanel);
+        var visible = _subView is not (SettingsView or PlatformsView) && !_overlays.Any(o => o is DetailView or StatsView or StorageView or KeyboardPanel);
         Anim.Fade(TopBar, visible ? 1 : 0, visible ? 300 : 250);
         TopBar.IsHitTestVisible = visible;
     }
@@ -1117,7 +1129,7 @@ public partial class MainWindow : Window
         {
             var inDock = (bool)e.NewValue;
             // Une seule zone active : la page s'atténue et sa sélection s'efface tant que la barre a la main.
-            if (!_overlays.Any(o => o is DetailView or StatsView)) Anim.Fade(Pages, inDock ? 0.45 : 1, 200);
+            if (!_overlays.Any(o => o is DetailView or StatsView or StorageView)) Anim.Fade(Pages, inDock ? 0.45 : 1, 200);
             _installed.SetSuspended(inDock);
             _all.SetSuspended(inDock);
             UpdateHints();
@@ -1414,6 +1426,15 @@ public partial class MainWindow : Window
     // Panneaux superposés
     // =====================================================================
 
+    /// <summary>
+    /// Tant qu'un panneau est ouvert, le focus reste dedans : une page qui reprend sa sélection en différé
+    /// (panneau refermé puis un autre ouvert aussitôt) ne doit pas le lui voler, sinon A valide la page dessous.
+    /// </summary>
+    private void KeepFocusInOverlay(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (_overlays.LastOrDefault() is { } top && e.NewFocus is Visual target && !target.IsDescendantOf(top)) e.Handled = true;
+    }
+
     private void OpenOverlay(OverlayBase overlay)
     {
         overlay.CloseRequested += CloseOverlay;
@@ -1423,7 +1444,7 @@ public partial class MainWindow : Window
         overlay.OnOpened();
         if (overlay is KeyboardPanel) SyncTopBar();
         // Pages plein écran (fiche, statistiques) : la page et la barre d'onglets s'effacent dessous.
-        if (overlay is DetailView or StatsView)
+        if (overlay is DetailView or StatsView or StorageView)
         {
             Anim.Fade(Pages, 0, 250);
             SyncTopBar();
@@ -1439,12 +1460,13 @@ public partial class MainWindow : Window
         overlay.IsHitTestVisible = false;
         Anim.Exit(overlay, 30, 0, 180, () => OverlayHost.Children.Remove(overlay));
         if (overlay is KeyboardPanel) SyncTopBar();
-        if (overlay is DetailView or StatsView && !_overlays.Any(o => o is DetailView or StatsView))
+        if (overlay is DetailView or StatsView or StorageView && !_overlays.Any(o => o is DetailView or StatsView or StorageView))
         {
             Anim.Fade(Pages, 1, 300);
             SyncTopBar();
         }
         UpdateHints();
+        if (_overlays.Count > 0) _overlays[^1].OnRevealed();
 
         if (_overlays.Count == 0)
         {
@@ -1805,6 +1827,15 @@ public partial class MainWindow : Window
         OpenOverlay(stats);
     }
 
+    private void OpenStorage()
+    {
+        var storage = new StorageView(_games);
+        storage.GameRequested += OpenDetail;
+        storage.OverlayRequested += OpenOverlay;
+        storage.ToastRequested += Toast;
+        OpenOverlay(storage);
+    }
+
     private void OpenSort(GamesView view)
     {
         var panel = new SidePanel("Trier par");
@@ -1844,7 +1875,7 @@ public partial class MainWindow : Window
     /// <summary>Ferme les volets ; <paramref name="instantly"/> : sans fondu, quand un autre prend sa place.</summary>
     private void CloseFlyouts(bool instantly = false)
     {
-        foreach (var overlay in _overlays.Where(o => o is not (DetailView or StatsView or WebPreview)).ToList())
+        foreach (var overlay in _overlays.Where(o => o is not (DetailView or StatsView or StorageView or WebPreview)).ToList())
         {
             overlay.Close();
             if (instantly) OverlayHost.Children.Remove(overlay);
@@ -2071,6 +2102,46 @@ public partial class MainWindow : Window
         var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
         var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
 
+        menu.AddSection("Accès rapide");
+        menu.AddButton("\uE713", "Réglages", () =>
+        {
+            menu.Close();
+            OpenSubPage(_settingsView);
+        });
+        menu.AddButton("\uE9D2", "Statistiques", () =>
+        {
+            menu.Close();
+            OpenStats();
+        });
+        menu.AddButton("", "Plateformes", () =>
+        {
+            menu.Close();
+            OpenSubPage(_platforms);
+        });
+
+        menu.AddIconButtons(
+            ("\uE701", "Wi-Fi", () => { menu.Close(); GameLauncher.Open("ms-settings:network-wifi"); }),
+            ("\uE702", "Bluetooth", () => { menu.Close(); GameLauncher.Open("ms-settings:bluetooth"); }),
+            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }),
+            ("\uE7F4", "Bureau", () => { menu.Close(); WindowsShell.ShowDesktop(); }));
+
+        if (_brightness is int brightness)
+        {
+            menu.AddBrightness(brightness, level =>
+            {
+                _brightness = level;
+                ScreenBrightness.Set(level);
+            });
+            _ = SyncBrightnessAsync(menu);
+        }
+
+        menu.AddDrives();
+        menu.AddButton("\uEDA2", "Gérer vos espaces de stockage", () =>
+        {
+            menu.Close();
+            OpenStorage();
+        });
+
         menu.AddSection("Mises à jour");
         var updates = new List<MenuTile>
         {
@@ -2096,41 +2167,6 @@ public partial class MainWindow : Window
             menu.Close();
             _ = ManualAppUpdateAsync();
         }, appColor));
-
-        menu.AddSection("Accès rapide");
-        menu.AddButton("\uE713", "Réglages", () =>
-        {
-            menu.Close();
-            OpenSubPage(_settingsView);
-        });
-        menu.AddButton("\uE9D2", "Statistiques", () =>
-        {
-            menu.Close();
-            OpenStats();
-        });
-        menu.AddButton("", "Plateformes", () =>
-        {
-            menu.Close();
-            OpenSubPage(_platforms);
-        });
-
-        menu.AddIconButtons(
-            ("\uE701", "Wi-Fi", () => { menu.Close(); GameLauncher.Open("ms-settings:network-wifi"); }),
-            ("\uE702", "Bluetooth", () => { menu.Close(); GameLauncher.Open("ms-settings:bluetooth"); }),
-            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }),
-            ("\uE7F4", "Retour au bureau", () => { menu.Close(); WindowsShell.ShowDesktop(); }));
-
-        if (_brightness is int brightness)
-        {
-            menu.AddBrightness(brightness, level =>
-            {
-                _brightness = level;
-                ScreenBrightness.Set(level);
-            });
-            _ = SyncBrightnessAsync(menu);
-        }
-
-        menu.AddDrives();
 
         menu.AddSection("Alimentation");
         menu.AddPowerButtons(
@@ -2338,6 +2374,7 @@ public partial class MainWindow : Window
 
     private void Launch(Game game)
     {
+        StorageStore.CancelScan(); // rien ne tourne pendant un jeu
         if (!game.IsInstalled)
         {
             _libraryDirty = true;

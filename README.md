@@ -18,7 +18,7 @@ L'exécutable n'est pas signé : Windows peut afficher un avertissement au premi
 | B | Échap | Retour (retire les filtres sur une liste) |
 | X | F | Filtres |
 | Y | Espace | Trier |
-| Menu (≡) | Échap, T | Menu : mises à jour, réglages, statistiques, plateformes, veille, arrêt |
+| Menu (≡) | Échap, T | Menu : réglages, statistiques, plateformes, stockage, mises à jour, veille, arrêt |
 | Vue (⧉) | | Revenir sur l'application depuis une autre fenêtre |
 | B (depuis une autre fenêtre) | | Réduire cette fenêtre, sauf un jeu de la bibliothèque ou une fenêtre en plein écran |
 | LB / RB | Maj+Tab / Tab | Onglet précédent / suivant |

@@ -29,6 +29,9 @@ public class OverlayBase : UserControl
         Dispatcher.BeginInvoke(() => FocusNav.FocusFirst(FocusScope), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    /// <summary>Le panneau posé au-dessus vient de se refermer.</summary>
+    public virtual void OnRevealed() { }
+
     /// <summary>Zone où le focus circule (par défaut tout le panneau).</summary>
     protected virtual FrameworkElement FocusScope => this;
 
@@ -40,7 +43,9 @@ public class OverlayBase : UserControl
                 Close();
                 return true;
             case NavAction.Accept:
-                FocusNav.Activate();
+                // Sélection hors du panneau : A l'y ramène, sans jamais valider ce qui est dessous.
+                if (FocusNav.IsFocusInside(this)) FocusNav.Activate();
+                else FocusNav.FocusFirst(FocusScope);
                 return true;
             case NavAction.Up or NavAction.Down or NavAction.Left or NavAction.Right:
                 FocusNav.Move(action, FocusScope);

@@ -64,6 +64,10 @@ public static class FocusNav
         }
     }
 
+    /// <summary>Le focus est-il dans cette zone ?</summary>
+    public static bool IsFocusInside(DependencyObject scope)
+        => Keyboard.FocusedElement is DependencyObject focused && IsInside(focused, scope);
+
     private static bool IsInside(DependencyObject element, DependencyObject scope)
         => element == scope || (element is Visual v && scope is Visual s && v.IsDescendantOf(s));
 

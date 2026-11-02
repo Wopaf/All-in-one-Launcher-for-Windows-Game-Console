@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using MaRogAlly.Input;
 using MaRogAlly.Services;
 using MaRogAlly.UI;
@@ -61,7 +62,7 @@ public partial class MainMenu : OverlayBase
     /// <summary>Rangée de tuiles de même largeur (2 par rangée en général).</summary>
     public void AddTiles(params MenuTile[] tiles)
     {
-        var row = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         for (var i = 0; i < tiles.Length; i++)
         {
             row.ColumnDefinitions.Add(new ColumnDefinition());
@@ -108,7 +109,7 @@ public partial class MainMenu : OverlayBase
         Items.Children.Add(b);
     }
 
-    /// <summary>Rangée de boutons de même largeur, sans texte (le nom reste en infobulle).</summary>
+    /// <summary>Rangée de boutons de même largeur, avec leur nom dessous.</summary>
     public void AddIconButtons(params (string Icon, string Title, Action OnClick)[] buttons)
     {
         var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
@@ -116,29 +117,37 @@ public partial class MainMenu : OverlayBase
         {
             row.ColumnDefinitions.Add(new ColumnDefinition());
             var (icon, title, onClick) = buttons[i];
+            var tile = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
+                CornerRadius = new CornerRadius(14),
+                Height = 56,
+                Child = new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            };
             var b = new Button
             {
                 Style = (Style)FindResource("RowButton"),
                 Padding = new Thickness(0),
-                Height = 56,
-                ToolTip = title,
+                Height = 80,
                 Margin = new Thickness(i == 0 ? 0 : 4, 0, i == buttons.Length - 1 ? 0 : 4, 0),
-                Content = new Border
+                Content = new StackPanel
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
-                    CornerRadius = new CornerRadius(14),
-                    Height = 56,
-                    Child = new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    Children =
+                    {
+                        tile,
+                        new TextBlock { Text = title, FontSize = 12, Foreground = (Brush)FindResource("TextSecondary"), HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 5, 0, 0) },
+                    },
                 },
             };
-            Track(b, onClick);
+            // Le cadre de sélection entoure la tuile, pas le nom dessous.
+            Track(b, onClick, tile);
             Grid.SetColumn(b, i);
             row.Children.Add(b);
         }
         Items.Children.Add(row);
     }
 
-    private const int BrightnessMin = 5, BrightnessStep = 5;
+    private const int BrightnessMin = 10, BrightnessStep = 10;
     private Button? _brightnessRow;
     private Border? _brightnessFill;
     private FrameworkElement? _brightnessBar;
@@ -166,7 +175,7 @@ public partial class MainMenu : OverlayBase
         Grid.SetColumn(_brightnessText, 2);
         grid.Children.Add(_brightnessText);
         _brightnessBar = bar;
-        bar.SizeChanged += (_, _) => ShowBrightness(_brightness);
+        bar.SizeChanged += (_, _) => ShowBrightness(_brightness, animate: false);
 
         _brightnessRow = new Button
         {
@@ -217,13 +226,20 @@ public partial class MainMenu : OverlayBase
         _applyBrightness?.Invoke(percent);
     }
 
-    /// <summary>Affiche un niveau sans le modifier (ex. changé entre-temps par les touches de la machine).</summary>
-    public void ShowBrightness(int percent)
+    /// <summary>Affiche un niveau, arrondi à la dizaine, sans le modifier (ex. changé entre-temps par les touches de la machine).</summary>
+    public void ShowBrightness(int percent, bool animate = true)
     {
         if (_brightnessFill is null || _brightnessBar is null || _brightnessText is null) return;
+        percent = Math.Clamp((int)Math.Round(percent / (double)BrightnessStep, MidpointRounding.AwayFromZero) * BrightnessStep, BrightnessMin, 100);
         _brightness = percent;
-        _brightnessFill.Width = _brightnessBar.ActualWidth * percent / 100;
         _brightnessText.Text = $"{percent} %";
+        var width = _brightnessBar.ActualWidth * percent / 100;
+        if (animate) _brightnessFill.BeginAnimation(WidthProperty, new DoubleAnimation(width, Anim.Ms(220)) { EasingFunction = Anim.Out });
+        else
+        {
+            _brightnessFill.BeginAnimation(WidthProperty, null);
+            _brightnessFill.Width = width;
+        }
     }
 
     /// <summary>Boutons d'alimentation : pastille colorée avec l'icône, libellé à côté, côte à côte.</summary>
@@ -235,11 +251,7 @@ public partial class MainMenu : OverlayBase
             row.ColumnDefinitions.Add(new ColumnDefinition());
             var (icon, title, tint, onClick) = buttons[i];
             var content = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            content.Children.Add(new Border
-            {
-                Width = 40, Height = 40, CornerRadius = new CornerRadius(20), Background = new SolidColorBrush(tint),
-                Child = new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 17, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-            });
+            content.Children.Add(new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
             content.Children.Add(new TextBlock { Text = title, FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) });
 
             var b = new Button
@@ -319,15 +331,15 @@ public partial class MainMenu : OverlayBase
         ? $"{bytes / (double)(1L << 40):0.##} To"
         : $"{bytes / (double)(1L << 30):0} Go";
 
-    private void Track(Button b, Action onClick)
+    private void Track(Button b, Action onClick, FrameworkElement? frame = null)
     {
         RowOptions.SetFloating(b, true);
-        b.GotKeyboardFocus += (_, _) => _highlight.MoveTo(b);
+        b.GotKeyboardFocus += (_, _) => _highlight.MoveTo(frame ?? b);
         b.Click += (_, _) => onClick();
     }
 
     /// <summary>Pastille et ligne d'état de chaque tuile, pour les mettre à jour menu ouvert.</summary>
-    private readonly Dictionary<string, (Border Dot, TextBlock Text)> _tileStates = [];
+    private readonly Dictionary<string, (Border Dot, TextBlock Text, Border Card)> _tileStates = [];
 
     /// <summary>Nouvel état d'une tuile (ex. fin de la vérification des mises à jour).</summary>
     public void UpdateTile(string title, string detail, Color dot)
@@ -336,11 +348,33 @@ public partial class MainMenu : OverlayBase
         state.Text.Text = detail;
         state.Dot.Background = new SolidColorBrush(dot);
         state.Dot.Visibility = Visibility.Visible;
+        ApplyTileLook(state.Card, dot);
+    }
+
+    /// <summary>Mise à jour à faire : voile orange qui part du coin de l'icône et s'efface en diagonale, avec un liseré assorti.</summary>
+    private static void ApplyTileLook(Border card, Color? dot)
+    {
+        var alert = dot is { } c && c != Ok && c != Idle;
+        card.BorderThickness = new Thickness(1);
+        if (!alert)
+        {
+            card.Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
+            card.BorderBrush = Brushes.Transparent;
+            return;
+        }
+        static Color Orange(byte alpha) => Color.FromArgb(alpha, 0xFF, 0x8A, 0x1C);
+        card.Background = new LinearGradientBrush(new GradientStopCollection
+        {
+            new(Orange(0x4D), 0), new(Orange(0x1F), 0.55), new(Orange(0x0A), 1),
+        }, new Point(0, 0), new Point(1, 1));
+        card.BorderBrush = new LinearGradientBrush(Orange(0x73), Orange(0x14), new Point(0, 0), new Point(1, 1));
     }
 
     private Button Tile(MenuTile t)
     {
-        var detail = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
+        var detail = new Grid { Margin = new Thickness(0, 2, 0, 0) };
+        detail.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        detail.ColumnDefinitions.Add(new ColumnDefinition());
         var dotBorder = new Border
         {
             Width = 8, Height = 8, CornerRadius = new CornerRadius(4), Background = new SolidColorBrush(t.Dot ?? Colors.Transparent),
@@ -353,36 +387,44 @@ public partial class MainMenu : OverlayBase
             Text = t.Detail, FontSize = 13, Foreground = (Brush)FindResource("TextSecondary"),
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
+        Grid.SetColumn(detailText, 1);
         detail.Children.Add(detailText);
-        _tileStates[t.Title] = (dotBorder, detailText);
 
-        var body = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var body = new Grid();
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition());
         body.Children.Add(new TextBlock
         {
             Text = t.Icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 22,
-            Foreground = (Brush)FindResource("TextPrimary"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 12),
+            Foreground = (Brush)FindResource("TextPrimary"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0),
         });
-        body.Children.Add(new TextBlock
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(text, 1);
+        body.Children.Add(text);
+        text.Children.Add(new TextBlock
         {
             Text = t.Title, FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 17,
             TextTrimming = TextTrimming.CharacterEllipsis,
         });
-        body.Children.Add(detail);
+        text.Children.Add(detail);
+
+        var card = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(16, 0, 12, 0),
+            Height = 68,
+            Child = body,
+        };
+        ApplyTileLook(card, t.Dot);
 
         var b = new Button
         {
             Style = (Style)FindResource("RowButton"),
             Padding = new Thickness(0),
-            Height = 112,
-            Content = new Border
-            {
-                Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
-                CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(20, 16, 16, 16),
-                Height = 112,
-                Child = body,
-            },
+            Height = 68,
+            Content = card,
         };
+        _tileStates[t.Title] = (dotBorder, detailText, card);
         RowOptions.SetFloating(b, true);
         b.GotKeyboardFocus += (_, _) => _highlight.MoveTo(b);
         b.Click += (_, _) => t.OnClick();

@@ -400,6 +400,8 @@ public static class WindowsShell
     /// <summary>Bureau de Windows (Win + D).</summary>
     public static void ShowDesktop() => WinShortcut((byte)'D');
     public static void ShowStartMenu() => WinShortcut(null);
+    /// <summary>Gestionnaire des tâches, sur l'onglet des applications de démarrage.</summary>
+    public static void ShowStartupApps() => GameLauncher.Open("taskmgr", "/0 /startup");
 
     // ---------------- Windows ----------------
 

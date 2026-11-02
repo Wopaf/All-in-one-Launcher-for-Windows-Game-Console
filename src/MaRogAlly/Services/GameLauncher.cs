@@ -132,12 +132,12 @@ public static class GameLauncher
     public static bool OpenFolder(Game game)
         => game.InstallDir is not null && Directory.Exists(game.InstallDir) && Open(game.InstallDir);
 
-    public static bool Open(string target)
+    public static bool Open(string target, string arguments = "")
     {
         if (string.IsNullOrWhiteSpace(target)) return false;
         try
         {
-            Process.Start(new ProcessStartInfo { FileName = target, UseShellExecute = true });
+            Process.Start(new ProcessStartInfo { FileName = target, Arguments = arguments, UseShellExecute = true });
             return true;
         }
         catch (Exception ex)

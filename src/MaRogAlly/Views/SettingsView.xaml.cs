@@ -82,6 +82,8 @@ public partial class SettingsView : UserControl
         _startupCategory = _categories[^1];
         Switch("Ouvrir au démarrage", () => _settings.StartWithWindows, v => { _settings.StartWithWindows = v; AutoStart.Apply(v); },
             "Ouvrir au démarrage", "Ma ROG Ally s'ouvre automatiquement au démarrage de la machine, dès l'ouverture de ta session Windows, puis rescanne toutes les plateformes.");
+        ActionRow("Voir les applications au démarrage de Windows", "", WindowsShell.ShowStartupApps,
+            "Applications au démarrage de Windows", "Ouvre le Gestionnaire des tâches sur l'onglet des applications de démarrage : tu y vois ce qui se lance avec Windows, et tu peux l'activer ou le désactiver.\n\nWindows peut te demander une confirmation à l'ouverture.");
         Header("Lanceurs à ouvrir avec l'application");
 
         Category("Comportement", "\uE713", "Sons, lancement d'un jeu et mises à jour",
