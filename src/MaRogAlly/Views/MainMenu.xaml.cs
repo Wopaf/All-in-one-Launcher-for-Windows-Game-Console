@@ -77,6 +77,28 @@ public partial class MainMenu : OverlayBase
     /// <summary>Bouton simple en pleine largeur : icône, libellé, chevron.</summary>
     public void AddButton(string icon, string title, Action onClick)
     {
+        var b = MenuButton(icon, title, onClick);
+        b.Margin = new Thickness(0, 0, 0, 8);
+        Items.Children.Add(b);
+    }
+
+    /// <summary>Boutons simples côte à côte, de même largeur.</summary>
+    public void AddButtons(params (string Icon, string Title, Action OnClick)[] buttons)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition());
+            var b = MenuButton(buttons[i].Icon, buttons[i].Title, buttons[i].OnClick);
+            b.Margin = new Thickness(i == 0 ? 0 : 4, 0, i == buttons.Length - 1 ? 0 : 4, 0);
+            Grid.SetColumn(b, i);
+            row.Children.Add(b);
+        }
+        Items.Children.Add(row);
+    }
+
+    private Button MenuButton(string icon, string title, Action onClick)
+    {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -94,7 +116,6 @@ public partial class MainMenu : OverlayBase
             Style = (Style)FindResource("RowButton"),
             Padding = new Thickness(0),
             Height = 56,
-            Margin = new Thickness(0, 0, 0, 8),
             Content = new Border
             {
                 Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
@@ -106,7 +127,7 @@ public partial class MainMenu : OverlayBase
             },
         };
         Track(b, onClick);
-        Items.Children.Add(b);
+        return b;
     }
 
     /// <summary>Rangée de boutons de même largeur, avec leur nom dessous.</summary>
@@ -139,12 +160,31 @@ public partial class MainMenu : OverlayBase
                     },
                 },
             };
+            _iconTiles[title] = tile;
             // Le cadre de sélection entoure la tuile, pas le nom dessous.
             Track(b, onClick, tile);
             Grid.SetColumn(b, i);
             row.Children.Add(b);
         }
         Items.Children.Add(row);
+    }
+
+    private readonly Dictionary<string, Border> _iconTiles = [];
+
+    /// <summary>Fonction activée (Wi-Fi, Bluetooth) : la tuile passe en dégradé bleu.</summary>
+    public void SetIconActive(string title, bool active)
+    {
+        if (!_iconTiles.TryGetValue(title, out var tile)) return;
+        tile.BorderThickness = new Thickness(1);
+        if (!active)
+        {
+            tile.Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
+            tile.BorderBrush = Brushes.Transparent;
+            return;
+        }
+        static Color Blue(byte alpha) => Color.FromArgb(alpha, 0x2D, 0x8C, 0xFF);
+        tile.Background = new LinearGradientBrush(new GradientStopCollection { new(Blue(0x8C), 0), new(Blue(0x33), 1) }, new Point(0, 0), new Point(1, 1));
+        tile.BorderBrush = new LinearGradientBrush(Blue(0xB3), Blue(0x26), new Point(0, 0), new Point(1, 1));
     }
 
     private const int BrightnessMin = 10, BrightnessStep = 10;
@@ -250,7 +290,7 @@ public partial class MainMenu : OverlayBase
         {
             row.ColumnDefinitions.Add(new ColumnDefinition());
             var (icon, title, tint, onClick) = buttons[i];
-            var content = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             content.Children.Add(new TextBlock { Text = icon, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center });
             content.Children.Add(new TextBlock { Text = title, FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0) });
 
@@ -264,7 +304,7 @@ public partial class MainMenu : OverlayBase
                 {
                     Background = new SolidColorBrush(Color.FromArgb(0x26, tint.R, tint.G, tint.B)),
                     CornerRadius = new CornerRadius(14),
-                    Padding = new Thickness(14, 0, 18, 0),
+                    Padding = new Thickness(14, 0, 14, 0),
                     Height = 68,
                     Child = content,
                 },
@@ -331,11 +371,23 @@ public partial class MainMenu : OverlayBase
         ? $"{bytes / (double)(1L << 40):0.##} To"
         : $"{bytes / (double)(1L << 30):0} Go";
 
+    private Button? _lastButton;
+
     private void Track(Button b, Action onClick, FrameworkElement? frame = null)
     {
         RowOptions.SetFloating(b, true);
-        b.GotKeyboardFocus += (_, _) => _highlight.MoveTo(frame ?? b);
+        b.GotKeyboardFocus += (_, _) =>
+        {
+            _lastButton = b;
+            _highlight.MoveTo(frame ?? b);
+        };
         b.Click += (_, _) => onClick();
+    }
+
+    /// <summary>Retour d'un écran ouvert par-dessus (Wi-Fi, Bluetooth) : la sélection reprend sur son bouton.</summary>
+    public override void OnRevealed()
+    {
+        if (_lastButton is { } b) FocusNav.Focus(b);
     }
 
     /// <summary>Pastille et ligne d'état de chaque tuile, pour les mettre à jour menu ouvert.</summary>

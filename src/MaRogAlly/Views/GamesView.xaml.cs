@@ -56,6 +56,8 @@ public partial class GamesView : UserControl
         GridHost.SizeChanged += (_, _) => Relayout();
         SizeChanged += (_, _) => Relayout();
         RowsList.Loaded += (_, _) => _scroller ??= RowsList.Template.FindName("Scroller", RowsList) as ScrollViewer;
+        // Première ouverture de l'onglet : les jaquettes apparaissent à ce moment-là.
+        IsVisibleChanged += (_, _) => RevealTiles();
         // Molette : rangée précédente / suivante (une seule rangée est visible).
         RowsList.PreviewMouseWheel += (_, e) =>
         {
@@ -90,6 +92,43 @@ public partial class GamesView : UserControl
         UpdateEmptyState();
         UpdateCategoryBar();
         ReplaySelection();
+        // toTop : filtre, tri ou catégorie changés. Une mise à jour en arrière-plan (scan, fiches) ne rejoue pas l'apparition.
+        if (toTop) _revealPending = true;
+        RevealTiles();
+    }
+
+    // ---------------- Apparition des jaquettes ----------------
+
+    /// <summary>L'apparition reste à jouer : au premier chargement, puis à chaque changement de filtre, de tri ou de catégorie.</summary>
+    private bool _revealPending = true;
+    private bool _revealAllowed;
+
+    /// <summary>L'écran de lancement s'efface : l'apparition peut se jouer, elle ne serait plus cachée derrière.</summary>
+    public void AllowReveal()
+    {
+        _revealAllowed = true;
+        RevealTiles();
+    }
+
+    /// <summary>Les jaquettes visibles apparaissent une à une ; les rangées suivantes, hors champ, sont déjà en place.</summary>
+    private void RevealTiles()
+    {
+        if (!_revealPending || !_revealAllowed || !_active || !IsVisible || _visible.Count == 0) return;
+        // Rangées générées tout de suite : les jaquettes sont masquées avant d'avoir été affichées une seule fois.
+        RowsList.UpdateLayout();
+        var tiles = new List<UIElement>();
+        for (var r = _firstRow; r < _firstRow + VisibleRows; r++)
+        {
+            if (RowsList.ItemContainerGenerator.ContainerFromIndex(r) is not DependencyObject row
+                || VisualTreeHelper.GetChildrenCount(row) == 0 || VisualTreeHelper.GetChild(row, 0) is not ItemsControl tilesOfRow) continue;
+            for (var c = 0; c < tilesOfRow.Items.Count; c++)
+                if (tilesOfRow.ItemContainerGenerator.ContainerFromIndex(c) is UIElement tile) tiles.Add(tile);
+        }
+        if (tiles.Count == 0) return;
+        _revealPending = false;
+        // Durée totale bornée : sur un très grand écran, davantage de jaquettes, plus rapprochées.
+        var step = Math.Min(45, 800.0 / tiles.Count);
+        for (var i = 0; i < tiles.Count; i++) Anim.Enter(tiles[i], 0, 18, 320, delay: i * step);
     }
 
     /// <summary>

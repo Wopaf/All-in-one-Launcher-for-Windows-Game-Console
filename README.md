@@ -1,6 +1,6 @@
 # All-in-one Launcher for Windows Game Console
 
-**Ma ROG Ally** : lanceur de jeux plein écran pour consoles portables sous Windows 11 (pensé pour l'Asus ROG Ally), entièrement pilotable à la manette. Il réunit les jeux de toutes les plateformes et remplace la barre des tâches de Windows par la sienne.
+**Ma ROG Ally** : lanceur de jeux plein écran pour consoles portables sous Windows 11 (pensé pour l'Asus ROG Ally), entièrement pilotable à la manette. Il réunit les jeux de toutes les plateformes, remplace la barre des tâches de Windows par la sienne et gère le Wi-Fi et le Bluetooth sans passer par les paramètres.
 
 ## Installer
 
@@ -19,7 +19,6 @@ L'exécutable n'est pas signé : Windows peut afficher un avertissement au premi
 | X | F | Filtres |
 | Y | Espace | Trier |
 | Menu (≡) | Échap, T | Menu : réglages, statistiques, plateformes, stockage, mises à jour, veille, arrêt |
-| Vue (⧉) | | Revenir sur l'application depuis une autre fenêtre |
 | B (depuis une autre fenêtre) | | Réduire cette fenêtre, sauf un jeu de la bibliothèque ou une fenêtre en plein écran |
 | LB / RB | Maj+Tab / Tab | Onglet précédent / suivant |
 | LT / RT | Page préc. / suiv. | Bibliothèque : catégorie précédente / suivante |

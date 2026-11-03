@@ -165,7 +165,7 @@ public partial class StatsView : OverlayBase
     /// <summary>Le jeu le plus joué mis en avant : son visuel en fond, sa jaquette, son temps de jeu.</summary>
     private FrameworkElement SpotlightCard(Game? top, int totalMinutes)
     {
-        var card = new Grid { MinHeight = 250, Background = Res<Brush>("SurfaceGlass") };
+        var card = new Grid { MinHeight = 250, Background = Res<Brush>("SurfaceClear") };
         Rounded.SetRadius(card, 22);
         if (top is null)
         {
@@ -219,7 +219,9 @@ public partial class StatsView : OverlayBase
     private Border Card(UIElement child, Thickness padding) => new()
     {
         CornerRadius = new CornerRadius(22),
-        Background = Res<Brush>("SurfaceGlass"),
+        Background = Res<Brush>("SurfaceClear"),
+        BorderBrush = Res<Brush>("StrokeClear"),
+        BorderThickness = new Thickness(1),
         Padding = padding,
         Child = child,
     };

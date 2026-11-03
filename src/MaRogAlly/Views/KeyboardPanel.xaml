@@ -72,10 +72,10 @@
             </Rectangle.Fill>
         </Rectangle>
 
-        <!-- Clavier collé aux bords de l'écran (bas, gauche, droite) : les aides de la manette passent en haut -->
+        <!-- Clavier collé aux bords de l'écran (bas, gauche, droite), par-dessus la barre de gauche : les aides de la manette passent en haut -->
         <Border x:Name="Panel" VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
                 CornerRadius="28,28,0,0" Background="{DynamicResource PanelBg}" BorderBrush="{StaticResource Stroke}" BorderThickness="0,1,0,0"
-                Padding="26,20,26,16" ClipToBounds="False">
+                Padding="16,20,16,14" ClipToBounds="False">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="40" ShadowDepth="0" Opacity="0.6" Color="Black"/>
             </Border.Effect>
@@ -89,77 +89,100 @@
                         </RadialGradientBrush>
                     </Ellipse.Fill>
                 </Ellipse>
-                <StackPanel>
-                    <!-- Champ de saisie -->
-                    <Grid Margin="5,0,5,14">
-                        <Border CornerRadius="16" Background="#1AFFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Padding="20,0" Height="56">
-                            <Grid VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock x:Name="ValueText" FontFamily="{StaticResource Display}" FontSize="26" Foreground="{StaticResource TextPrimary}"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                    <!-- Curseur qui clignote -->
-                                    <Border x:Name="Caret" Width="2" Height="28" Margin="3,0,0,0" Background="{DynamicResource Accent}" VerticalAlignment="Center">
-                                        <Border.Triggers>
-                                            <EventTrigger RoutedEvent="FrameworkElement.Loaded">
-                                                <BeginStoryboard>
-                                                    <Storyboard>
-                                                        <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity" RepeatBehavior="Forever" Duration="0:0:1.1">
-                                                            <DiscreteDoubleKeyFrame Value="1" KeyTime="0:0:0"/>
-                                                            <DiscreteDoubleKeyFrame Value="0" KeyTime="0:0:0.55"/>
-                                                        </DoubleAnimationUsingKeyFrames>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </EventTrigger>
-                                        </Border.Triggers>
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock x:Name="Placeholder" FontSize="22" Foreground="{StaticResource TextMuted}" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
-                    </Grid>
-
-                    <Grid x:Name="KeysHost">
+                <Grid x:Name="KeysHost">
                     <Border x:Name="KeyHighlight" CornerRadius="14" Background="{DynamicResource Accent}">
                         <Border.Effect>
                             <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="20" ShadowDepth="0" Opacity="0.7"/>
                         </Border.Effect>
                     </Border>
                     <StackPanel>
-                    <UniformGrid x:Name="Keys" Columns="10"/>
-                    <Grid x:Name="Specials">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="4*"/>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="3*"/>
-                        </Grid.ColumnDefinitions>
-                        <Button x:Name="ShiftButton" Style="{StaticResource FnKey}" Click="Shift_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE752;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                <TextBlock x:Name="ShiftText" Text="Maj" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                        <!-- Caractères spéciaux : la même touche ramène aux lettres -->
-                        <Button x:Name="SymbolsButton" Grid.Column="1" Style="{StaticResource FnKey}" Content="@" Click="Symbols_Click"/>
-                        <Button Grid.Column="2" Style="{StaticResource FnKey}" Click="Space_Click">
-                            <Border Width="120" Height="4" CornerRadius="2" Background="#55FFFFFF"/>
-                        </Button>
-                        <Button Grid.Column="3" Style="{StaticResource FnKey}" Click="Backspace_Click">
-                            <TextBlock Text="&#xE750;" FontFamily="{StaticResource Icons}" FontSize="20"/>
-                        </Button>
-                        <Button x:Name="ExtraButton" Grid.Column="4" Style="{StaticResource FnKey}" Content="Effacer" Click="Clear_Click"/>
-                        <Button Grid.Column="5" Style="{StaticResource OkKey}" Click="Ok_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE73E;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                <TextBlock Text="Valider" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
+                        <!-- Champ de saisie, avec à sa droite la remise à zéro -->
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Margin="5,0" CornerRadius="16" Background="#1AFFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Padding="20,0" Height="56">
+                                <Grid VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="ValueText" FontFamily="{StaticResource Display}" FontSize="26" Foreground="{StaticResource TextPrimary}"
+                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        <!-- Curseur qui clignote -->
+                                        <Border x:Name="Caret" Width="2" Height="28" Margin="3,0,0,0" Background="{DynamicResource Accent}" VerticalAlignment="Center">
+                                            <Border.Triggers>
+                                                <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimationUsingKeyFrames Storyboard.TargetProperty="Opacity" RepeatBehavior="Forever" Duration="0:0:1.1">
+                                                                <DiscreteDoubleKeyFrame Value="1" KeyTime="0:0:0"/>
+                                                                <DiscreteDoubleKeyFrame Value="0" KeyTime="0:0:0.55"/>
+                                                            </DoubleAnimationUsingKeyFrames>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Border.Triggers>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock x:Name="Placeholder" FontSize="22" Foreground="{StaticResource TextMuted}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    <!-- Dictée en cours -->
+                                    <TextBlock x:Name="ListeningText" Text="Je t'écoute…" FontSize="18" Foreground="{DynamicResource Accent}" HorizontalAlignment="Right"
+                                               VerticalAlignment="Center" Visibility="Collapsed"/>
+                                </Grid>
+                            </Border>
+                            <Button x:Name="ResetButton" Grid.Column="1" Style="{StaticResource FnKey}" Width="66" Height="56" Margin="5,0" ToolTip="Tout effacer" Click="Clear_Click">
+                                <TextBlock Text="&#xE711;" FontFamily="{StaticResource Icons}" FontSize="20"/>
+                            </Button>
+                        </Grid>
+
+                        <!-- Lettres ; à droite, Effacer puis Entrer sur deux rangées -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="10*"/>
+                                <ColumnDefinition Width="1.28*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="72"/>
+                                <RowDefinition Height="72"/>
+                                <RowDefinition Height="72"/>
+                            </Grid.RowDefinitions>
+                            <UniformGrid x:Name="Keys" Grid.RowSpan="3" Columns="10"/>
+                            <Button x:Name="BackspaceButton" Grid.Column="1" Style="{StaticResource FnKey}" Click="Backspace_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE750;" FontFamily="{StaticResource Icons}" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Effacer" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="EnterButton" Grid.Column="1" Grid.Row="1" Grid.RowSpan="2" Height="NaN" Style="{StaticResource OkKey}" Content="ENTRER" Click="Ok_Click"/>
+                        </Grid>
+
+                        <!-- Dernière rangée : touches de fonction, espace et chiffres -->
+                        <Grid x:Name="Specials">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="3*"/>
+                                <ColumnDefinition Width="5.28*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="ShiftButton" Style="{StaticResource FnKey}" Click="Shift_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE752;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="ShiftText" Text="Maj" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                            <!-- Caractères spéciaux : la même touche ramène aux lettres -->
+                            <Button x:Name="SymbolsButton" Grid.Column="1" Style="{StaticResource FnKey}" Content="@" Click="Symbols_Click"/>
+                            <!-- Dictée (remplacée par « Coller » pour les clés d'API) -->
+                            <Button x:Name="VoiceButton" Grid.Column="2" Style="{StaticResource FnKey}" ToolTip="Dicter">
+                                <TextBlock x:Name="VoiceIcon" Text="&#xE720;" FontFamily="{StaticResource Icons}" FontSize="22"/>
+                            </Button>
+                            <Button Grid.Column="3" Style="{StaticResource FnKey}" Click="Space_Click">
+                                <Border Width="120" Height="4" CornerRadius="2" Background="#55FFFFFF"/>
+                            </Button>
+                            <UniformGrid x:Name="Digits" Grid.Column="4" Rows="1"/>
+                        </Grid>
                     </StackPanel>
-                    </Grid>
-                </StackPanel>
+                </Grid>
             </Grid>
         </Border>
     </Grid>

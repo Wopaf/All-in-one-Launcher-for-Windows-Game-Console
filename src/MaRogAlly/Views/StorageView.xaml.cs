@@ -60,7 +60,7 @@ public partial class StorageView : OverlayBase
     private readonly List<StorageFolder> _path = [];
 
     /// <summary>Barre et lignes de la vue d'ensemble, mises à jour pendant une première analyse.</summary>
-    private StackedBar? _stack;
+    private StackedBar<StorageCategory>? _stack;
     private readonly Dictionary<StorageCategory, (TextBlock Value, Action<double> Meter)> _liveRows = [];
 
     public StorageView(IEnumerable<Game> games)
@@ -134,8 +134,11 @@ public partial class StorageView : OverlayBase
     {
         switch (action)
         {
+            case NavAction.Up or NavAction.Down when InContent:
+                FocusNav.Move(action, Items);
+                return true;
             case NavAction.Up or NavAction.Down:
-                FocusNav.Move(action, InContent ? Items : Menu);
+                MoveInMenu(action == NavAction.Up ? -1 : 1);
                 return true;
             case NavAction.Right when !InContent:
                 EnterContent();
@@ -163,6 +166,13 @@ public partial class StorageView : OverlayBase
                 return base.Handle(action);
         }
         return true;
+    }
+
+    /// <summary>Déplacement explicite : la prédiction de WPF visait parfois une ligne du contenu, à droite, et la sélection restait bloquée.</summary>
+    private void MoveInMenu(int step)
+    {
+        var current = _menuButtons.IndexOf((Keyboard.FocusedElement as Button)!);
+        FocusNav.Focus(_menuButtons[current < 0 ? (int)_page : Math.Clamp(current + step, 0, _menuButtons.Count - 1)]);
     }
 
     private void Secondary()
@@ -432,21 +442,9 @@ public partial class StorageView : OverlayBase
     private Border HeroCard(StorageDrive drive, Dictionary<StorageCategory, long> bytes)
     {
         var panel = new StackPanel();
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition());
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var used = new StackPanel();
-        used.Children.Add(new TextBlock { Text = "UTILISÉS", Style = Res<Style>("Label") });
-        used.Children.Add(new TextBlock { Text = StorageScanner.Format(drive.Used), FontFamily = Res<FontFamily>("Display"), FontWeight = FontWeights.Bold, FontSize = 44, Foreground = Res<Brush>("TextPrimary") });
-        head.Children.Add(used);
-        var free = new StackPanel();
-        free.Children.Add(new TextBlock { Text = "LIBRES", Style = Res<Style>("Label"), HorizontalAlignment = HorizontalAlignment.Right });
-        free.Children.Add(new TextBlock { Text = StorageScanner.Format(drive.Free), FontFamily = Res<FontFamily>("Display"), FontWeight = FontWeights.Bold, FontSize = 44, Foreground = Res<Brush>("TextPrimary"), HorizontalAlignment = HorizontalAlignment.Right });
-        Grid.SetColumn(free, 1);
-        head.Children.Add(free);
-        panel.Children.Add(head);
+        panel.Children.Add(CardHead("UTILISÉS", drive.Used, "LIBRES", drive.Free));
 
-        _stack = new StackedBar(drive.Total);
+        _stack = new StackedBar<StorageCategory>(drive.Total, Categories.Select(c => (c.Category, c.Name, c.Color)));
         _stack.Element.Margin = new Thickness(0, 12, 0, 0);
         panel.Children.Add(_stack.Element);
         _stack.Update(bytes);
@@ -460,8 +458,32 @@ public partial class StorageView : OverlayBase
             warning.Children.Add(new TextBlock { Text = $"Disque presque plein : plus que {ratio:P0} d'espace libre", FontSize = 14, Foreground = Res<Brush>("TextPrimary"), VerticalAlignment = VerticalAlignment.Center });
             panel.Children.Add(warning);
         }
-        return new Border { CornerRadius = new CornerRadius(18), Background = Res<Brush>("SurfaceGlass"), Padding = new Thickness(24, 16, 24, 20), Child = panel };
+        return Card(panel);
     }
+
+    /// <summary>Haut d'une carte : deux tailles bien lisibles, à gauche et à droite.</summary>
+    private Grid CardHead(string leftLabel, long left, string rightLabel, long right)
+    {
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition());
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var first = new StackPanel();
+        first.Children.Add(new TextBlock { Text = leftLabel, Style = Res<Style>("Label") });
+        first.Children.Add(new TextBlock { Text = StorageScanner.Format(left), FontFamily = Res<FontFamily>("Display"), FontWeight = FontWeights.Bold, FontSize = 44, Foreground = Res<Brush>("TextPrimary") });
+        head.Children.Add(first);
+        var second = new StackPanel();
+        second.Children.Add(new TextBlock { Text = rightLabel, Style = Res<Style>("Label"), HorizontalAlignment = HorizontalAlignment.Right });
+        second.Children.Add(new TextBlock { Text = StorageScanner.Format(right), FontFamily = Res<FontFamily>("Display"), FontWeight = FontWeights.Bold, FontSize = 44, Foreground = Res<Brush>("TextPrimary"), HorizontalAlignment = HorizontalAlignment.Right });
+        Grid.SetColumn(second, 1);
+        head.Children.Add(second);
+        return head;
+    }
+
+    private Border Card(UIElement child) => new()
+    {
+        CornerRadius = new CornerRadius(18), Background = Res<Brush>("SurfaceClear"), BorderBrush = Res<Brush>("StrokeClear"), BorderThickness = new Thickness(1),
+        Padding = new Thickness(24, 16, 24, 20), Child = child,
+    };
 
     private Border TypesCard(StorageScan scan)
     {
@@ -485,7 +507,7 @@ public partial class StorageView : OverlayBase
             row.Children.Add(value);
             panel.Children.Add(row);
         }
-        return new Border { CornerRadius = new CornerRadius(16), Background = Res<Brush>("SurfaceGlass"), Padding = new Thickness(20, 16, 20, 10), Child = panel };
+        return new Border { CornerRadius = new CornerRadius(16), Background = Res<Brush>("SurfaceClear"), BorderBrush = Res<Brush>("StrokeClear"), BorderThickness = new Thickness(1), Padding = new Thickness(20, 16, 20, 10), Child = panel };
     }
 
     private Action? CategoryAction(StorageCategory category, StorageDrive drive) => category switch
@@ -584,17 +606,42 @@ public partial class StorageView : OverlayBase
             ? games.OrderBy(g => LastActivity(g.Game)).ToList()
             : games.OrderByDescending(g => g.Bytes ?? -1).ToList();
         var count = games.Count > 1 ? $"{games.Count} jeux" : "1 jeu";
-        Items.Children.Add(Heading($"{count} · {StorageScanner.Format(total)} · {(_gamesByAge ? "les plus délaissés d'abord" : "les plus lourds d'abord")}", top: 0));
+        var colors = new Dictionary<Game, Brush>();
+        if (total > 0) Items.Children.Add(GamesCard(drive, games, total, colors));
+        Items.Children.Add(Heading($"{count} · {StorageScanner.Format(total)} · {(_gamesByAge ? "les plus délaissés d'abord" : "les plus lourds d'abord")}", top: total > 0 ? 20 : 0));
 
         var largest = Math.Max(1, games.Max(g => g.Bytes ?? 0));
         foreach (var (game, bytes) in ordered)
         {
             var played = game.LastPlayedAny is { } last ? $"Dernière partie {Ago(last)}" : "Jamais lancé";
             var row = Row(Cover(game), game.DisplayTitle, $"{game.PlatformInfo.Name} · {played}", bytes is { } b ? (double)b / largest : null,
-                bytes is { } size ? StorageScanner.Format(size) : "–", () => GameRequested?.Invoke(game), out _, out _, height: 66);
+                bytes is { } size ? StorageScanner.Format(size) : "–", () => GameRequested?.Invoke(game), out _, out _, bar: colors.GetValueOrDefault(game, Others), height: 66);
             row.Tag = game;
             Items.Children.Add(row);
         }
+    }
+
+    private static readonly Brush Others = new SolidColorBrush(Color.FromRgb(0x6B, 0x74, 0x84));
+
+    /// <summary>
+    /// Place de chaque jeu sur le disque, comme la barre de la vue d'ensemble : les plus lourds ont leur couleur,
+    /// reprise par leur ligne dans la liste ; les autres sont regroupés. La piste vide est le reste du disque.
+    /// </summary>
+    private Border GamesCard(StorageDrive drive, List<(Game Game, long? Bytes)> games, long total, Dictionary<Game, Brush> colors)
+    {
+        var palette = Categories.Where(c => c.Category != StorageCategory.System).Select(c => c.Color).ToList();
+        var heaviest = games.Where(g => g.Bytes > 0).OrderByDescending(g => g.Bytes).Take(palette.Count).ToList();
+        for (var i = 0; i < heaviest.Count; i++) colors[heaviest[i].Game] = new SolidColorBrush(palette[i]);
+
+        const string rest = "Autres jeux";
+        var segments = heaviest.Select((g, i) => ((object)g.Game, g.Game.DisplayTitle, palette[i])).Append((rest, rest, ((SolidColorBrush)Others).Color));
+        var bytes = heaviest.ToDictionary(g => (object)g.Game, g => g.Bytes ?? 0);
+        bytes[rest] = total - bytes.Values.Sum();
+
+        var bar = new StackedBar<object>(drive.Total, segments);
+        bar.Element.Margin = new Thickness(0, 12, 0, 0);
+        bar.Update(bytes);
+        return Card(new StackPanel { Children = { CardHead("OCCUPÉS PAR LES JEUX", total, "LIBRES", drive.Free), bar.Element } });
     }
 
     // ---------------- Dossiers ----------------
@@ -851,30 +898,30 @@ public partial class StorageView : OverlayBase
         };
     }
 
-    /// <summary>Barre du disque : un segment par catégorie, séparés de 2 px ; la piste vide est l'espace libre.</summary>
-    private sealed class StackedBar
+    /// <summary>Barre du disque : un segment par catégorie ou par jeu, séparés de 2 px ; la piste vide est l'espace libre.</summary>
+    private sealed class StackedBar<TKey> where TKey : notnull
     {
         private readonly long _total;
         private readonly StackPanel _segments = new() { Orientation = Orientation.Horizontal };
-        private readonly Dictionary<StorageCategory, Border> _bars = [];
-        private Dictionary<StorageCategory, long> _values = [];
+        private readonly Dictionary<TKey, (Border Bar, string Name)> _bars = [];
+        private Dictionary<TKey, long> _values = [];
         public Grid Element { get; } = new() { Height = 14, Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)) };
 
-        public StackedBar(long total)
+        public StackedBar(long total, IEnumerable<(TKey Key, string Name, Color Color)> segments)
         {
             _total = Math.Max(1, total);
             Rounded.SetRadius(Element, 7);
             Element.Children.Add(_segments);
-            foreach (var (category, name, _, color) in Categories)
+            foreach (var (key, name, color) in segments)
             {
                 var bar = new Border { Background = new SolidColorBrush(color), Width = 0, Margin = new Thickness(0, 0, 2, 0), ToolTip = name };
-                _bars[category] = bar;
+                _bars[key] = (bar, name);
                 _segments.Children.Add(bar);
             }
             Element.SizeChanged += (_, _) => Layout();
         }
 
-        public void Update(Dictionary<StorageCategory, long> values)
+        public void Update(Dictionary<TKey, long> values)
         {
             _values = values;
             Layout();
@@ -886,11 +933,11 @@ public partial class StorageView : OverlayBase
             if (width <= 0) return;
             // Les liens durs de Windows peuvent faire dépasser le total mesuré : la barre reste dans la piste.
             var scale = (double)Math.Max(_total, _values.Values.Sum());
-            foreach (var (category, bar) in _bars)
+            foreach (var (key, (bar, name)) in _bars)
             {
-                var bytes = _values.GetValueOrDefault(category);
+                var bytes = _values.GetValueOrDefault(key);
                 bar.Margin = new Thickness(0, 0, bytes > 0 ? 2 : 0, 0);
-                bar.ToolTip = $"{Categories.First(c => c.Category == category).Name} : {StorageScanner.Format(bytes)}";
+                bar.ToolTip = $"{name} : {StorageScanner.Format(bytes)}";
                 bar.BeginAnimation(WidthProperty, new DoubleAnimation(Math.Max(0, width * bytes / scale - 2), Anim.Ms(500)) { EasingFunction = Anim.Out });
             }
         }

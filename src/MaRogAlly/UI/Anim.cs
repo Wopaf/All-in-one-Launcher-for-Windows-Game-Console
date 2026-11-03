@@ -10,7 +10,7 @@ public static class Anim
 {
     public static readonly IEasingFunction Out = new CubicEase { EasingMode = EasingMode.EaseOut };
     public static readonly IEasingFunction InOut = new CubicEase { EasingMode = EasingMode.EaseInOut };
-    public static readonly IEasingFunction Spring = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.35 };
+    public static readonly IEasingFunction Spring = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.15 };
 
     public static Duration Ms(double ms) => new(TimeSpan.FromMilliseconds(ms));
 

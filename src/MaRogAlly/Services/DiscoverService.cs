@@ -53,6 +53,8 @@ public sealed class DiscoverGame : ObservableObject
         ? $"{(p >= 1_000_000 ? (p / 1_000_000.0).ToString("0.#", Fr) + " M" : p >= 1000 ? (p / 1000.0).ToString("0", Fr) + " k" : p.ToString())} joueurs au pic du jour"
         : null;
     [JsonIgnore] public string? PriceText => IsFree ? "Gratuit" : Price;
+    /// <summary>Connu comme gratuit (magasin Steam, ou prix relevé sur une autre boutique) : inutile d'y chercher des offres.</summary>
+    [JsonIgnore] public bool IsKnownFree => IsFree || Price == "Gratuit";
     [JsonIgnore] public string? DiscountText => DiscountPercent > 0 ? $"-{DiscountPercent} %" : null;
     /// <summary>Badge de la jaquette : « Possédé », sinon le prix (avec la remise éventuelle).</summary>
     [JsonIgnore]

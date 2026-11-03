@@ -24,7 +24,7 @@ public partial class SidePanel : OverlayBase
 
     private bool _left;
     protected override FrameworkElement AnimatedPart => Panel;
-    protected override double EnterFromX => _left ? -60 : 60;
+    protected override double EnterFromX => _centered ? 0 : _left ? -60 : 60;
 
     /// <summary>Ouvre le panneau contre la barre de gauche ; <paramref name="bottom"/> : posé en bas, à la hauteur de son contenu.</summary>
     public void AnchorLeft(bool bottom)
@@ -35,6 +35,22 @@ public partial class SidePanel : OverlayBase
         Panel.VerticalAlignment = VerticalAlignment.Bottom;
         Panel.CornerRadius = new CornerRadius(0, 18, 0, 0);
     }
+
+    private bool _centered;
+
+    /// <summary>Panneau au centre de l'écran, à la hauteur de son contenu.</summary>
+    public void AnchorCenter()
+    {
+        _centered = true;
+        Panel.Width = 640;
+        Panel.HorizontalAlignment = HorizontalAlignment.Center;
+        Panel.VerticalAlignment = VerticalAlignment.Center;
+        Panel.CornerRadius = new CornerRadius(22);
+        // La barre de gauche occupe 72 : on recentre sur tout l'écran, pas sur ce qu'il reste à droite.
+        Panel.Margin = new Thickness(-72, 0, 0, 0);
+        SizeChanged += (_, _) => Panel.MaxHeight = ActualHeight * 0.82;
+    }
+
     protected override FrameworkElement FocusScope => Items;
     public override string Hints => _hints;
     public void SetHints(string hints) => _hints = hints;
@@ -53,12 +69,16 @@ public partial class SidePanel : OverlayBase
         row.GotKeyboardFocus += (_, _) => _highlight.MoveTo(row);
     }
 
+    /// <summary>Panneau sans titre : le contenu commence tout en haut.</summary>
+    public void HideTitle() => Header.Visibility = Visibility.Collapsed;
+
     public void SetSubtitle(string subtitle)
     {
         SubtitleText.Text = subtitle;
         SubtitleText.Visibility = subtitle.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>Intitulé de section (vide : simple espace entre deux groupes).</summary>
     public void AddHeader(string text)
         => Items.Children.Add(new TextBlock
         {
@@ -122,7 +142,33 @@ public partial class SidePanel : OverlayBase
             row.Children.Add(mark);
         }
 
-        var b = new Button { Content = row, Style = (Style)FindResource("RowButton") };
+        var b = new Button { Content = row, Style = (Style)FindResource("RowButton"), Uid = label };
+        Track(b);
+        Tagged(b, tag);
+        b.Click += (_, _) => onClick();
+        Items.Children.Add(b);
+        return b;
+    }
+
+    /// <summary>Ligne avec une icône libre et un détail sous le nom ; <paramref name="active"/> ajoute une coche d'accent.</summary>
+    public Button AddRow(FrameworkElement icon, string label, string? detail, bool active, Action onClick, object? tag = null)
+    {
+        var row = new Grid { ColumnDefinitions = { new() { Width = new GridLength(40) }, new(), new() { Width = GridLength.Auto } } };
+        row.Children.Add(icon);
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(text, 1);
+        text.Children.Add(new TextBlock { Text = label, TextTrimming = TextTrimming.CharacterEllipsis });
+        if (detail is not null)
+            text.Children.Add(new TextBlock { Text = detail, FontSize = 13, Foreground = (Brush)FindResource("TextSecondary"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 1, 0, 0) });
+        row.Children.Add(text);
+        if (active)
+        {
+            var mark = new TextBlock { Text = "\uE73E", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 16, Foreground = (Brush)FindResource("Accent"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+            Grid.SetColumn(mark, 2);
+            row.Children.Add(mark);
+        }
+
+        var b = new Button { Content = row, Style = (Style)FindResource("RowButton"), Uid = label };
         Track(b);
         Tagged(b, tag);
         b.Click += (_, _) => onClick();
@@ -149,15 +195,45 @@ public partial class SidePanel : OverlayBase
     /// <summary>Sélectionne la dernière ligne portant ce Tag (celle de la liste, plutôt que sa case en haut), sinon la première.</summary>
     public void FocusTag(object tag) => Dispatcher.BeginInvoke(() =>
     {
+        if (AllButtons().LastOrDefault(b => tag.Equals(b.Tag)) is { } target) FocusNav.Focus(target);
+        else FocusNav.FocusFirst(this);
+    }, System.Windows.Threading.DispatcherPriority.Loaded);
+
+    private List<ButtonBase> AllButtons()
+    {
         var buttons = new List<ButtonBase>();
         foreach (var child in Items.Children)
         {
             if (child is ButtonBase row) buttons.Add(row);
             else if (child is UniformGrid g) buttons.AddRange(g.Children.OfType<ButtonBase>());
         }
-        if (buttons.LastOrDefault(b => tag.Equals(b.Tag)) is { } target) FocusNav.Focus(target);
-        else FocusNav.FocusFirst(this);
-    }, System.Windows.Threading.DispatcherPriority.Loaded);
+        return buttons;
+    }
+
+    /// <summary>
+    /// Reconstruit le contenu (liste chargée après coup) en laissant la sélection sur le même élément :
+    /// reconnu à son Tag ou à son libellé (une application peut figurer plusieurs fois), sinon à la même position.
+    /// </summary>
+    public void Rebuild(Action build)
+    {
+        static object KeyOf(ButtonBase b) => b.Tag ?? b.Uid;
+        var before = AllButtons();
+        var index = Keyboard.FocusedElement is ButtonBase current ? before.IndexOf(current) : -1;
+        var key = index >= 0 ? KeyOf(before[index]) : null;
+        var occurrence = index >= 0 ? before.Take(index).Count(b => KeyOf(b).Equals(key)) : 0;
+        build();
+        Dispatcher.BeginInvoke(() =>
+        {
+            var after = AllButtons();
+            if (index < 0 || after.Count == 0)
+            {
+                FocusNav.FocusFirst(this);
+                return;
+            }
+            var same = after.Where(b => KeyOf(b).Equals(key)).ToList();
+            FocusNav.Focus(same.Count > 0 ? same[Math.Min(occurrence, same.Count - 1)] : after[Math.Min(index, after.Count - 1)]);
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
 
     /// <summary>Grille d'icônes : logo vectoriel ou icône Windows, et le nom dessous ; chaque case se sélectionne comme une ligne.</summary>
     public void AddIconGrid(int columns, IEnumerable<(string? Logo, string? IconSource, string Label, Action OnClick, object? Tag)> items)
@@ -176,7 +252,7 @@ public partial class SidePanel : OverlayBase
                 if (iconSource is not null) LoadIcon(icon, iconSource);
             }
             content.Children.Add(new TextBlock { Text = label, FontSize = 12, TextAlignment = TextAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 7, 0, 0) });
-            var b = new Button { Content = content, Style = (Style)FindResource("RowButton"), Padding = new Thickness(0, 10, 0, 10) };
+            var b = new Button { Content = content, Style = (Style)FindResource("RowButton"), Padding = new Thickness(0, 10, 0, 10), Uid = label };
             RowOptions.SetNoBar(b, true);
             Track(b);
             Tagged(b, tag);

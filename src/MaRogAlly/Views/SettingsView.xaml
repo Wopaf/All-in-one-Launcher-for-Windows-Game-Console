@@ -49,7 +49,7 @@
 
         <!-- ====== Aide contextuelle de la ligne sélectionnée ====== -->
         <Border Grid.Column="4" VerticalAlignment="Top" CornerRadius="16" Padding="26,22" Margin="0,64,0,0"
-                Background="{StaticResource SurfaceGlass}" BorderBrush="{StaticResource Stroke}" BorderThickness="1">
+                Background="{StaticResource SurfaceClear}" BorderBrush="{StaticResource StrokeClear}" BorderThickness="1">
             <StackPanel>
                 <TextBlock x:Name="HelpTitle" Style="{StaticResource H2}" FontSize="20" TextWrapping="Wrap"/>
                 <TextBlock x:Name="HelpText" Style="{StaticResource BodyText}" FontSize="15" Margin="0,10,0,0"/>

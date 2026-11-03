@@ -60,6 +60,48 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Section entière sélectionnable (description, succès) : un cadre l'entoure.
+             Marges opposées au Padding : le contenu reste aligné sur le reste de la fiche, le cadre déborde autour. -->
+        <Style x:Key="SectionButton" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Padding" Value="12,10"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid Background="Transparent">
+                        <Border x:Name="Fill" CornerRadius="16" Background="Transparent"/>
+                        <Border x:Name="Frame" CornerRadius="16" BorderBrush="#E6FFFFFF" BorderThickness="2" Opacity="0"/>
+                        <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Fill" Property="Background" Value="#0AFFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="Fill" Property="Background" Value="#12FFFFFF"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.14"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </v:OverlayBase.Resources>
     <Grid>
         <!-- Assombrit le fond (le visuel du jeu reste visible à droite) -->
@@ -78,7 +120,6 @@
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition x:Name="DescRow" Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
@@ -180,63 +221,23 @@
             <TextBlock x:Name="ActionLabel" Grid.Row="2" VerticalAlignment="Bottom" Margin="0,0,0,-24"
                        FontSize="13" Foreground="{StaticResource TextMuted}"/>
 
-            <!-- Description : repliée sur quelques lignes, « Lire la suite » la déroule -->
-            <ScrollViewer x:Name="DescScroll" Grid.Row="3" Margin="0,40,0,0" Focusable="False" VerticalAlignment="Top"
-                          VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+            <!-- Description : quelques lignes ; toute la section se sélectionne et s'ouvre en plein écran -->
+            <Button x:Name="DescButton" Grid.Row="3" Style="{StaticResource SectionButton}" Margin="-12,30,0,-10" Click="DescButton_Click"
+                    Visibility="{Binding Description, Converter={StaticResource VisibleIf}}">
                 <TextBlock x:Name="DescText" Text="{Binding Description}" Style="{StaticResource BodyText}" FontSize="17" LineHeight="27"
-                           LineStackingStrategy="BlockLineHeight" MaxWidth="820" HorizontalAlignment="Left"/>
-            </ScrollViewer>
-            <Button x:Name="MoreButton" Grid.Row="4" Style="{StaticResource PillButton}" Click="More_Click" HorizontalAlignment="Left"
-                    Height="36" Padding="16,0" Margin="0,12,0,0" FontSize="14" Background="#14FFFFFF">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock x:Name="MoreIcon" Text="&#xE70D;" FontFamily="{StaticResource Icons}" FontSize="12" VerticalAlignment="Center" Margin="0,1,8,0"/>
-                    <TextBlock x:Name="MoreText" Text="Lire la suite" VerticalAlignment="Center"/>
-                </StackPanel>
+                           LineStackingStrategy="BlockLineHeight" MaxWidth="820" HorizontalAlignment="Left" TextTrimming="WordEllipsis"/>
             </Button>
 
             <!-- Captures : sélectionnables, A les agrandit -->
             <!-- Fiche technique : sous la description, sur une grille de petites infos à icône -->
-            <Border x:Name="InfoSection" Grid.Row="5" Margin="0,30,0,0" Padding="0,22,0,0" MaxWidth="860" HorizontalAlignment="Left"
+            <Border x:Name="InfoSection" Grid.Row="4" Margin="0,30,0,0" Padding="0,22,0,0" MaxWidth="860" HorizontalAlignment="Left"
                     BorderBrush="#1AFFFFFF" BorderThickness="0,1,0,0">
                 <WrapPanel x:Name="InfoList"/>
             </Border>
 
-            <!-- Succès du jeu : progression et quelques succès mis en avant ; toute la section se sélectionne et mène à l'onglet Succès.
-                 Marges opposées au Padding : le contenu reste aligné sur le reste de la fiche, le cadre déborde autour. -->
-            <Button x:Name="AchievementSection" Grid.Row="6" Width="884" HorizontalAlignment="Left" Margin="-12,-6,0,-10" Padding="12,10"
-                    Visibility="Collapsed" FocusVisualStyle="{x:Null}" Cursor="Hand" Foreground="{StaticResource TextPrimary}"
-                    HorizontalContentAlignment="Stretch" Click="AchievementSection_Click">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Grid Background="Transparent">
-                            <Border x:Name="Fill" CornerRadius="16" Background="Transparent"/>
-                            <Border x:Name="Frame" CornerRadius="16" BorderBrush="#E6FFFFFF" BorderThickness="2" Opacity="0"/>
-                            <ContentPresenter Margin="{TemplateBinding Padding}"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Fill" Property="Background" Value="#0AFFFFFF"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Fill" Property="Background" Value="#12FFFFFF"/>
-                                <Trigger.EnterActions>
-                                    <BeginStoryboard>
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.14"/>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </Trigger.EnterActions>
-                                <Trigger.ExitActions>
-                                    <BeginStoryboard>
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.14"/>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </Trigger.ExitActions>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Button.Template>
+            <!-- Succès du jeu : progression et quelques succès mis en avant ; toute la section se sélectionne et mène à l'onglet Succès. -->
+            <Button x:Name="AchievementSection" Grid.Row="5" Style="{StaticResource SectionButton}" Width="884" Margin="-12,-6,0,-10"
+                    Visibility="Collapsed" HorizontalContentAlignment="Stretch" Click="AchievementSection_Click">
                 <StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -259,7 +260,7 @@
             </Button>
 
             <!-- Galerie : captures -->
-            <StackPanel x:Name="Gallery" Grid.Row="7" Orientation="Horizontal" Margin="0,22,0,0" VerticalAlignment="Top">
+            <StackPanel x:Name="Gallery" Grid.Row="6" Orientation="Horizontal" Margin="0,22,0,0" VerticalAlignment="Top">
             <ItemsControl x:Name="Shots" Focusable="False" VerticalAlignment="Top">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -299,6 +300,24 @@
                         <Border.RenderTransform><TranslateTransform x:Name="StripFrameMove"/></Border.RenderTransform>
                     </Border>
                 </Grid>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Description en plein écran -->
+        <Grid x:Name="DescReader" Background="#F2050608" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <TextBlock Text="{Binding DisplayTitle}" Style="{StaticResource H1}" FontSize="34" TextWrapping="Wrap" Margin="64,36,128,20"/>
+            <!-- Pour le doigt et la souris : la sélection à la manette reste sur la section, B referme -->
+            <Button Style="{StaticResource RoundButton}" Focusable="False" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,30,48,0"
+                    ToolTip="Fermer" Click="CloseReader_Click">
+                <TextBlock Text="&#xE711;" FontFamily="{StaticResource Icons}" FontSize="16"/>
+            </Button>
+            <ScrollViewer x:Name="ReaderScroll" Grid.Row="1" Margin="64,0" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
+                <TextBlock Text="{Binding Description}" Style="{StaticResource BodyText}" FontSize="18" LineHeight="30" LineStackingStrategy="BlockLineHeight"
+                           MaxWidth="1000" HorizontalAlignment="Left" Margin="0,0,0,80"/>
             </ScrollViewer>
         </Grid>
     </Grid>

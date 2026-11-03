@@ -15,7 +15,7 @@ public sealed class DesktopHost
     private readonly Window _window;
     private IntPtr _hwnd;
 
-    /// <summary>Taille forcée en pixels (option « --size 1280x672 ») pour simuler un autre écran ; sinon la zone de travail.</summary>
+    /// <summary>Taille forcée en pixels (option « --size 1280x720 ») pour simuler un autre écran, centré sur le moniteur ; sinon tout le moniteur.</summary>
     public (int Width, int Height)? ForcedSize { get; set; }
 
     public DesktopHost(Window window)
@@ -45,7 +45,9 @@ public sealed class DesktopHost
         if (!GetMonitorInfo(monitor, ref info)) return;
         var r = info.rcMonitor;
         var (w, h) = ForcedSize ?? (r.Right - r.Left, r.Bottom - r.Top);
-        SetWindowPos(_hwnd, IntPtr.Zero, r.Left, r.Top, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+        var x = r.Left + (r.Right - r.Left - w) / 2;
+        var y = r.Top + (r.Bottom - r.Top - h) / 2;
+        SetWindowPos(_hwnd, IntPtr.Zero, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     public void SendToBack()

@@ -58,7 +58,7 @@ public sealed class SlideHighlight
             var bounds = VisibleBounds();
             var bounceX = Fits(_move.X, at.X, _box.ActualWidth, width, bounds.Left, bounds.Right);
             var bounceY = Fits(_move.Y, y, _box.ActualHeight, height, bounds.Top, bounds.Bottom);
-            const double ms = 170;
+            const double ms = 230;
             _move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(at.X, Anim.Ms(ms)) { EasingFunction = bounceX ? Bounce : Smooth });
             _move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, Anim.Ms(ms)) { EasingFunction = bounceY ? Bounce : Smooth });
             _box.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(width, Anim.Ms(ms)) { EasingFunction = bounceX ? Bounce : Smooth });
@@ -67,7 +67,7 @@ public sealed class SlideHighlight
         Anim.Fade(_box, opacity, 150);
     }
 
-    private static readonly BackEase Bounce = new() { EasingMode = EasingMode.EaseOut, Amplitude = 0.35 };
+    private static readonly BackEase Bounce = new() { EasingMode = EasingMode.EaseOut, Amplitude = 0.12 };
     private static readonly CubicEase Smooth = new() { EasingMode = EasingMode.EaseOut };
     /// <summary>Dépassement maximal du rebond, en part du trajet.</summary>
     private static readonly double Overshoot = Enumerable.Range(0, 101).Max(i => Bounce.Ease(i / 100.0)) - 1;

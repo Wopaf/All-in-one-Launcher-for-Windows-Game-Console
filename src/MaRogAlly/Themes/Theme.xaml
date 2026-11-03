@@ -18,8 +18,10 @@
     <SolidColorBrush x:Key="PanelBg" Color="#F2121620"/>
     <SolidColorBrush x:Key="Ambient" Color="Transparent"/>
     <SolidColorBrush x:Key="Surface" Color="{StaticResource SurfaceColor}"/>
-    <SolidColorBrush x:Key="SurfaceGlass" Color="#B8121620"/>
     <SolidColorBrush x:Key="SurfaceHover" Color="#232836"/>
+    <!-- Panneau transparent : laisse voir le fond de la page (Succès, Statistiques, Réglages) -->
+    <SolidColorBrush x:Key="SurfaceClear" Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="StrokeClear" Color="#14FFFFFF"/>
     <SolidColorBrush x:Key="Stroke" Color="#22FFFFFF"/>
     <!-- Remplacées au démarrage et à chaque changement de couleur d'accent (AccentTheme.Apply) -->
     <SolidColorBrush x:Key="Accent" Color="#FF2E4D"/>
@@ -162,10 +164,10 @@
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Fill" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.22"/>
                                         <DoubleAnimation Storyboard.TargetName="Scale" Storyboard.TargetProperty="ScaleX" To="1.06" Duration="0:0:0.25">
-                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.4" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.15" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Scale" Storyboard.TargetProperty="ScaleY" To="1.06" Duration="0:0:0.25">
-                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.4" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.15" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
@@ -369,10 +371,10 @@
                                 <BeginStoryboard>
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Scale" Storyboard.TargetProperty="ScaleX" To="1.07" Duration="0:0:0.28">
-                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.45" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.15" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Scale" Storyboard.TargetProperty="ScaleY" To="1.07" Duration="0:0:0.28">
-                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.45" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            <DoubleAnimation.EasingFunction><BackEase Amplitude="0.15" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity" To="0.5" Duration="0:0:0.25"/>
                                         <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>

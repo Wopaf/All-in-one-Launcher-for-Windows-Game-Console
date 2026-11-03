@@ -240,26 +240,18 @@
 
             <!-- ====== Nouveautés, ou résultats de la recherche ====== -->
             <Grid x:Name="ResultsArea">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="34"/>
                 </Grid.RowDefinitions>
-                <!-- Le jeu sélectionné s'affiche sur la ligne du titre : la rangée de jaquettes ne bouge jamais -->
-                <Grid Margin="64,0,0,14">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="ResultsLabel" Style="{StaticResource Label}" Text="RÉSULTATS" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="ResultsCount" Grid.Column="1" Margin="24,0,0,0" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13"
-                               Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="HitInfo" Grid.Column="1" Margin="24,0,0,0" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13"
-                               TextTrimming="CharacterEllipsis" Visibility="Collapsed">
-                        <Run x:Name="HitTitle" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextPrimary}"/><Run x:Name="HitDetail" Foreground="{StaticResource TextSecondary}"/>
-                    </TextBlock>
-                </Grid>
+                <TextBlock x:Name="ResultsLabel" Style="{StaticResource Label}" Text="RÉSULTATS" VerticalAlignment="Center" Margin="64,0,0,14"/>
 
-                <ScrollViewer x:Name="HitsScroll" Grid.Row="1" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
+                <ScrollViewer x:Name="HitsScroll" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
                     <ItemsControl x:Name="Hits" ItemTemplate="{StaticResource HitCard}" Focusable="False" Margin="64,26,26,26">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -269,7 +261,7 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <ScrollViewer x:Name="NewScroll" Grid.Row="1" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
+                <ScrollViewer x:Name="NewScroll" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
                     <ItemsControl x:Name="NewGames" ItemTemplate="{StaticResource NewCard}" Focusable="False" Margin="64,26,26,26">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -280,10 +272,21 @@
                 </ScrollViewer>
 
                 <!-- Aucun résultat / recherche en cours / chargement -->
-                <StackPanel x:Name="EmptyState" Grid.Row="1" Margin="64,0,64,0" VerticalAlignment="Center">
+                <StackPanel x:Name="EmptyState" Grid.Row="1" Grid.ColumnSpan="2" Margin="64,0,64,0" VerticalAlignment="Center">
                     <TextBlock x:Name="EmptyTitle" Style="{StaticResource H2}" FontSize="22"/>
                     <TextBlock x:Name="EmptyHint" Style="{StaticResource BodyText}" FontSize="15" Margin="0,6,0,0" TextWrapping="Wrap" MaxWidth="720" HorizontalAlignment="Left"/>
                 </StackPanel>
+
+                <!-- Jeu sélectionné ou décompte : sur la ligne du titre pour les nouveautés, sous la liste pendant une recherche (voir PlaceInfo).
+                     Une place fixe : la rangée de jaquettes ne bouge jamais. -->
+                <Grid x:Name="InfoLine" Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="ResultsCount" VerticalAlignment="Center" FontSize="13"
+                               Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="HitInfo" VerticalAlignment="Center" FontSize="13"
+                               TextTrimming="CharacterEllipsis" Visibility="Collapsed">
+                        <Run x:Name="HitTitle" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextPrimary}"/><Run x:Name="HitDetail" Foreground="{StaticResource TextSecondary}"/>
+                    </TextBlock>
+                </Grid>
             </Grid>
 
             <!-- ====== Jeux offerts par Epic (masqués pendant une recherche, pour laisser la place aux résultats) ====== -->

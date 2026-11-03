@@ -3,7 +3,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using MaRogAlly.Core;
 using MaRogAlly.Input;
+using MaRogAlly.Services;
 using MaRogAlly.UI;
 
 namespace MaRogAlly.Views;
@@ -16,15 +18,16 @@ public partial class KeyboardPanel : OverlayBase
 {
     private static readonly string[] Layout =
     [
-        "1234567890",
         "AZERTYUIOP",
         "QSDFGHJKLM",
         "WXCVBN-':.",
     ];
 
+    /// <summary>Toujours visibles, en bas à droite (lettres comme symboles).</summary>
+    private const string Numbers = "1234567890";
+
     private static readonly string[] Symbols =
     [
-        "1234567890",
         "@#&_-+=/\\*",
         "!?()[]<>~|",
         "\"',;:.%€$°",
@@ -41,11 +44,17 @@ public partial class KeyboardPanel : OverlayBase
     private bool _symbols;
     private readonly SlideHighlight _highlight;
     private Button? _lastKey;
+    /// <summary>Rangée courante : Entrer appartient à deux rangées, on revient par celle d'où on est arrivé.</summary>
+    private int _row;
+    /// <summary>Dictée en cours (un second appui sur le micro l'annule).</summary>
+    private CancellationTokenSource? _listening;
 
     /// <summary>Appelé à chaque frappe (recherche en direct).</summary>
     public event Action<string>? ValueChanged;
     /// <summary>Appelé à la validation (OK ou Start).</summary>
     public event Action<string>? Submitted;
+    /// <summary>Message à afficher (icône, texte).</summary>
+    public event Action<string, string>? ToastRequested;
 
     public KeyboardPanel(string initial, string placeholder = "", bool lowercase = false)
     {
@@ -61,6 +70,12 @@ public partial class KeyboardPanel : OverlayBase
             b.Click += (_, _) => Type((string)b.Content);
             Keys.Children.Add(b);
         }
+        foreach (var digit in Numbers)
+        {
+            var b = new Button { Style = (Style)FindResource("Key"), Content = digit.ToString(), Margin = new Thickness(3, 5, 3, 5), FontSize = 20 };
+            b.Click += (_, _) => Type((string)b.Content);
+            Digits.Children.Add(b);
+        }
         // À la manette, la sélection glisse d'une touche à l'autre (ce cadre est commun à tout le clavier) ; au doigt ou à la souris, la touche s'enfonce.
         foreach (var b in KeyRows().SelectMany(r => r))
         {
@@ -73,13 +88,15 @@ public partial class KeyboardPanel : OverlayBase
         }
         ApplyKeys();
 
-        // Pour les clés d'API (longues), « Coller » est bien plus pratique qu'« Effacer ».
+        // Pour les clés d'API (longues), « Coller » est bien plus pratique que la dictée.
         if (lowercase)
         {
-            ExtraButton.Content = "Coller";
-            ExtraButton.Click -= Clear_Click;
-            ExtraButton.Click += (_, _) => { if (Clipboard.ContainsText()) Set(Clipboard.GetText().Trim()); };
+            VoiceButton.Content = "Coller";
+            VoiceButton.Click += Paste_Click;
         }
+        else VoiceButton.Click += Voice_Click;
+        // Une phrase reconnue après la fermeture ne doit plus rien saisir.
+        CloseRequested += _ => _listening?.Cancel();
         Set(initial);
     }
 
@@ -89,9 +106,13 @@ public partial class KeyboardPanel : OverlayBase
         // Le clavier monte depuis le bas de l'écran.
         Anim.Enter(Panel, 0, 90, 380);
     }
-    public override string Hints => "A:Taper|X:Effacer|Y:Espace|LB:Maj/min|RB:Symboles|≡:Valider|B:Fermer";
+    public override string Hints => "A:Taper|X:Effacer|Y:Espace|LB:Maj/min|RB:Symboles|≡:Entrer|B:Fermer";
+
+    /// <summary>La sélection s'ouvre sur la première lettre, pas sur la remise à zéro.</summary>
+    protected override FrameworkElement FocusScope => Keys;
 
     private const double PressedScale = 0.9;
+    private const string MicIcon = "\uE720";
 
     /// <summary>La touche s'enfonce à l'appui et revient au relâchement (le retour part toujours du fond : un appui bref se voit aussi).</summary>
     private void AddPressAnimation(Button key)
@@ -109,7 +130,7 @@ public partial class KeyboardPanel : OverlayBase
             ShowPointerMode();
             Animate(new DoubleAnimation(PressedScale, Anim.Ms(50)) { EasingFunction = Anim.Out });
         };
-        key.PreviewMouseLeftButtonUp += (_, _) => Animate(new DoubleAnimation(PressedScale, 1, Anim.Ms(170)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 } });
+        key.PreviewMouseLeftButtonUp += (_, _) => Animate(new DoubleAnimation(PressedScale, 1, Anim.Ms(200)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.2 } });
     }
 
     private void ShowPointerMode()
@@ -205,11 +226,15 @@ public partial class KeyboardPanel : OverlayBase
         return base.Handle(action);
     }
 
-    /// <summary>Rangées de touches, de haut en bas : chiffres, lettres, puis touches de fonction.</summary>
+    /// <summary>Rangées de touches, de haut en bas : remise à zéro, lettres (avec Effacer et Entrer), puis touches de fonction et chiffres.</summary>
     private List<List<Button>> KeyRows()
     {
-        var rows = Keys.Children.OfType<Button>().Chunk(Layout[0].Length).Select(r => r.ToList()).ToList();
-        rows.Add(Specials.Children.OfType<Button>().ToList());
+        var rows = new List<List<Button>> { new() { ResetButton } };
+        rows.AddRange(Keys.Children.OfType<Button>().Chunk(Numbers.Length).Select(r => r.ToList()));
+        rows[1].Add(BackspaceButton);
+        rows[2].Add(EnterButton);
+        rows[3].Add(EnterButton);
+        rows.Add([.. Specials.Children.OfType<Button>(), .. Digits.Children.OfType<Button>()]);
         return rows;
     }
 
@@ -221,13 +246,14 @@ public partial class KeyboardPanel : OverlayBase
     {
         var rows = KeyRows();
         var current = Keyboard.FocusedElement as Button;
-        var row = current is null ? -1 : rows.FindIndex(r => r.Contains(current));
+        var row = current is null ? -1 : _row < rows.Count && rows[_row].Contains(current) ? _row : rows.FindIndex(r => r.Contains(current));
         if (row < 0)
         {
             // Sélection perdue : on la remet sur la dernière touche utilisée.
             FocusNav.Focus(_lastKey ?? rows[1][0]);
             return;
         }
+        _row = row;
         var keys = rows[row];
         var col = keys.IndexOf(current!);
         switch (action)
@@ -238,12 +264,25 @@ public partial class KeyboardPanel : OverlayBase
             case NavAction.Right:
                 FocusNav.Focus(keys[(col + 1) % keys.Count]);
                 break;
-            case NavAction.Up when row > 0:
-                FocusNav.Focus(Nearest(rows[row - 1], current!));
+            case NavAction.Up:
+                MoveToRow(rows, row, -1, current!);
                 break;
-            case NavAction.Down when row < rows.Count - 1:
-                FocusNav.Focus(Nearest(rows[row + 1], current!));
+            case NavAction.Down:
+                MoveToRow(rows, row, 1, current!);
                 break;
+        }
+    }
+
+    /// <summary>Touche la plus proche dans la rangée voisine ; si c'est la même (Entrer, sur deux rangées), on regarde la suivante.</summary>
+    private void MoveToRow(List<List<Button>> rows, int row, int step, Button current)
+    {
+        for (var r = row + step; r >= 0 && r < rows.Count; r += step)
+        {
+            var target = Nearest(rows[r], current);
+            if (target == current) continue;
+            _row = r;
+            FocusNav.Focus(target);
+            return;
         }
     }
 
@@ -252,6 +291,68 @@ public partial class KeyboardPanel : OverlayBase
         double CenterX(Button b) => b.TranslatePoint(new Point(b.ActualWidth / 2, 0), KeysHost).X;
         var x = CenterX(from);
         return row.MinBy(b => Math.Abs(CenterX(b) - x))!;
+    }
+
+    /// <summary>Lance la dictée sans toucher le clavier (vérification de l'affichage).</summary>
+    public void PreviewVoice() => Voice_Click(this, new RoutedEventArgs());
+
+    private async void Voice_Click(object sender, RoutedEventArgs e)
+    {
+        if (_listening is { } active)
+        {
+            active.Cancel();
+            return;
+        }
+        using var cancel = _listening = new CancellationTokenSource();
+        ShowListening(true);
+        try
+        {
+            var heard = await VoiceInput.ListenAsync(cancel.Token);
+            if (heard.Length == 0) ToastRequested?.Invoke(MicIcon, "Je n'ai rien entendu : vérifie le micro");
+            else Type(_value.Length == 0 || _value.EndsWith(' ') ? heard : $" {heard}");
+        }
+        catch (OperationCanceledException)
+        {
+            // Annulée par un second appui ou par la fermeture du clavier.
+        }
+        catch (VoiceInputException ex)
+        {
+            ToastRequested?.Invoke(MicIcon, ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Dictée", ex);
+            ToastRequested?.Invoke(MicIcon, "La dictée a échoué (voir log.txt)");
+        }
+        finally
+        {
+            _listening = null;
+            ShowListening(false);
+        }
+    }
+
+    /// <summary>Micro allumé qui pulse et « Je t'écoute… » dans le champ, le temps de la dictée.</summary>
+    private void ShowListening(bool listening)
+    {
+        ListeningText.Visibility = listening ? Visibility.Visible : Visibility.Collapsed;
+        if (listening)
+        {
+            VoiceButton.SetResourceReference(BackgroundProperty, "Accent");
+            VoiceButton.Foreground = Brushes.White;
+        }
+        else
+        {
+            VoiceButton.ClearValue(BackgroundProperty);
+            VoiceButton.ClearValue(ForegroundProperty);
+        }
+        VoiceIcon.BeginAnimation(OpacityProperty, listening
+            ? new DoubleAnimation(1, 0.35, Anim.Ms(550)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever }
+            : null);
+    }
+
+    private void Paste_Click(object sender, RoutedEventArgs e)
+    {
+        if (Clipboard.ContainsText()) Set(Clipboard.GetText().Trim());
     }
 
     private void Submit()

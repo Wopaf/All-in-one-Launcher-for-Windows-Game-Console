@@ -83,7 +83,7 @@ public partial class MainWindow : Window
         _library = new LibraryService(_settings, _http);
         _metadata = new MetadataService(_http, _settings);
         _desktop = new DesktopHost(this);
-        // « --size 1280x672 » : simule un autre écran (ex. ROG Ally en 1920×1080 à 150 %, barre des tâches déduite).
+        // « --size 1280x720 » : simule un autre écran, centré sur le moniteur (ex. ROG Ally en 1920×1080 à 150 %).
         var sizeArg = Array.IndexOf(Environment.GetCommandLineArgs(), "--size");
         if (sizeArg >= 0 && Environment.GetCommandLineArgs().ElementAtOrDefault(sizeArg + 1)?.Split('x') is [var sw, var sh]
             && int.TryParse(sw, out var fw) && int.TryParse(sh, out var fh))
@@ -95,6 +95,7 @@ public partial class MainWindow : Window
         _search = new GameSearch(_http, _discover);
         _tags = new TagService(_http);
         _appUpdater = new AppUpdater(_http);
+        _network = new NetworkMenus(OpenOverlay, Toast, () => _ = RefreshRadioButtonsAsync());
         GameCategories.TagLabel = _tags.Label;
         _imageCache = new ImageCache(_http);
         _settingsView = new SettingsView(_settings);
@@ -111,7 +112,6 @@ public partial class MainWindow : Window
 
         _pad.IsActive = () => _desktop.IsForeground;
         _pad.Action += OnNav;
-        _pad.ReturnRequested += _desktop.BringToFront;
         _pad.MinimizeRequested += MinimizeForegroundApp;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
 
@@ -192,6 +192,14 @@ public partial class MainWindow : Window
         if (args.Contains("--storage")) OpenStorage();
         if (args.Contains("--detail") && _installed.Source.FirstOrDefault() is { } firstGame) OpenDetail(firstGame);
         if (args.Contains("--menu")) OpenSystemMenu();
+        // « --network wifi|bluetooth|demo » : interface Wi-Fi ou Bluetooth (demo : réseaux d'exemple), pour vérifier l'affichage.
+        var networkArg = Array.IndexOf(args, "--network");
+        if (networkArg >= 0)
+        {
+            var network = args.ElementAtOrDefault(networkArg + 1);
+            if (network == "bluetooth") _network.OpenBluetooth();
+            else _network.OpenWifi(demo: network == "demo");
+        }
         if (args.Contains("--store"))
         {
             // Fiche magasin d'un jeu de la Découverte non possédé, une fois les tendances chargées.
@@ -199,7 +207,8 @@ public partial class MainWindow : Window
             store.Tick += (_, _) =>
             {
                 store.Stop();
-                if (_discoverView.AllGames.FirstOrDefault(g => g.Owned is null) is { } d) OpenStoreDetail(d);
+                // « --free » / « --paid » : un jeu gratuit / payant.
+                if (_discoverView.AllGames.FirstOrDefault(g => g.Owned is null && (!args.Contains("--free") || g.IsKnownFree) && (!args.Contains("--paid") || !g.IsKnownFree)) is { } d) OpenStoreDetail(d);
             };
             store.Start();
         }
@@ -211,6 +220,9 @@ public partial class MainWindow : Window
             replay.Tick += (_, _) => { replay.Stop(); sweepView.PreviewSweep(); };
             replay.Start();
         }
+        // « --desc » : description sélectionnée ; « --reader » : ouverte en plein écran.
+        if ((args.Contains("--desc") || args.Contains("--reader")) && _overlays.LastOrDefault() is DetailView descView)
+            _ = Dispatcher.BeginInvoke(() => descView.PreviewDescription(args.Contains("--reader")), DispatcherPriority.ApplicationIdle);
         if (args.Contains("--shot") && _overlays.LastOrDefault() is DetailView shotView)
             _ = Dispatcher.BeginInvoke(shotView.PreviewShots, DispatcherPriority.ApplicationIdle);
         _ = LoadFreeGamesAsync();
@@ -231,7 +243,10 @@ public partial class MainWindow : Window
         var renderArg = Array.IndexOf(args, "--render");
         if (renderArg >= 0 && renderArg + 1 < args.Length)
         {
-            var render = new DispatcherTimer { Interval = TimeSpan.FromSeconds(args.Contains("--dock") ? 30 : 15) };
+            // « --render-after 1.2 » : capture plus tôt, pour voir une animation du lancement.
+            var renderAfter = Array.IndexOf(args, "--render-after");
+            var seconds = renderAfter >= 0 && double.TryParse(args.ElementAtOrDefault(renderAfter + 1), System.Globalization.CultureInfo.InvariantCulture, out var after) ? after : args.Contains("--dock") ? 30 : 15;
+            var render = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
             render.Tick += (_, _) =>
             {
                 render.Stop();
@@ -245,6 +260,24 @@ public partial class MainWindow : Window
             render.Start();
         }
         if (args.Contains("--platforms")) OpenSubPage(_platforms);
+        // « --replay » : rejoue l'apparition des jaquettes juste avant la capture (« --render »), pour la voir en cours.
+        if (args.Contains("--replay"))
+        {
+            var replayTiles = new DispatcherTimer { Interval = TimeSpan.FromSeconds(14.6) };
+            replayTiles.Tick += (_, _) => { replayTiles.Stop(); _installed.Refresh(toTop: true); };
+            replayTiles.Start();
+        }
+        // « --keyboard » : clavier ouvert ; avec « --dictate », dictée lancée 10 s plus tard (à la fin du démarrage), pour vérifier l'affichage.
+        if (args.Contains("--keyboard"))
+        {
+            OpenStoreSearchKeyboard();
+            if (args.Contains("--dictate") && _overlays.LastOrDefault() is KeyboardPanel keyboard)
+            {
+                var dictate = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+                dictate.Tick += (_, _) => { dictate.Stop(); keyboard.PreviewVoice(); };
+                dictate.Start();
+            }
+        }
         // « --dock options,windows » : boutons de la barre de gauche pressés à la suite, pour vérifier l'affichage.
         var dockArg = Array.IndexOf(args, "--dock");
         if (dockArg >= 0 && args.ElementAtOrDefault(dockArg + 1) is { } dockButtons)
@@ -297,26 +330,62 @@ public partial class MainWindow : Window
 
     private void PlayIntro()
     {
-        var scale = (ScaleTransform)IntroContent.RenderTransform;
-        // Environ 3,5 s : le logo apparaît, grossit doucement, reste affiché, puis s'efface.
-        scale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.92, 1, Anim.Ms(2900)) { EasingFunction = Anim.Out });
-        scale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.92, 1, Anim.Ms(2900)) { EasingFunction = Anim.Out });
-        IntroContent.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(900)));
+        // Environ 2,6 s : les points apparaissent, font une seule vague, s'effacent, puis l'écran s'ouvre.
+        var dots = IntroDots.Children.OfType<System.Windows.Shapes.Ellipse>().ToList();
+        for (var i = 0; i < dots.Count; i++) PlayIntroDot(dots[i], TimeSpan.FromMilliseconds(i * 130));
         // Une vague, du centre vers les bords, qui laisse voir le motif hexagonal.
-        PlayIntroWave(IntroWave, TimeSpan.FromMilliseconds(1100));
-        var fade = new DoubleAnimation(1, 0, Anim.Ms(500)) { BeginTime = TimeSpan.FromMilliseconds(3000), EasingFunction = Anim.InOut };
+        PlayIntroWave(IntroWave, TimeSpan.FromMilliseconds(800));
+        var fade = new DoubleAnimation(1, 0, Anim.Ms(500)) { BeginTime = TimeSpan.FromMilliseconds(2150), EasingFunction = Anim.InOut };
         fade.Completed += (_, _) => Intro.Visibility = Visibility.Collapsed;
         Intro.BeginAnimation(OpacityProperty, fade);
+        // Les jaquettes apparaissent quand l'écran de lancement commence à s'effacer.
+        var reveal = new DispatcherTimer { Interval = fade.BeginTime!.Value };
+        reveal.Tick += (_, _) =>
+        {
+            reveal.Stop();
+            _installed.AllowReveal();
+            _all.AllowReveal();
+        };
+        reveal.Start();
+    }
+
+    /// <summary>Un point : il grossit en douceur, saute une fois (montée freinée, descente arrondie), puis se résorbe.</summary>
+    private static void PlayIntroDot(FrameworkElement dot, TimeSpan delay)
+    {
+        var scale = new ScaleTransform(0, 0);
+        var move = new TranslateTransform();
+        dot.RenderTransform = new TransformGroup { Children = { scale, move } };
+
+        static KeyTime At(double ms) => KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms));
+        var soft = new SineEase { EasingMode = EasingMode.EaseInOut };
+        var grow = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
+        grow.KeyFrames.Add(new EasingDoubleKeyFrame(1, At(560), new ExponentialEase { EasingMode = EasingMode.EaseOut, Exponent = 5 }));
+        grow.KeyFrames.Add(new LinearDoubleKeyFrame(1, At(1620)));
+        grow.KeyFrames.Add(new EasingDoubleKeyFrame(0, At(1980), new CubicEase { EasingMode = EasingMode.EaseIn }));
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+
+        var opacity = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
+        opacity.KeyFrames.Add(new EasingDoubleKeyFrame(1, At(320), soft));
+        opacity.KeyFrames.Add(new LinearDoubleKeyFrame(1, At(1680)));
+        opacity.KeyFrames.Add(new EasingDoubleKeyFrame(0, At(1980), soft));
+        dot.BeginAnimation(OpacityProperty, opacity);
+
+        var hop = new DoubleAnimationUsingKeyFrames { BeginTime = delay };
+        hop.KeyFrames.Add(new LinearDoubleKeyFrame(0, At(620)));
+        hop.KeyFrames.Add(new EasingDoubleKeyFrame(-20, At(920), new SineEase { EasingMode = EasingMode.EaseOut }));
+        hop.KeyFrames.Add(new EasingDoubleKeyFrame(0, At(1300), soft));
+        move.BeginAnimation(TranslateTransform.YProperty, hop);
     }
 
     /// <summary>
     /// Vague circulaire : un anneau opaque (front net, traîne en fondu) dans un masque radial, centré sur l'écran.
-    /// Elle part d'un petit cercle autour du logo, se resserre un instant (anticipation),
+    /// Elle part d'un petit cercle au centre, se resserre un instant (anticipation),
     /// puis s'élargit vite et en douceur jusqu'aux coins ; le motif n'apparaît qu'à son passage.
     /// </summary>
     private static void PlayIntroWave(FrameworkElement target, TimeSpan begin)
     {
-        // Taille de la zone elle-même (l'interface peut être mise à l'échelle) : le centre tombe sur le logo.
+        // Taille de la zone elle-même (l'interface peut être mise à l'échelle) : le centre tombe sur les points.
         var w = Math.Max(1, target.ActualWidth);
         var h = Math.Max(1, target.ActualHeight);
         var radius = Math.Sqrt(w * w + h * h) / 2;
@@ -794,7 +863,7 @@ public partial class MainWindow : Window
     private void OpenStorePage(DiscoverGame g)
     {
         OpenStorePrompt(g.Name, PlatformInfo.Of(Platform.Steam), () => OpenSteamStore(g),
-            ("Rechercher sur Instant Gaming", () => OpenInstantGaming(g)));
+            g.IsKnownFree ? null : ("Rechercher sur Instant Gaming", () => OpenInstantGaming(g)));
     }
 
     /// <summary>Page Steam du jeu : dans le client Steam s'il est installé, sinon dans le navigateur.</summary>
@@ -1440,7 +1509,12 @@ public partial class MainWindow : Window
         overlay.CloseRequested += CloseOverlay;
         overlay.HintsChanged += UpdateHints;
         _overlays.Add(overlay);
-        OverlayHost.Children.Add(overlay);
+        if (overlay is KeyboardPanel keyboard)
+        {
+            keyboard.ToastRequested += Toast;
+            KeyboardHost.Children.Add(overlay);
+        }
+        else OverlayHost.Children.Add(overlay);
         overlay.OnOpened();
         if (overlay is KeyboardPanel) SyncTopBar();
         // Pages plein écran (fiche, statistiques) : la page et la barre d'onglets s'effacent dessous.
@@ -1452,13 +1526,15 @@ public partial class MainWindow : Window
         UpdateHints();
     }
 
+    private static void RemoveFromHost(OverlayBase overlay) => (overlay.Parent as Panel)?.Children.Remove(overlay);
+
     private void CloseOverlay(OverlayBase overlay)
     {
         if (!_overlays.Remove(overlay)) return;
         var fromDock = overlay == _dockPanel;
         if (fromDock) _dockPanel = null;
         overlay.IsHitTestVisible = false;
-        Anim.Exit(overlay, 30, 0, 180, () => OverlayHost.Children.Remove(overlay));
+        Anim.Exit(overlay, 30, 0, 180, () => RemoveFromHost(overlay));
         if (overlay is KeyboardPanel) SyncTopBar();
         if (overlay is DetailView or StatsView or StorageView && !_overlays.Any(o => o is DetailView or StatsView or StorageView))
         {
@@ -1878,7 +1954,7 @@ public partial class MainWindow : Window
         foreach (var overlay in _overlays.Where(o => o is not (DetailView or StatsView or StorageView or WebPreview)).ToList())
         {
             overlay.Close();
-            if (instantly) OverlayHost.Children.Remove(overlay);
+            if (instantly) RemoveFromHost(overlay);
         }
     }
 
@@ -1943,9 +2019,15 @@ public partial class MainWindow : Window
     private void OpenWindowsMenu()
     {
         var panel = DockPanelOf(WindowsMenu, bottom: false);
+        panel.HideTitle();
         // Dernière liste connue : affichée tout de suite, la lecture (quelques secondes) se fait derrière.
         var (apps, launchers, recent) = _windowsMenuData;
         var search = "";
+        var showAll = false;
+        // Jeux de la bibliothèque, reconnus à leur nom, ou à un raccourci vers leur plateforme (steam://…).
+        var gameNames = _games.SelectMany(g => new[] { g.Title, g.DisplayTitle }).Select(Text.Normalize).ToHashSet();
+        bool IsOnlyApp(InstalledApp a) => !WindowsShell.IsGameLauncher(a.Name) && !gameNames.Contains(Text.Normalize(a.Name))
+            && (!a.Id.Contains("://") || a.Id.StartsWith("http", StringComparison.OrdinalIgnoreCase));
         var browser = WindowsShell.DefaultBrowser();
         panel.SetHints("A:Ouvrir|Y:Favori|B:Fermer");
         // Y (ou clic droit) sur une application : la marque en favori, ou la retire.
@@ -2022,6 +2104,17 @@ public partial class MainWindow : Window
                 panel.AddHeader("Dernières applications");
                 foreach (var app in recent) AddInstalledApp(app);
             }
+            // La liste complète reste repliée : une recherche ou le bouton l'affiche.
+            if (search.Length == 0 && !showAll)
+            {
+                panel.AddHeader("");
+                panel.AddApp("Voir toutes les applications", null, () =>
+                {
+                    showAll = true;
+                    panel.Rebuild(Build);
+                }, "\uE71D");
+                return;
+            }
             panel.AddHeader("Applications");
             if (apps is null)
             {
@@ -2029,7 +2122,8 @@ public partial class MainWindow : Window
                 return;
             }
             var words = Text.Normalize(search).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            foreach (var app in apps.Where(a => words.All(Text.Normalize(a.Name).Contains))) AddInstalledApp(app);
+            // La liste complète n'affiche que les applications ; une recherche, demandée exprès, trouve tout.
+            foreach (var app in apps.Where(a => (search.Length > 0 || IsOnlyApp(a)) && words.All(Text.Normalize(a.Name).Contains))) AddInstalledApp(app);
         }
 
         void RunApp(InstalledApp app)
@@ -2068,7 +2162,7 @@ public partial class MainWindow : Window
                 var history = WindowsShell.WindowsLaunchHistory();
                 foreach (var (id, when) in _settings.RecentApps)
                     if (!history.TryGetValue(id, out var known) || when > known) history[id] = when;
-                var latest = loaded.Where(a => history.ContainsKey(a.Id) && !WindowsShell.IsGameLauncher(a.Name))
+                var latest = loaded.Where(a => history.ContainsKey(a.Id) && IsOnlyApp(a))
                     .OrderByDescending(a => history[a.Id]).Take(5).ToList();
                 return ((List<InstalledApp>?)loaded, platforms, latest);
             });
@@ -2079,12 +2173,22 @@ public partial class MainWindow : Window
                        && previous.Recent.SequenceEqual(fresh.latest);
             if (same || _overlays.LastOrDefault() != panel) return;
             (apps, launchers, recent) = fresh;
-            Build();
-            FocusNav.FocusFirst(panel);
+            panel.Rebuild(Build);
         }
     }
 
     private MainMenu? _systemMenu;
+    private readonly NetworkMenus _network;
+
+    /// <summary>Boutons Wi-Fi et Bluetooth du menu principal : en bleu quand la fonction est activée.</summary>
+    private async Task RefreshRadioButtonsAsync()
+    {
+        if (_systemMenu is not { } menu) return;
+        var wifi = await Radios.IsOnAsync(Windows.Devices.Radios.RadioKind.WiFi);
+        var bluetooth = await Radios.IsOnAsync(Windows.Devices.Radios.RadioKind.Bluetooth);
+        menu.SetIconActive("Wi-Fi", wifi);
+        menu.SetIconActive("Bluetooth", bluetooth);
+    }
 
     /// <summary>Bouton Start (ou Échap) : menu principal à droite.</summary>
     /// <summary>Niveau changé par les touches de la machine depuis le dernier relevé.</summary>
@@ -2102,26 +2206,26 @@ public partial class MainWindow : Window
         var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
         var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
 
-        menu.AddSection("Accès rapide");
         menu.AddButton("\uE713", "Réglages", () =>
         {
             menu.Close();
             OpenSubPage(_settingsView);
         });
-        menu.AddButton("\uE9D2", "Statistiques", () =>
-        {
-            menu.Close();
-            OpenStats();
-        });
-        menu.AddButton("", "Plateformes", () =>
-        {
-            menu.Close();
-            OpenSubPage(_platforms);
-        });
+        menu.AddButtons(
+            ("\uE9D2", "Statistiques", () =>
+            {
+                menu.Close();
+                OpenStats();
+            }),
+            ("", "Plateformes", () =>
+            {
+                menu.Close();
+                OpenSubPage(_platforms);
+            }));
 
         menu.AddIconButtons(
-            ("\uE701", "Wi-Fi", () => { menu.Close(); GameLauncher.Open("ms-settings:network-wifi"); }),
-            ("\uE702", "Bluetooth", () => { menu.Close(); GameLauncher.Open("ms-settings:bluetooth"); }),
+            ("\uE701", "Wi-Fi", () => _network.OpenWifi()),
+            ("\uE702", "Bluetooth", _network.OpenBluetooth),
             ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }),
             ("\uE7F4", "Bureau", () => { menu.Close(); WindowsShell.ShowDesktop(); }));
 
@@ -2192,6 +2296,7 @@ public partial class MainWindow : Window
         menu.CloseRequested += _ => _systemMenu = null;
         _systemMenu = menu;
         OpenOverlay(menu);
+        _ = RefreshRadioButtonsAsync();
     }
 
     // ---- Recherche sur toutes les boutiques (onglet Découverte) ----
@@ -2594,7 +2699,7 @@ public partial class MainWindow : Window
     private void PlaceHints()
     {
         var top = _overlays.LastOrDefault() is KeyboardPanel;
-        var x = top ? (HintsBox.ActualWidth - Pages.ActualWidth) / 2 + HintsBox.Margin.Right : 0;
+        var x = top ? (HintsBox.ActualWidth - RootGrid.ActualWidth) / 2 + HintsBox.Margin.Right : 0;
         var y = top ? 14 - (RootGrid.ActualHeight - HintsBox.Margin.Bottom - HintsBox.ActualHeight) : 0;
         var move = (TranslateTransform)HintsBox.RenderTransform;
         move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, Anim.Ms(300)) { EasingFunction = Anim.Out });

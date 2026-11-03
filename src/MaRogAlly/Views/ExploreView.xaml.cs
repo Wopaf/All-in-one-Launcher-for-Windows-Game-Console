@@ -66,10 +66,10 @@ public partial class ExploreView : UserControl
     private readonly List<DiscoverTile> _tiles =
     [
         new(DiscoverView.WishlistKey, "Ma liste de souhaits", "Les jeux que tu veux garder à l'œil", Color.FromRgb(0xFF, 0x5C, 0x8A)),
+        new("soon", "Prochainement", "Les sorties les plus attendues", Color.FromRgb(0xA6, 0x5C, 0xFF)),
         new("played", "Les plus joués", "En ce moment sur Steam", Color.FromRgb(0xFF, 0x7A, 0x2E)),
         new("new", "Nouveautés", "Sorties récentes populaires", Color.FromRgb(0x2D, 0x8C, 0xFF)),
         new("sellers", "Meilleures ventes", "Les plus achetés sur Steam", Color.FromRgb(0x22, 0xB0, 0x63)),
-        new("soon", "Prochainement", "Les sorties les plus attendues", Color.FromRgb(0xA6, 0x5C, 0xFF)),
     ];
     private List<DiscoverGame> _newGames = [];
     private List<FreeGame> _free = [];
@@ -95,6 +95,9 @@ public partial class ExploreView : UserControl
 
     public string Query => _query;
 
+    /// <summary>Rangée réservée sous la liste (voir <see cref="PlaceInfo"/>).</summary>
+    private const double InfoRowHeight = 34;
+
     private void Relayout()
     {
         if (ActualHeight <= 0) return;
@@ -109,12 +112,12 @@ public partial class ExploreView : UserControl
         // Un peu plus de quatre jaquettes visibles (la cinquième, coupée, annonce la suite), sans dépasser la hauteur restante.
         var coversWidth = ActualWidth - 2 * 64 - FreeWidth - 36;
         var fromWidth = ((coversWidth + 18) / 4.4 - 18) * 1.5;
-        var fromHeight = ActualHeight - SearchButton.Height - TileHeight - 2 * gap - 44;
+        var fromHeight = ActualHeight - SearchButton.Height - TileHeight - 2 * gap - 44 - InfoRowHeight;
         CoverHeight = Math.Clamp(Math.Floor(Math.Min(fromWidth, fromHeight)), 110, 420);
         CoverWidth = Math.Floor(CoverHeight / 1.5);
         LayoutFree();
         // Hauteur stable : le bloc centré ne saute pas entre les nouveautés, une recherche en cours et les résultats.
-        ResultsArea.MinHeight = 30 + CoverHeight;
+        ResultsArea.MinHeight = 30 + CoverHeight + InfoRowHeight;
     }
 
     /// <summary>Jeux offerts sur la hauteur des jaquettes : empilés, en deux colonnes à partir de quatre (trois rangées visibles, les suivantes défilent).</summary>
@@ -180,6 +183,7 @@ public partial class ExploreView : UserControl
             ShowNewSection();
             return;
         }
+        PlaceInfo(searching: true);
         ResultsLabel.Text = $"RÉSULTATS POUR « {_query.ToUpperInvariant()} »";
         ResultsCount.Text = "";
         ShowMessage("Recherche en cours…", $"Bibliothèque, Steam et GOG pour « {_query} ».");
@@ -227,6 +231,7 @@ public partial class ExploreView : UserControl
     /// <summary>Sans recherche : la section Nouveautés occupe le milieu de l'écran.</summary>
     private void ShowNewSection()
     {
+        PlaceInfo(searching: false);
         ResultsLabel.Text = "NOUVEAUTÉS";
         ResultsCount.Text = _newGames.Count > 0 ? "Sorties récentes populaires sur Steam" : "";
         if (_newGames.Count == 0)
@@ -236,6 +241,16 @@ public partial class ExploreView : UserControl
         }
         EmptyState.Visibility = HitsScroll.Visibility = Visibility.Collapsed;
         NewScroll.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Jeu sélectionné et décompte : en bas à gauche de la liste pendant une recherche, sinon à droite du titre.</summary>
+    private void PlaceInfo(bool searching)
+    {
+        Grid.SetRow(InfoLine, searching ? 2 : 0);
+        Grid.SetColumn(InfoLine, searching ? 0 : 1);
+        Grid.SetColumnSpan(InfoLine, searching ? 2 : 1);
+        InfoLine.Margin = searching ? new Thickness(64, 12, 64, 0) : new Thickness(24, 0, 0, 14);
+        ResultsCount.HorizontalAlignment = HitInfo.HorizontalAlignment = searching ? HorizontalAlignment.Left : HorizontalAlignment.Right;
     }
 
     private void ShowMessage(string title, string hint)

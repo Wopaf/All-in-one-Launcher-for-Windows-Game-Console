@@ -50,11 +50,11 @@ public partial class DetailView : OverlayBase
         var tight = compact && _achievementGame is not null;
         MetaRow.Margin = new Thickness(0, tight ? 12 : compact ? 18 : 26, 0, 0);
         Actions.Margin = new Thickness(0, tight ? 18 : compact ? 24 : 34, 0, 0);
-        DescScroll.Margin = new Thickness(0, tight ? 24 : compact ? 38 : 52, 0, 0);
-        MoreButton.Margin = new Thickness(0, compact ? 14 : 18, 0, 0);
+        // Le cadre de la section déborde de son Padding autour du texte.
+        DescButton.Margin = new Thickness(-12, (tight ? 24 : compact ? 38 : 52) - 10, 0, -10);
         DescText.FontSize = compact ? 15 : 17;
         DescText.LineHeight = compact ? 23 : 27;
-        ApplyDescription();
+        ApplySections();
         Gallery.Margin = new Thickness(0, tight ? 18 : compact ? 26 : 34, 0, 0);
         ShotWidth = compact ? 160 : 240;
         ShotHeight = compact ? 90 : 135;
@@ -66,7 +66,6 @@ public partial class DetailView : OverlayBase
     {
         InitializeComponent();
         SizeChanged += (_, _) => ApplyCompact(ActualHeight < 860);
-        DescText.SizeChanged += (_, _) => UpdateMoreButton();
         foreach (var b in Actions.Children.OfType<Button>())
             b.GotKeyboardFocus += (_, _) => ActionLabel.Text = b.ToolTip as string ?? "";
         PlayButton.GotKeyboardFocus += (_, _) =>
@@ -113,37 +112,41 @@ public partial class DetailView : OverlayBase
         });
     }
 
-    // ---------------- Description repliable ----------------
+    // ---------------- Description ----------------
 
-    private bool _compact, _expanded;
+    private bool _compact;
+    private bool ReaderOpen => DescReader.Visibility == Visibility.Visible;
 
-    /// <summary>Hauteur de la description repliée : quelques lignes.</summary>
-    private double CollapsedHeight => DescText.LineHeight * (_compact ? 3 : 4);
-
-    private void ApplyDescription()
+    /// <summary>La description tient sur quelques lignes (points de suspension s'il y en a plus) ; le reste s'adapte au contenu.</summary>
+    private void ApplySections()
     {
-        DescScroll.MaxHeight = _expanded ? double.PositiveInfinity : CollapsedHeight;
-        // Dépliée, la description prend la place des captures.
-        DescRow.Height = _expanded ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
-        // Repliée : le tout est centré verticalement ; dépliée : la page entière sert à la lecture.
-        Body.VerticalAlignment = _expanded ? VerticalAlignment.Stretch : VerticalAlignment.Center;
-        Gallery.Visibility = _expanded || Shots.Items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        AchievementSection.Visibility = _expanded || _achievementGame is null ? Visibility.Collapsed : Visibility.Visible;
-        MoreText.Text = _expanded ? "Réduire" : "Lire la suite";
-        MoreIcon.Text = _expanded ? "\uE70E" : "\uE70D";
-        UpdateMoreButton();
+        DescText.MaxHeight = DescText.LineHeight * (_compact ? 3 : 4);
+        Gallery.Visibility = Shots.Items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        AchievementSection.Visibility = _achievementGame is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private void UpdateMoreButton()
-        => MoreButton.Visibility = _expanded || DescText.ActualHeight > CollapsedHeight + 2 ? Visibility.Visible : Visibility.Collapsed;
-
-    private void More_Click(object sender, RoutedEventArgs e)
+    private void DescButton_Click(object sender, RoutedEventArgs e)
     {
-        _expanded = !_expanded;
-        ApplyDescription();
-        if (!_expanded) DescScroll.ScrollToTop();
-        Anim.Enter(DescScroll, 0, _expanded ? 8 : -8, 260);
+        ReaderScroll.ScrollToTop();
+        DescReader.Visibility = Visibility.Visible;
+        DescReader.Opacity = 0;
+        Anim.Fade(DescReader, 1, 220);
         RaiseHintsChanged();
+    }
+
+    private void CloseReader()
+    {
+        DescReader.Visibility = Visibility.Collapsed;
+        RaiseHintsChanged();
+    }
+
+    private void CloseReader_Click(object sender, RoutedEventArgs e) => CloseReader();
+
+    /// <summary>Sélectionne la description, et l'ouvre si demandé (« --desc », « --reader », pour vérifier l'affichage).</summary>
+    public void PreviewDescription(bool open)
+    {
+        FocusNav.Focus(DescButton);
+        if (open) DescButton_Click(this, new RoutedEventArgs());
     }
 
     // ---------------- Visionneuse de captures ----------------
@@ -313,9 +316,7 @@ public partial class DetailView : OverlayBase
             return bmp;
         }).ToList() ?? [];
         Shots.ItemsSource = shots;
-        _expanded = false;
-        ApplyDescription();
-        DescScroll.ScrollToTop();
+        ApplySections();
     }
 
     /// <summary>
@@ -326,7 +327,7 @@ public partial class DetailView : OverlayBase
     {
         if (Shots.Items.Count > 0) return;
         Shots.ItemsSource = Enumerable.Repeat<object?>(null, ShotsShown).ToList();
-        ApplyDescription();
+        ApplySections();
     }
 
     /// <summary>La fiche n'a pas pu être complétée : on retire les cartes fantômes.</summary>
@@ -334,7 +335,7 @@ public partial class DetailView : OverlayBase
     {
         if (_shotUrls.Count > 0) return;
         Shots.ItemsSource = null;
-        ApplyDescription();
+        ApplySections();
     }
 
     // ---------------- Succès mis en avant ----------------
@@ -469,9 +470,10 @@ public partial class DetailView : OverlayBase
     /// <summary>Jeu non possédé : seuls les liens vers les magasins, et une fiche technique orientée achat.</summary>
     private void ShowStore(Game g, DiscoverGame store)
     {
+        // Pas d'offres à chercher pour un jeu connu comme gratuit.
         foreach (UIElement child in Actions.Children)
-            child.Visibility = child == SteamButton || child == InstantGamingButton || child == WishButton ? Visibility.Visible : Visibility.Collapsed;
-        SteamButton.Margin = new Thickness(0, 0, 12, 0);
+            child.Visibility = child == SteamButton || child == WishButton || (child == InstantGamingButton && !store.IsKnownFree) ? Visibility.Visible : Visibility.Collapsed;
+        SteamButton.Margin = new Thickness(0, 0, store.IsKnownFree ? 0 : 12, 0);
         InstantGamingButton.Margin = new Thickness(0);
 
         var fr = new System.Globalization.CultureInfo("fr-FR");
@@ -537,20 +539,16 @@ public partial class DetailView : OverlayBase
             return true;
         }
 
-        // Description dépliée : haut / bas la font défiler tant qu'il reste du texte.
-        if (_expanded && MoreButton.IsKeyboardFocused)
+        if (ReaderOpen)
         {
             const double step = 140;
-            if (action == NavAction.Down && DescScroll.VerticalOffset < DescScroll.ScrollableHeight)
+            switch (action)
             {
-                Anim.ScrollTo(DescScroll, DescScroll.VerticalOffset + step, 220);
-                return true;
+                case NavAction.Down: Anim.ScrollTo(ReaderScroll, ReaderScroll.VerticalOffset + step, 220); break;
+                case NavAction.Up: Anim.ScrollTo(ReaderScroll, ReaderScroll.VerticalOffset - step, 220); break;
+                case NavAction.Back or NavAction.Accept: CloseReader(); break;
             }
-            if (action == NavAction.Up && DescScroll.VerticalOffset > 0)
-            {
-                Anim.ScrollTo(DescScroll, DescScroll.VerticalOffset - step, 220);
-                return true;
-            }
+            return true;
         }
 
         switch (action)
@@ -563,7 +561,7 @@ public partial class DetailView : OverlayBase
     }
 
     /// <summary>
-    /// Rangées de la fiche, de haut en bas : actions, « Lire la suite », succès, captures.
+    /// Rangées de la fiche, de haut en bas : actions, description, succès, captures.
     /// (La prédiction de WPF ne trouvait pas toujours la rangée du dessous.)
     /// </summary>
     private List<List<Button>> NavRows()
@@ -576,7 +574,7 @@ public partial class DetailView : OverlayBase
             else if (child is Button b) actions.Add(b);
         }
         var rows = new List<List<Button>> { actions };
-        if (MoreButton.Visibility == Visibility.Visible) rows.Add([MoreButton]);
+        if (DescButton.Visibility == Visibility.Visible) rows.Add([DescButton]);
         if (AchievementSection.Visibility == Visibility.Visible) rows.Add([AchievementSection]);
         if (Gallery.Visibility == Visibility.Visible)
         {
@@ -625,8 +623,7 @@ public partial class DetailView : OverlayBase
     }
 
     public override string Hints => LightboxOpen ? "←→:Image|B:Fermer"
-        : _store is not null ? (_expanded ? "A:Valider|↕:Défiler|B:Retour" : "A:Valider|B:Retour")
-        : _expanded ? "A:Valider|↕:Défiler|B:Retour"
+        : ReaderOpen ? "↕:Défiler|B:Fermer"
         : "A:Valider|B:Retour";
 
     /// <summary>Fiche magasin : état du bouton de la liste de souhaits.</summary>

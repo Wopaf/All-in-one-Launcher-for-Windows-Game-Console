@@ -26,8 +26,6 @@ public sealed class Gamepad : IDisposable
 {
     public event Action<NavAction>? Action;
     public event Action<bool>? ConnectionChanged;
-    /// <summary>Select pressé alors que l'application n'est pas au premier plan : revenir dessus.</summary>
-    public event Action? ReturnRequested;
     /// <summary>B pressé alors que l'application n'est pas au premier plan : réduire celle qui l'est.</summary>
     public event Action? MinimizeRequested;
 
@@ -70,7 +68,6 @@ public sealed class Gamepad : IDisposable
             // En arrière-plan (ou au retour), on ignore les boutons déjà enfoncés pour ne pas
             // déclencher d'action avec un appui fait dans le jeu.
             var newlyPressed = (ushort)(pad.Buttons & ~_previousButtons);
-            if (!active && Has(newlyPressed, Buttons.Back)) ReturnRequested?.Invoke();
             if (!active && Has(newlyPressed, Buttons.B)) MinimizeRequested?.Invoke();
             _previousButtons = pad.Buttons;
             _previousLt = pad.LeftTrigger > TriggerThreshold;
