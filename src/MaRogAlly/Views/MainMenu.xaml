@@ -5,11 +5,14 @@
     <Grid>
         <Rectangle Fill="#99000000" MouseLeftButtonUp="Backdrop_Click"/>
         <Grid x:Name="Panel" Width="540" HorizontalAlignment="Right">
-            <!-- Ombre portée sur un calque à part : l'effet ne dégrade pas le texte du menu -->
-            <Border Background="Black" IsHitTestVisible="False">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="70" ShadowDepth="0" Opacity="0.85" Color="Black"/>
-                </Border.Effect>
+            <!-- Ombre en dégradé plutôt qu'en effet de flou, recalculé à chaque image de l'ouverture -->
+            <Border Width="70" Margin="-70,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#00000000" Offset="0"/>
+                        <GradientStop Color="#8C000000" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
             </Border>
             <!-- Fond opaque : la couleur du thème sous la teinte (translucide) des panneaux -->
             <Border Background="{DynamicResource Bg}"/>

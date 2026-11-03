@@ -29,9 +29,24 @@ public partial class MainMenu : OverlayBase
         UpdateHeader();
     }
 
-    protected override FrameworkElement AnimatedPart => Panel;
     protected override FrameworkElement FocusScope => Items;
     public override string Hints => _brightnessRow?.IsKeyboardFocused == true ? "←→:Luminosité|B:Fermer" : "A:Valider|B:Fermer";
+
+    public override void OnOpened()
+    {
+        UpdateHeader();
+        // Mise en page faite avant de lancer l'animation : son calcul ne lui vole aucune image.
+        UpdateLayout();
+        base.OnOpened();
+        Anim.Slide(Panel, EnterFromX, 360);
+    }
+
+    /// <summary>Retour depuis une page ouverte par le menu : la sélection reprend sur son bouton.</summary>
+    protected override void FocusOnOpen()
+    {
+        if (_lastButton is { } b) FocusNav.Focus(b);
+        else base.FocusOnOpen();
+    }
 
     private void UpdateHeader()
     {
@@ -130,7 +145,7 @@ public partial class MainMenu : OverlayBase
         return b;
     }
 
-    /// <summary>Rangée de boutons de même largeur, avec leur nom dessous.</summary>
+    /// <summary>Rangée de boutons de même largeur : une icône seule.</summary>
     public void AddIconButtons(params (string Icon, string Title, Action OnClick)[] buttons)
     {
         var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
@@ -149,20 +164,13 @@ public partial class MainMenu : OverlayBase
             {
                 Style = (Style)FindResource("RowButton"),
                 Padding = new Thickness(0),
-                Height = 80,
+                Height = 56,
+                ToolTip = title,
                 Margin = new Thickness(i == 0 ? 0 : 4, 0, i == buttons.Length - 1 ? 0 : 4, 0),
-                Content = new StackPanel
-                {
-                    Children =
-                    {
-                        tile,
-                        new TextBlock { Text = title, FontSize = 12, Foreground = (Brush)FindResource("TextSecondary"), HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 5, 0, 0) },
-                    },
-                },
+                Content = tile,
             };
             _iconTiles[title] = tile;
-            // Le cadre de sélection entoure la tuile, pas le nom dessous.
-            Track(b, onClick, tile);
+            Track(b, onClick);
             Grid.SetColumn(b, i);
             row.Children.Add(b);
         }
@@ -183,8 +191,8 @@ public partial class MainMenu : OverlayBase
             return;
         }
         static Color Blue(byte alpha) => Color.FromArgb(alpha, 0x2D, 0x8C, 0xFF);
-        tile.Background = new LinearGradientBrush(new GradientStopCollection { new(Blue(0x8C), 0), new(Blue(0x33), 1) }, new Point(0, 0), new Point(1, 1));
-        tile.BorderBrush = new LinearGradientBrush(Blue(0xB3), Blue(0x26), new Point(0, 0), new Point(1, 1));
+        tile.Background = new LinearGradientBrush(new GradientStopCollection { new(Blue(0x4D), 0), new(Blue(0x14), 1) }, new Point(0, 0), new Point(1, 1));
+        tile.BorderBrush = new LinearGradientBrush(Blue(0x59), Blue(0x14), new Point(0, 0), new Point(1, 1));
     }
 
     private const int BrightnessMin = 10, BrightnessStep = 10;
@@ -373,13 +381,13 @@ public partial class MainMenu : OverlayBase
 
     private Button? _lastButton;
 
-    private void Track(Button b, Action onClick, FrameworkElement? frame = null)
+    private void Track(Button b, Action onClick)
     {
         RowOptions.SetFloating(b, true);
         b.GotKeyboardFocus += (_, _) =>
         {
             _lastButton = b;
-            _highlight.MoveTo(frame ?? b);
+            _highlight.MoveTo(b);
         };
         b.Click += (_, _) => onClick();
     }

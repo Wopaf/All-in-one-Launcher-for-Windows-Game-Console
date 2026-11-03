@@ -20,24 +20,6 @@
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
-        <!-- Carte de chiffre clé du jeu sélectionné -->
-        <Style x:Key="StatCard" TargetType="Border">
-            <Setter Property="CornerRadius" Value="12"/>
-            <Setter Property="Padding" Value="14,10,16,10"/>
-            <Setter Property="Margin" Value="0,0,10,0"/>
-            <Setter Property="Background" Value="#12FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#14FFFFFF"/>
-            <Setter Property="BorderThickness" Value="1"/>
-        </Style>
-        <Style x:Key="StatValue" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="FontSize" Value="15"/>
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-            <Setter Property="Margin" Value="0,3,0,0"/>
-        </Style>
-
         <!-- Fondu en bas des listes : masque vers la transparence (le fond reste visible) -->
         <LinearGradientBrush x:Key="FadeBottom" StartPoint="0,0" EndPoint="0,1">
             <GradientStop Color="#FF000000" Offset="0"/>
@@ -141,33 +123,6 @@
                     </Grid>
                     <TextBlock x:Name="CountText" Grid.Column="2" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15"
                                Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="18,0,0,0"/>
-                </Grid>
-
-                <!-- Chiffres clés -->
-                <Grid x:Name="StatCards" Margin="0,14,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition/>
-                        <ColumnDefinition Width="1.6*"/>
-                        <ColumnDefinition/>
-                    </Grid.ColumnDefinitions>
-                    <Border Style="{StaticResource StatCard}">
-                        <StackPanel>
-                            <TextBlock Text="DERNIER SUCCÈS" Style="{StaticResource Label}" FontSize="11"/>
-                            <TextBlock x:Name="LastValue" Style="{StaticResource StatValue}"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Grid.Column="1" Style="{StaticResource StatCard}">
-                        <StackPanel>
-                            <TextBlock Text="LE PLUS RARE OBTENU" Style="{StaticResource Label}" FontSize="11"/>
-                            <TextBlock x:Name="RareValue" Style="{StaticResource StatValue}"/>
-                        </StackPanel>
-                    </Border>
-                    <Border Grid.Column="2" Style="{StaticResource StatCard}" Margin="0">
-                        <StackPanel>
-                            <TextBlock Text="RESTANTS" Style="{StaticResource Label}" FontSize="11"/>
-                            <TextBlock x:Name="LeftValue" Style="{StaticResource StatValue}"/>
-                        </StackPanel>
-                    </Border>
                 </Grid>
             </StackPanel>
 

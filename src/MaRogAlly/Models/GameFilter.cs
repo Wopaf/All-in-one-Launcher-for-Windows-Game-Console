@@ -2,7 +2,7 @@ using MaRogAlly.Core;
 
 namespace MaRogAlly.Models;
 
-public enum SortMode { NameAsc, NameDesc, LastPlayed, MostPlayed, Rating, Release, RecentlyAdded, Platform }
+public enum SortMode { NameAsc, NameDesc, LastPlayed, MostPlayed, Rating, Release, RecentlyAdded, Platform, Size }
 
 public enum InstallFilter { All, Installed, NotInstalled }
 
@@ -18,6 +18,7 @@ public sealed class GameFilter : ObservableObject
         (SortMode.Rating, "Les mieux notés"),
         (SortMode.Release, "Date de sortie"),
         (SortMode.RecentlyAdded, "Ajoutés récemment"),
+        (SortMode.Size, "Les plus lourds"),
         (SortMode.Platform, "Plateforme"),
     ];
 
@@ -88,6 +89,7 @@ public sealed class GameFilter : ObservableObject
             SortMode.Release => q.OrderByDescending(g => g.Meta?.ReleaseDate ?? DateTime.MinValue),
             SortMode.RecentlyAdded => q.OrderByDescending(g => g.FirstSeen),
             SortMode.Platform => q.OrderBy(g => (int)g.Platform),
+            SortMode.Size => q.OrderByDescending(g => g.DiskBytes ?? -1),
             _ => q.OrderBy(g => g.DisplayTitle, byName),
         };
         // Ordre alphabétique pour départager.

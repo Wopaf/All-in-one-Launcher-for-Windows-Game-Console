@@ -42,6 +42,8 @@ public sealed class Game : ObservableObject
     [JsonIgnore] public PlatformInfo PlatformInfo => PlatformInfo.Of(Platform);
     /// <summary>Tags Steam (noms anglais), du plus voté au moins voté ; vide si le jeu n'est pas relié à Steam.</summary>
     [JsonIgnore] public IReadOnlyList<string> Tags { get; set; } = [];
+    /// <summary>Place prise sur le disque, si elle a été mesurée (voir GameSizes).</summary>
+    [JsonIgnore] public long? DiskBytes { get; set; }
     [JsonIgnore] public string Initial => Text.Initial(DisplayTitle);
 
     // ---- Données enrichies (métadonnées, préférences) : non sérialisées ici ----

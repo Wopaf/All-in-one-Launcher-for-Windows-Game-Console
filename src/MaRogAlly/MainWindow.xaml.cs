@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private readonly ExploreView _explore = new();
     private readonly GameSearch _search;
     private readonly TagService _tags;
+    private readonly GameSizes _sizes = new();
     private readonly AppUpdater _appUpdater;
     private readonly WishlistService _wishlist = new();
     /// <summary>Luminosité de l'écran ; null si elle ne se règle pas depuis l'application (écran externe).</summary>
@@ -166,6 +167,7 @@ public partial class MainWindow : Window
         var pulse = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         pulse.Tick += (_, _) =>
         {
+            if (!_menuWarmed) WarmSystemMenu();
             UpdateClock();
             _explore.RefreshCountdowns();
             RefreshDue();
@@ -192,6 +194,12 @@ public partial class MainWindow : Window
         if (args.Contains("--storage")) OpenStorage();
         if (args.Contains("--detail") && _installed.Source.FirstOrDefault() is { } firstGame) OpenDetail(firstGame);
         if (args.Contains("--menu")) OpenSystemMenu();
+        if (args.Contains("--sort-size"))
+        {
+            _installed.Filter.Sort = SortMode.Size;
+            _installed.Refresh(toTop: true);
+            _ = MeasureSizesAsync(toTop: true);
+        }
         // « --network wifi|bluetooth|demo » : interface Wi-Fi ou Bluetooth (demo : réseaux d'exemple), pour vérifier l'affichage.
         var networkArg = Array.IndexOf(args, "--network");
         if (networkArg >= 0)
@@ -444,6 +452,9 @@ public partial class MainWindow : Window
 
         if (CurrentView == _platforms) _platforms.RefreshRunning();
 
+        // Poids des jeux : seulement si un onglet trie dessus.
+        if (_installed.Filter.Sort == SortMode.Size || _all.Filter.Sort == SortMode.Size) _ = MeasureSizesAsync();
+
         // Jeux : disque à chaque passage (rapide) ; bibliothèques en ligne au retour et toutes les 30 min.
         if (!_scanning && _lastScan != DateTime.MinValue
             && (returned && (_libraryDirty || now - _lastScan > TimeSpan.FromMinutes(2)) || now - _lastScan > TimeSpan.FromMinutes(30)))
@@ -474,6 +485,19 @@ public partial class MainWindow : Window
 
         // Succès : toutes les 30 min (et après une partie, avec le scan du retour).
         if (!_scanning && _games.Count > 0 && now - _lastAchievementsFetch > TimeSpan.FromMinutes(30)) _ = LoadAchievementsAsync();
+    }
+
+    /// <param name="toTop">Le tri vient d'être choisi : le résultat s'affiche depuis le plus lourd.</param>
+    private async Task MeasureSizesAsync(bool toTop = false)
+    {
+        if (_sizes.IsMeasuring) return;
+        var changed = await _sizes.MeasureAsync(_games, (done, total) =>
+            Activity("sizes", "Poids des jeux", $"Calcul de la place prise par les jeux ({done} / {total})…", (double)done / total));
+        EndActivity("sizes");
+        if (!changed) return;
+        _sizes.Apply(_games);
+        foreach (var view in new[] { _installed, _all })
+            if (view.Filter.Sort == SortMode.Size) view.Refresh(toTop);
     }
 
     /// <param name="localOnly">Disque seulement : reflète tout de suite une installation ou une désinstallation.</param>
@@ -606,6 +630,7 @@ public partial class MainWindow : Window
     private void SetGames(List<Game> games)
     {
         _games = games;
+        _sizes.Apply(games);
         _installed.SetGames(games);
         _all.SetGames(games);
         _installed.SetActive(CurrentGames == _installed);
@@ -1038,6 +1063,7 @@ public partial class MainWindow : Window
         var direction = Math.Sign(index - _page);
         var old = CurrentView;
         _subView = null;
+        if (_menuBehind is not null) _menuBehind = _systemMenu = null;
         SyncTopBar();
         var next = _pages[index].View;
 
@@ -1155,6 +1181,7 @@ public partial class MainWindow : Window
         Anim.Enter(page, 0, -50, 340);
         OnViewShown(page);
         UpdateHints();
+        ReturnToMenu();
     }
 
     private void PrevTab_Click(object sender, MouseButtonEventArgs e) => ShowPage(_page - 1);
@@ -1414,7 +1441,8 @@ public partial class MainWindow : Window
         switch (action)
         {
             case NavAction.Menu:
-                OpenSystemMenu();
+                if (_menuBehind is not null && _subView is not null) CloseSubPage();
+                else OpenSystemMenu();
                 return;
             case NavAction.PrevTab:
                 ShowPage(_page - 1);
@@ -1534,7 +1562,10 @@ public partial class MainWindow : Window
         var fromDock = overlay == _dockPanel;
         if (fromDock) _dockPanel = null;
         overlay.IsHitTestVisible = false;
-        Anim.Exit(overlay, 30, 0, 180, () => RemoveFromHost(overlay));
+        overlay.CloseRequested -= CloseOverlay;
+        overlay.HintsChanged -= UpdateHints;
+        // Rouvert entre-temps (retour au menu) : il reste à l'écran.
+        Anim.Exit(overlay, 30, 0, 180, () => { if (!_overlays.Contains(overlay)) RemoveFromHost(overlay); });
         if (overlay is KeyboardPanel) SyncTopBar();
         if (overlay is DetailView or StatsView or StorageView && !_overlays.Any(o => o is DetailView or StatsView or StorageView))
         {
@@ -1566,6 +1597,7 @@ public partial class MainWindow : Window
                 case GamesView gv: OnSelectionChanged(gv.Selected); gv.RestoreFocus(); break;
             }
         }
+        if (overlay is StatsView or StorageView) ReturnToMenu();
     }
 
     private void OpenDetail(Game game)
@@ -1923,6 +1955,7 @@ public partial class MainWindow : Window
                 _settings.Sorts[_pages.First(p => p.View == view).Key] = mode;
                 _settings.Save();
                 view.Refresh(toTop: true);
+                if (mode == SortMode.Size) _ = MeasureSizesAsync(toTop: true);
                 panel.Close();
             });
             if (view.Filter.Sort == mode) panel.InitialFocus = b;
@@ -2201,28 +2234,60 @@ public partial class MainWindow : Window
 
     private void OpenSystemMenu()
     {
+        var menu = BuildSystemMenu();
+        menu.CloseRequested += _ =>
+        {
+            if (_menuBehind != menu) _systemMenu = null;
+        };
+        _systemMenu = menu;
+        OpenOverlay(menu);
+        _ = RefreshRadioButtonsAsync();
+    }
+
+    /// <summary>Menu principal quitté pour une page (Réglages, Plateformes, Statistiques, Stockage) : B y revient, sur le même bouton.</summary>
+    private MainMenu? _menuBehind;
+
+    private void OpenFromMenu(MainMenu menu, Action open)
+    {
+        _menuBehind = menu;
+        menu.Close();
+        open();
+    }
+
+    private void ReturnToMenu()
+    {
+        if (_menuBehind is not { } menu) return;
+        _menuBehind = null;
+        RemoveFromHost(menu);
+        menu.IsHitTestVisible = true;
+        OpenOverlay(menu);
+        _ = RefreshRadioButtonsAsync();
+    }
+
+    private bool _menuWarmed;
+
+    /// <summary>Prépare le menu une première fois en coulisse : sa première ouverture ne paie plus le chargement de ses boutons.</summary>
+    private void WarmSystemMenu()
+    {
+        _menuWarmed = true;
+        var menu = BuildSystemMenu();
+        menu.Measure(RenderSize);
+        menu.Arrange(new Rect(RenderSize));
+        _ = Radios.IsOnAsync(Windows.Devices.Radios.RadioKind.WiFi);
+    }
+
+    private MainMenu BuildSystemMenu()
+    {
         var menu = new MainMenu();
         // Mises à jour : le menu affiche le dernier résultat, tenu à jour en arrière-plan (voir RefreshDue).
         var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
         var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
 
-        menu.AddButton("\uE713", "Réglages", () =>
+        menu.AddButton("\uE713", "Réglages", () => OpenFromMenu(menu, () =>
         {
-            menu.Close();
+            _settingsView.ResetSelection();
             OpenSubPage(_settingsView);
-        });
-        menu.AddButtons(
-            ("\uE9D2", "Statistiques", () =>
-            {
-                menu.Close();
-                OpenStats();
-            }),
-            ("", "Plateformes", () =>
-            {
-                menu.Close();
-                OpenSubPage(_platforms);
-            }));
-
+        }));
         menu.AddIconButtons(
             ("\uE701", "Wi-Fi", () => _network.OpenWifi()),
             ("\uE702", "Bluetooth", _network.OpenBluetooth),
@@ -2239,12 +2304,12 @@ public partial class MainWindow : Window
             _ = SyncBrightnessAsync(menu);
         }
 
+        menu.AddButtons(
+            ("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats)),
+            ("", "Plateformes", () => OpenFromMenu(menu, () => OpenSubPage(_platforms))));
+
         menu.AddDrives();
-        menu.AddButton("\uEDA2", "Gérer vos espaces de stockage", () =>
-        {
-            menu.Close();
-            OpenStorage();
-        });
+        menu.AddButton("\uEDA2", "Gérer vos espaces de stockage", () => OpenFromMenu(menu, OpenStorage));
 
         menu.AddSection("Mises à jour");
         var updates = new List<MenuTile>
@@ -2292,11 +2357,7 @@ public partial class MainWindow : Window
                 confirm.AddChoice("Annuler", false, confirm.Close);
                 OpenOverlay(confirm);
             }));
-
-        menu.CloseRequested += _ => _systemMenu = null;
-        _systemMenu = menu;
-        OpenOverlay(menu);
-        _ = RefreshRadioButtonsAsync();
+        return menu;
     }
 
     // ---- Recherche sur toutes les boutiques (onglet Découverte) ----
@@ -2479,7 +2540,9 @@ public partial class MainWindow : Window
 
     private void Launch(Game game)
     {
-        StorageStore.CancelScan(); // rien ne tourne pendant un jeu
+        // Rien ne tourne pendant un jeu.
+        StorageStore.CancelScan();
+        _sizes.Cancel();
         if (!game.IsInstalled)
         {
             _libraryDirty = true;

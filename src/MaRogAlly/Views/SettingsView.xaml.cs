@@ -437,6 +437,14 @@ public partial class SettingsView : UserControl
 
     // ---------------- Navigation ----------------
 
+    /// <summary>À chaque ouverture depuis le menu : première catégorie, sans mémoire de la visite précédente.</summary>
+    public void ResetSelection()
+    {
+        _lastFocused = null;
+        foreach (var category in _categories) category.LastFocused = null;
+        ShowCategory(0);
+    }
+
     /// <summary>Redonne le focus à la dernière ligne sélectionnée (ex. après la saisie d'une clé), sinon à la première.</summary>
     public void FocusFirst()
     {

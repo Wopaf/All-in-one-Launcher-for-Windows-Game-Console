@@ -10,8 +10,13 @@
             <Setter Property="FontFamily" Value="{StaticResource Display}"/>
             <Setter Property="FontSize" Value="24"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Height" Value="62"/>
-            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Height" Value="64"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Tag">
+                <Setter.Value>
+                    <CornerRadius>14</CornerRadius>
+                </Setter.Value>
+            </Setter>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Background" Value="#16FFFFFF"/>
             <Setter Property="Template">
@@ -19,7 +24,7 @@
                     <ControlTemplate TargetType="Button">
                         <Grid>
                             <!-- Relief : un liseré clair en haut, plus sombre en bas -->
-                            <Border x:Name="Bd" CornerRadius="14" Background="{TemplateBinding Background}" BorderThickness="0,1,0,3">
+                            <Border x:Name="Bd" CornerRadius="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Background="{TemplateBinding Background}" BorderThickness="0,1,0,3">
                                 <Border.BorderBrush>
                                     <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                                         <GradientStop Color="#26FFFFFF" Offset="0"/>
@@ -62,8 +67,8 @@
     </v:OverlayBase.Resources>
 
     <Grid>
-        <!-- Voile : léger en haut, plus dense vers le clavier -->
-        <Rectangle IsHitTestVisible="False">
+        <!-- Voile : léger en haut, plus dense vers le clavier. Il arrête les clics destinés à l'interface dessous et referme le clavier. -->
+        <Rectangle MouseLeftButtonUp="Backdrop_Click">
             <Rectangle.Fill>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                     <GradientStop Color="#66000000" Offset="0"/>
@@ -97,12 +102,12 @@
                     </Border>
                     <StackPanel>
                         <!-- Champ de saisie, avec à sa droite la remise à zéro -->
-                        <Grid Margin="0,0,0,14">
+                        <Grid Margin="0,0,0,10">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Border Margin="5,0" CornerRadius="16" Background="#1AFFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Padding="20,0" Height="56">
+                            <Border Margin="3,0" CornerRadius="28" Background="#1AFFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Padding="26,0" Height="56">
                                 <Grid VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock x:Name="ValueText" FontFamily="{StaticResource Display}" FontSize="26" Foreground="{StaticResource TextPrimary}"
@@ -129,57 +134,59 @@
                                                VerticalAlignment="Center" Visibility="Collapsed"/>
                                 </Grid>
                             </Border>
-                            <Button x:Name="ResetButton" Grid.Column="1" Style="{StaticResource FnKey}" Width="66" Height="56" Margin="5,0" ToolTip="Tout effacer" Click="Clear_Click">
+                            <Button x:Name="ResetButton" Grid.Column="1" Style="{StaticResource FnKey}" Width="56" Height="56" Margin="3,0" ToolTip="Tout effacer" Click="Clear_Click">
+                                <Button.Tag>
+                                    <CornerRadius>28</CornerRadius>
+                                </Button.Tag>
                                 <TextBlock Text="&#xE711;" FontFamily="{StaticResource Icons}" FontSize="20"/>
                             </Button>
                         </Grid>
 
-                        <!-- Lettres ; à droite, Effacer puis Entrer sur deux rangées -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="10*"/>
-                                <ColumnDefinition Width="1.28*"/>
-                            </Grid.ColumnDefinitions>
+                        <!-- Rangées décalées d'un clavier classique. Une touche de lettre fait 2 colonnes : la deuxième rangée part d'une demi-touche, la troisième d'une touche. -->
+                        <Grid x:Name="Keys">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="72"/>
-                                <RowDefinition Height="72"/>
-                                <RowDefinition Height="72"/>
+                                <RowDefinition Height="70"/>
+                                <RowDefinition Height="70"/>
+                                <RowDefinition Height="70"/>
                             </Grid.RowDefinitions>
-                            <UniformGrid x:Name="Keys" Grid.RowSpan="3" Columns="10"/>
-                            <Button x:Name="BackspaceButton" Grid.Column="1" Style="{StaticResource FnKey}" Click="Backspace_Click">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE750;" FontFamily="{StaticResource Icons}" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                    <TextBlock Text="Effacer" VerticalAlignment="Center"/>
-                                </StackPanel>
+                            <Button x:Name="BackspaceButton" Grid.Column="20" Grid.ColumnSpan="4" Style="{StaticResource FnKey}" ToolTip="Effacer" Click="Backspace_Click">
+                                <TextBlock Text="&#xE750;" FontFamily="{StaticResource Icons}" FontSize="24"/>
                             </Button>
-                            <Button x:Name="EnterButton" Grid.Column="1" Grid.Row="1" Grid.RowSpan="2" Height="NaN" Style="{StaticResource OkKey}" Content="ENTRER" Click="Ok_Click"/>
-                        </Grid>
-
-                        <!-- Dernière rangée : touches de fonction, espace et chiffres -->
-                        <Grid x:Name="Specials">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="3*"/>
-                                <ColumnDefinition Width="5.28*"/>
-                            </Grid.ColumnDefinitions>
-                            <Button x:Name="ShiftButton" Style="{StaticResource FnKey}" Click="Shift_Click">
+                            <Button x:Name="EnterButton" Grid.Row="1" Grid.Column="21" Grid.ColumnSpan="3" Style="{StaticResource OkKey}" ToolTip="Entrer" Click="Ok_Click">
+                                <TextBlock Text="&#xE751;" FontFamily="{StaticResource Icons}" FontSize="26"/>
+                            </Button>
+                            <Button x:Name="ShiftButton" Grid.Row="2" Grid.ColumnSpan="2" Style="{StaticResource FnKey}" Click="Shift_Click">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE752;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
                                     <TextBlock x:Name="ShiftText" Text="Maj" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
+                            <Button x:Name="ShiftRightButton" Grid.Row="2" Grid.Column="22" Grid.ColumnSpan="2" Style="{StaticResource FnKey}" Click="Shift_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE752;" FontFamily="{StaticResource Icons}" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                    <TextBlock x:Name="ShiftRightText" Text="Maj" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <!-- Dernière rangée : caractères spéciaux, dictée, espace et chiffres -->
+                        <Grid x:Name="Specials">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="4.5*"/>
+                                <ColumnDefinition Width="5.5*"/>
+                            </Grid.ColumnDefinitions>
                             <!-- Caractères spéciaux : la même touche ramène aux lettres -->
-                            <Button x:Name="SymbolsButton" Grid.Column="1" Style="{StaticResource FnKey}" Content="@" Click="Symbols_Click"/>
+                            <Button x:Name="SymbolsButton" Style="{StaticResource FnKey}" Content="@" Click="Symbols_Click"/>
                             <!-- Dictée (remplacée par « Coller » pour les clés d'API) -->
-                            <Button x:Name="VoiceButton" Grid.Column="2" Style="{StaticResource FnKey}" ToolTip="Dicter">
+                            <Button x:Name="VoiceButton" Grid.Column="1" Style="{StaticResource FnKey}" ToolTip="Dicter">
                                 <TextBlock x:Name="VoiceIcon" Text="&#xE720;" FontFamily="{StaticResource Icons}" FontSize="22"/>
                             </Button>
-                            <Button Grid.Column="3" Style="{StaticResource FnKey}" Click="Space_Click">
+                            <Button Grid.Column="2" Style="{StaticResource FnKey}" Click="Space_Click">
                                 <Border Width="120" Height="4" CornerRadius="2" Background="#55FFFFFF"/>
                             </Button>
-                            <UniformGrid x:Name="Digits" Grid.Column="4" Rows="1"/>
+                            <UniformGrid x:Name="Digits" Grid.Column="3" Rows="1"/>
                         </Grid>
                     </StackPanel>
                 </Grid>

@@ -32,6 +32,10 @@ public static class Anim
         t.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(dy, 0, Ms(ms)) { EasingFunction = Out, BeginTime = begin });
     }
 
+    /// <summary>Glissement seul, quand un parent porte déjà le fondu : une couche transparente de moins à composer.</summary>
+    public static void Slide(UIElement e, double dx, double ms)
+        => Translate(e).BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(dx, 0, Ms(ms)) { EasingFunction = Out });
+
     /// <summary>Retour d'un élément en train de disparaître : il repart de là où il en est, sans saut.</summary>
     public static void Resume(UIElement e, double ms = 380)
     {

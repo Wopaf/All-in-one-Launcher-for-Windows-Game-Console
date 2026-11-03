@@ -72,7 +72,6 @@ public partial class AchievementsView : UserControl
         ListTitle.FontSize = compact ? 28 : 34;
         TitleText.FontSize = compact ? 28 : 38;
         PercentText.FontSize = compact ? 24 : 30;
-        StatCards.Margin = new Thickness(0, compact ? 10 : 14, 0, 0);
         ItemsBar.Margin = new Thickness(0, compact ? 12 : 18, 0, compact ? 6 : 10);
     }
 
@@ -91,9 +90,10 @@ public partial class AchievementsView : UserControl
     }
 
     /// <summary>Reconstruit la liste des jeux selon le tri et le filtre choisis.</summary>
-    private void ApplyList(bool keepFocus)
+    /// <param name="toTop">Tri ou filtre changés : on repart du premier jeu plutôt que de suivre le jeu sélectionné dans le nouvel ordre.</param>
+    private void ApplyList(bool keepFocus, bool toTop = false)
     {
-        var key = _current?.Key;
+        var key = toTop ? null : _current?.Key;
         var list = GameFilters[_gameFilter].Key == "platinum" ? _games.Where(g => g.Completed) : _games;
         list = GameSorts[_sort].Key switch
         {
@@ -255,14 +255,6 @@ public partial class AchievementsView : UserControl
         ProgressBar.UpdateLayout();
         ProgressFill.Background = g.Completed ? (Brush)FindResource("Gold") : new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
         ProgressFill.BeginAnimation(WidthProperty, new DoubleAnimation(ProgressBar.ActualWidth * g.Ratio, Anim.Ms(animate ? 500 : 0)) { EasingFunction = Anim.Out });
-
-        LastValue.Text = g.LastUnlock is { } last ? last.ToString("d MMMM yyyy", Fr) : "—";
-        var rare = g.Items.Where(a => a.Unlocked && a.Rarity is not null).MinBy(a => a.Rarity);
-        RareValue.Text = rare is not null ? $"{rare.Name} · {FormatRarity(rare.Rarity!.Value)}"
-            : g.HasDetails ? "—" : "Non fourni par la plateforme";
-        var left = g.Total - g.Unlocked;
-        LeftValue.Text = left == 0 ? "Aucun" : $"{left} succès";
-        LeftValue.Foreground = (Brush)FindResource(left == 0 ? "Gold" : "TextPrimary");
 
         if (animate) Anim.Enter(Header, 0, 12, 300);
     }
@@ -501,14 +493,14 @@ public partial class AchievementsView : UserControl
     {
         _sort = (_sort + 1) % GameSorts.Length;
         UpdateControls();
-        ApplyList(keepFocus: true);
+        ApplyList(keepFocus: true, toTop: true);
     }
 
     private void CycleGameFilter()
     {
         _gameFilter = (_gameFilter + 1) % GameFilters.Length;
         UpdateControls();
-        ApplyList(keepFocus: true);
+        ApplyList(keepFocus: true, toTop: true);
     }
 
     private void CycleItemSort()

@@ -23,6 +23,9 @@ public partial class KeyboardPanel : OverlayBase
         "WXCVBN-':.",
     ];
 
+    /// <summary>Colonnes de la grille des lettres : 12 touches, en demi-touches pour décaler les rangées.</summary>
+    private const int KeyColumns = 24;
+
     /// <summary>Toujours visibles, en bas à droite (lettres comme symboles).</summary>
     private const string Numbers = "1234567890";
 
@@ -43,9 +46,8 @@ public partial class KeyboardPanel : OverlayBase
     private readonly bool _autoCapital;
     private bool _symbols;
     private readonly SlideHighlight _highlight;
+    private readonly List<Button> _letters = [];
     private Button? _lastKey;
-    /// <summary>Rangée courante : Entrer appartient à deux rangées, on revient par celle d'où on est arrivé.</summary>
-    private int _row;
     /// <summary>Dictée en cours (un second appui sur le micro l'annule).</summary>
     private CancellationTokenSource? _listening;
 
@@ -64,15 +66,22 @@ public partial class KeyboardPanel : OverlayBase
         _highlight = new SlideHighlight(KeyHighlight, KeysHost);
         Placeholder.Text = placeholder;
 
-        foreach (var _ in Layout.SelectMany(row => row))
-        {
-            var b = new Button { Style = (Style)FindResource("Key") };
-            b.Click += (_, _) => Type((string)b.Content);
-            Keys.Children.Add(b);
-        }
+        for (var i = 0; i < KeyColumns; i++) Keys.ColumnDefinitions.Add(new ColumnDefinition());
+        for (var row = 0; row < Layout.Length; row++)
+            for (var col = 0; col < Layout[row].Length; col++)
+            {
+                var b = new Button { Style = (Style)FindResource("Key") };
+                b.Click += (_, _) => Type((string)b.Content);
+                Grid.SetRow(b, row);
+                Grid.SetColumn(b, row + col * 2);
+                Grid.SetColumnSpan(b, 2);
+                // Avant les touches de fonction : la sélection s'ouvre sur la première lettre.
+                Keys.Children.Insert(_letters.Count, b);
+                _letters.Add(b);
+            }
         foreach (var digit in Numbers)
         {
-            var b = new Button { Style = (Style)FindResource("Key"), Content = digit.ToString(), Margin = new Thickness(3, 5, 3, 5), FontSize = 20 };
+            var b = new Button { Style = (Style)FindResource("Key"), Content = digit.ToString(), FontSize = 20 };
             b.Click += (_, _) => Type((string)b.Content);
             Digits.Children.Add(b);
         }
@@ -82,6 +91,7 @@ public partial class KeyboardPanel : OverlayBase
             b.GotKeyboardFocus += (_, _) =>
             {
                 _lastKey = b;
+                KeyHighlight.CornerRadius = (CornerRadius)b.Tag;
                 if (PadSelection) _highlight.MoveTo(b);
             };
             AddPressAnimation(b);
@@ -151,9 +161,9 @@ public partial class KeyboardPanel : OverlayBase
     private void ApplyKeys()
     {
         var labels = string.Concat(_symbols ? Symbols : Layout);
-        foreach (var (key, label) in Keys.Children.OfType<Button>().Zip(labels))
+        foreach (var (key, label) in _letters.Zip(labels))
             key.Content = _lowercase ? char.ToLowerInvariant(label).ToString() : label.ToString();
-        ShiftText.Text = _lowercase ? "Maj" : "MAJ";
+        ShiftText.Text = ShiftRightText.Text = _lowercase ? "Maj" : "MAJ";
         SymbolsButton.Content = _symbols ? "ABC" : "@";
     }
 
@@ -226,16 +236,18 @@ public partial class KeyboardPanel : OverlayBase
         return base.Handle(action);
     }
 
-    /// <summary>Rangées de touches, de haut en bas : remise à zéro, lettres (avec Effacer et Entrer), puis touches de fonction et chiffres.</summary>
+    /// <summary>Rangées de touches, de haut en bas : remise à zéro, lettres (avec Effacer, Entrer et Maj), puis touches de fonction et chiffres.</summary>
     private List<List<Button>> KeyRows()
     {
-        var rows = new List<List<Button>> { new() { ResetButton } };
-        rows.AddRange(Keys.Children.OfType<Button>().Chunk(Numbers.Length).Select(r => r.ToList()));
-        rows[1].Add(BackspaceButton);
-        rows[2].Add(EnterButton);
-        rows[3].Add(EnterButton);
-        rows.Add([.. Specials.Children.OfType<Button>(), .. Digits.Children.OfType<Button>()]);
-        return rows;
+        var letters = _letters.Chunk(Numbers.Length).ToList();
+        return
+        [
+            [ResetButton],
+            [.. letters[0], BackspaceButton],
+            [.. letters[1], EnterButton],
+            [ShiftButton, .. letters[2], ShiftRightButton],
+            [.. Specials.Children.OfType<Button>(), .. Digits.Children.OfType<Button>()],
+        ];
     }
 
     /// <summary>
@@ -246,14 +258,13 @@ public partial class KeyboardPanel : OverlayBase
     {
         var rows = KeyRows();
         var current = Keyboard.FocusedElement as Button;
-        var row = current is null ? -1 : _row < rows.Count && rows[_row].Contains(current) ? _row : rows.FindIndex(r => r.Contains(current));
+        var row = current is null ? -1 : rows.FindIndex(r => r.Contains(current));
         if (row < 0)
         {
             // Sélection perdue : on la remet sur la dernière touche utilisée.
             FocusNav.Focus(_lastKey ?? rows[1][0]);
             return;
         }
-        _row = row;
         var keys = rows[row];
         var col = keys.IndexOf(current!);
         switch (action)
@@ -264,25 +275,12 @@ public partial class KeyboardPanel : OverlayBase
             case NavAction.Right:
                 FocusNav.Focus(keys[(col + 1) % keys.Count]);
                 break;
-            case NavAction.Up:
-                MoveToRow(rows, row, -1, current!);
+            case NavAction.Up when row > 0:
+                FocusNav.Focus(Nearest(rows[row - 1], current!));
                 break;
-            case NavAction.Down:
-                MoveToRow(rows, row, 1, current!);
+            case NavAction.Down when row < rows.Count - 1:
+                FocusNav.Focus(Nearest(rows[row + 1], current!));
                 break;
-        }
-    }
-
-    /// <summary>Touche la plus proche dans la rangée voisine ; si c'est la même (Entrer, sur deux rangées), on regarde la suivante.</summary>
-    private void MoveToRow(List<List<Button>> rows, int row, int step, Button current)
-    {
-        for (var r = row + step; r >= 0 && r < rows.Count; r += step)
-        {
-            var target = Nearest(rows[r], current);
-            if (target == current) continue;
-            _row = r;
-            FocusNav.Focus(target);
-            return;
         }
     }
 
@@ -361,6 +359,7 @@ public partial class KeyboardPanel : OverlayBase
         Close();
     }
 
+    private void Backdrop_Click(object sender, MouseButtonEventArgs e) => Close();
     private void Backspace_Click(object sender, RoutedEventArgs e) => Backspace();
     private void Space_Click(object sender, RoutedEventArgs e) => Type(" ");
     private void Clear_Click(object sender, RoutedEventArgs e) => Set("");

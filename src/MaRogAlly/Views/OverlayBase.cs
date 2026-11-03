@@ -26,8 +26,11 @@ public class OverlayBase : UserControl
     {
         Anim.Enter(this, 0, 0, 220);
         if (AnimatedPart is { } part) Anim.Enter(part, EnterFromX, 0, 360);
-        Dispatcher.BeginInvoke(() => FocusNav.FocusFirst(FocusScope), System.Windows.Threading.DispatcherPriority.Loaded);
+        Dispatcher.BeginInvoke(FocusOnOpen, System.Windows.Threading.DispatcherPriority.Loaded);
     }
+
+    /// <summary>Sélection à l'ouverture.</summary>
+    protected virtual void FocusOnOpen() => FocusNav.FocusFirst(FocusScope);
 
     /// <summary>Le panneau posé au-dessus vient de se refermer.</summary>
     public virtual void OnRevealed() { }
