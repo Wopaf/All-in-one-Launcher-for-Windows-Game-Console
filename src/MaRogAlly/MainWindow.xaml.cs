@@ -147,6 +147,7 @@ public partial class MainWindow : Window
             _hotkeys.Pressed += OnQuickPanelKey;
             _ = PrepareControllerAsync();
         };
+        CursorHider.Attach(this);
         Activated += OnActivated;
         PreviewKeyDown += OnKeyDown;
         PreviewTextInput += OnTextInput;
@@ -302,6 +303,14 @@ public partial class MainWindow : Window
             var home = new DispatcherTimer { Interval = TimeSpan.FromSeconds(homeAfter) };
             home.Tick += (_, _) => { home.Stop(); OnNav(NavAction.Home); };
             home.Start();
+        }
+        // « --quick-press 3 » : simule après 3 s la réception de la touche du centre de contrôle (attention : le volet apparaît et prend le focus).
+        var pressArg = Array.IndexOf(args, "--quick-press");
+        if (pressArg >= 0 && double.TryParse(args.ElementAtOrDefault(pressArg + 1), System.Globalization.CultureInfo.InvariantCulture, out var pressAfter))
+        {
+            var press = new DispatcherTimer { Interval = TimeSpan.FromSeconds(pressAfter) };
+            press.Tick += (_, _) => { press.Stop(); OnQuickPanelKey(); };
+            press.Start();
         }
         // « --row 0.5 » : amène la rangée de Découverte à cette position (0 à 1) une fois chargée, pour vérifier ses dégradés.
         var rowArg = Array.IndexOf(args, "--row");
@@ -1464,6 +1473,7 @@ public partial class MainWindow : Window
     {
         // Le volet repart et le jeu a repris la main : ces boutons sont pour lui.
         if (_quickPanel is { IsClosing: true }) return;
+        CursorHider.Hide();
         var onStage = _quickPanel?.Stage?.Current;
         UiSounds.OnNav(action, onKeyboard: (onStage ?? _overlays.LastOrDefault()) is KeyboardPanel);
         if (_quickPanel is { } quick)
@@ -2377,8 +2387,10 @@ public partial class MainWindow : Window
         panel.WifiRequested += () => _quickNetwork.OpenWifi();
         panel.BluetoothRequested += _quickNetwork.OpenBluetooth;
         panel.ImageRequested += (files, index) => OpenOnQuickStage(new ImageViewer(files, index));
+        CursorHider.Attach(window);
         window.StageCreated += stage =>
         {
+            CursorHider.Attach(stage);
             stage.PreviewKeyDown += OnKeyDown;
             stage.PreviewTextInput += OnTextInput;
         };

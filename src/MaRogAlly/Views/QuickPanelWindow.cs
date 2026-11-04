@@ -138,6 +138,7 @@ public sealed class QuickPanelWindow : Window
     {
         if (_slidIn || _closing) return;
         _slidIn = true;
+        Log.Info($"Centre de contrôle : glissement lancé après {_opened.ElapsedMilliseconds} ms");
         BeginAnimation(LeftProperty, new DoubleAnimation(-Width, Gap, Anim.Ms(OpenMs)) { EasingFunction = OpenEase });
         Panel.PlayEntrance();
     }
@@ -152,7 +153,7 @@ public sealed class QuickPanelWindow : Window
         if (!_slidIn && _opened.ElapsedMilliseconds > 400) SlideIn();
         if (IsForeground)
         {
-            if (!_gotForeground) Log.Info($"Centre de contrôle : premier plan obtenu en {_opened.ElapsedMilliseconds} ms");
+            if (!_gotForeground) Log.Info($"Centre de contrôle : premier plan obtenu en {_opened.ElapsedMilliseconds} ms (position {Left:0}, {ActualWidth:0}×{ActualHeight:0}, visible {IsVisible}, glissement lancé {_slidIn})");
             _gotForeground = true;
             _lostFor = 0;
             return;
