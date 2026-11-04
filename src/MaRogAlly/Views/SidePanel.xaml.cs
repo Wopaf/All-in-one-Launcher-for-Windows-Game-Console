@@ -51,6 +51,12 @@ public partial class SidePanel : OverlayBase
         SizeChanged += (_, _) => Panel.MaxHeight = ActualHeight * 0.82;
     }
 
+    /// <summary>Hors de la fenêtre principale il n'y a pas de barre de gauche à compenser.</summary>
+    public void CenterOnWholeWindow()
+    {
+        if (_centered) Panel.Margin = new Thickness(0);
+    }
+
     protected override FrameworkElement FocusScope => Items;
     public override string Hints => _hints;
     public void SetHints(string hints) => _hints = hints;

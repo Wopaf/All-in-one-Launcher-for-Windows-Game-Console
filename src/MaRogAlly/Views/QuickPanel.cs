@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using MaRogAlly.Input;
 using MaRogAlly.Services;
@@ -17,7 +18,7 @@ namespace MaRogAlly.Views;
 /// </summary>
 public sealed class QuickPanel : UserControl
 {
-    private const int GalleryLimit = 60, KeepModeSeconds = 15, BrightnessMin = 10, Step = 10;
+    private const int QuickColumns = 4, GalleryLimit = 60, KeepModeSeconds = 15, BrightnessMin = 10, Step = 10;
     private static readonly string[] Names = ["Accueil", "Performance", "Audio", "Affichage", "Galerie"];
     private static readonly string[] Glyphs = ["", "", "", "", ""];
     private static HashSet<RadioKind>? _beforeAirplane;
@@ -28,7 +29,11 @@ public sealed class QuickPanel : UserControl
     private readonly bool _hasController, _interactive;
 
     private readonly Grid _root = new();
+    private const double TabWidth = 56, TabGap = 3;
     private readonly StackPanel _tabBar = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
+    private readonly Border _tabPill = new() { Width = TabWidth, Height = 40, CornerRadius = new CornerRadius(12), HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false };
+    private readonly TranslateTransform _tabPillMove = new();
+    private bool _tabPillPlaced;
     private readonly TextBlock _title = new() { FontSize = 26 };
     private readonly StackPanel _items = new();
     private readonly Border _box = new() { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(2), BorderBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)) };
@@ -47,7 +52,9 @@ public sealed class QuickPanel : UserControl
     private readonly object _statsLock = new();
     private bool _sampling, _closed;
 
-    public event Action? CloseRequested, HomeRequested, DesktopRequested, ScreenshotRequested;
+    public event Action? CloseRequested, HomeRequested, DesktopRequested, ScreenshotRequested, WifiRequested, BluetoothRequested;
+    /// <summary>Une image de la galerie est choisie : liste des images, et position de celle-ci.</summary>
+    public event Action<List<string>, int>? ImageRequested;
 
     /// <param name="interactive">Faux pour une capture de vérification : aucun élément ne prend le focus, qui resterait sinon à l'utilisateur.</param>
     public QuickPanel(OpenWindow? target, Func<ControlMode?> readMode, Action<ControlMode> writeMode, bool hasController, int tab, bool interactive = true)
@@ -61,12 +68,14 @@ public sealed class QuickPanel : UserControl
         _highlight = new SlideHighlight(_box, _itemsHost);
         _ticker.Tick += (_, _) => { _ticks++; _onTick?.Invoke(); };
         BuildLayout();
-        Loaded += (_, _) =>
-        {
-            Anim.Slide(_root, -60, 320);
-            ShowTab(_tab);
-        };
+        Loaded += (_, _) => ShowTab(_tab);
     }
+
+    /// <summary>Le contenu arrive un peu après la fenêtre qui glisse, et se pose en dernier.</summary>
+    public void PlayEntrance() => Anim.Enter(_root, dx: -48, dy: 0, ms: 360);
+
+    /// <summary>Le contenu s'efface pendant que la fenêtre repart.</summary>
+    public void PlayExit() => Anim.Exit(_root, dx: -32, ms: 170);
 
     // ================= Structure =================
 
@@ -93,8 +102,12 @@ public sealed class QuickPanel : UserControl
         previous.VerticalAlignment = VerticalAlignment.Center;
         previous.MouseLeftButtonUp += (_, _) => ShowTab(_tab - 1);
         bar.Children.Add(previous);
-        Grid.SetColumn(_tabBar, 1);
-        bar.Children.Add(_tabBar);
+        // La pastille de l'onglet choisi glisse derrière les icônes.
+        _tabPill.Background = (Brush)FindResource("Accent");
+        _tabPill.RenderTransform = _tabPillMove;
+        var tabs = new Grid { HorizontalAlignment = HorizontalAlignment.Center, Children = { _tabPill, _tabBar } };
+        Grid.SetColumn(tabs, 1);
+        bar.Children.Add(tabs);
         var next = PadGlyph("RT");
         next.Margin = new Thickness(0);
         next.VerticalAlignment = VerticalAlignment.Center;
@@ -109,9 +122,9 @@ public sealed class QuickPanel : UserControl
             var index = i;
             var tab = new Border
             {
-                Width = 56,
+                Width = TabWidth,
                 Height = 40,
-                Margin = new Thickness(3, 0, 3, 0),
+                Margin = new Thickness(TabGap, 0, TabGap, 0),
                 CornerRadius = new CornerRadius(12),
                 Background = Brushes.Transparent,
                 Cursor = Cursors.Hand,
@@ -127,6 +140,8 @@ public sealed class QuickPanel : UserControl
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _title.Margin = new Thickness(4, 0, 0, 12);
         body.Children.Add(_title);
+        // Le cadre de sélection passe devant : derrière une vignette de la galerie, il serait caché par l'image.
+        Panel.SetZIndex(_box, 1);
         _itemsHost.Children.Add(_box);
         _itemsHost.Children.Add(_items);
         var scroll = new ScrollViewer { Focusable = false, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden, PanningMode = PanningMode.VerticalOnly, Content = _itemsHost };
@@ -140,7 +155,9 @@ public sealed class QuickPanel : UserControl
         Grid.SetRow(_hints, 3);
         _root.Children.Add(_hints);
 
-        Content = new Grid { Children = { new Border { Background = (Brush)FindResource("PanelBg") }, _root } };
+        // Le fond du volet est légèrement translucide : le fond opaque dessous empêche le jeu de transparaître.
+        var round = new CornerRadius(22);
+        Content = new Grid { Children = { new Border { CornerRadius = round, Background = (Brush)FindResource("Bg") }, new Border { CornerRadius = round, Background = (Brush)FindResource("PanelBg") }, _root } };
     }
 
     private FrameworkElement BuildClock()
@@ -192,8 +209,10 @@ public sealed class QuickPanel : UserControl
         // Un essai d'affichage non confirmé ne survit pas à un changement d'onglet.
         CancelModeTrial();
         _tab = (index + Names.Length) % Names.Length;
-        for (var i = 0; i < _tabBar.Children.Count; i++)
-            ((Border)_tabBar.Children[i]).Background = i == _tab ? (Brush)FindResource("Accent") : Brushes.Transparent;
+        var x = TabGap + _tab * (TabWidth + 2 * TabGap);
+        if (_tabPillPlaced) _tabPillMove.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, Anim.Ms(260)) { EasingFunction = Anim.Spring });
+        else _tabPillMove.X = x;
+        _tabPillPlaced = true;
         BuildTab();
     }
 
@@ -230,7 +249,12 @@ public sealed class QuickPanel : UserControl
     {
         var first = NavRows().FirstOrDefault()?.FirstOrDefault();
         _box.Visibility = first is null ? Visibility.Collapsed : Visibility.Visible;
-        if (!_interactive) return;
+        if (!_interactive)
+        {
+            // Capture de vérification : le cadre de sélection s'affiche, sans prendre le focus.
+            if (first is not null) _highlight.MoveTo(first);
+            return;
+        }
         if (first is not null) Dispatcher.BeginInvoke(() => FocusNav.Focus(first), DispatcherPriority.Loaded);
         else Window.GetWindow(this)?.Focus();
     }
@@ -417,14 +441,17 @@ public sealed class QuickPanel : UserControl
         card.BorderBrush = active ? new LinearGradientBrush(Blue(0x59), Blue(0x14), new Point(0, 0), new Point(1, 1)) : Brushes.Transparent;
     }
 
-    /// <summary>Rangée de tuiles de même largeur : icône (facultative) au-dessus du libellé.</summary>
-    private List<Border> AddTiles(double height, params (string? Glyph, string Label, Action OnClick)[] tiles)
+    private List<Border> AddTiles(double height, params (string? Glyph, string Label, Action OnClick)[] tiles) => AddTileRow(height, tiles.Length, tiles);
+
+    /// <summary>Rangée de tuiles de même taille : icône (facultative) au-dessus du libellé. Une rangée incomplète garde des colonnes vides.</summary>
+    private List<Border> AddTileRow(double height, int columns, (string? Glyph, string Label, Action OnClick)[] tiles)
     {
-        var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
+        // Même marge de chaque côté de toutes les tuiles, que la grille rattrape sur ses bords : aucune n'est plus large qu'une autre.
+        var grid = new Grid { Margin = new Thickness(-4, 0, -4, 8) };
         var cards = new List<Border>();
+        for (var i = 0; i < columns; i++) grid.ColumnDefinitions.Add(new ColumnDefinition());
         for (var i = 0; i < tiles.Length; i++)
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition());
             var (glyph, label, onClick) = tiles[i];
             var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             if (glyph is not null) content.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) });
@@ -433,7 +460,7 @@ public sealed class QuickPanel : UserControl
             card.Height = height;
             cards.Add(card);
             var button = RowButton(card, height, onClick);
-            button.Margin = new Thickness(i == 0 ? 0 : 4, 0, i == tiles.Length - 1 ? 0 : 4, 0);
+            button.Margin = new Thickness(4, 0, 4, 0);
             Grid.SetColumn(button, i);
             grid.Children.Add(button);
         }
@@ -446,22 +473,7 @@ public sealed class QuickPanel : UserControl
     private void BuildHome()
     {
         var screen = _screen;
-        if (AudioMixer.ReadMaster() is { } master)
-        {
-            var muted = master.Muted;
-            Slider? volume = null;
-            volume = AddSlider(muted ? "" : "", null, master.Percent, 0, AudioMixer.SetMaster, () =>
-            {
-                muted = !muted;
-                AudioMixer.SetMasterMuted(muted);
-                volume!.SetMuted(muted);
-                volume.Icon.Text = muted ? "" : "";
-            });
-            volume.SetMuted(muted);
-        }
-        _ = AddBrightnessAsync(screen);
-
-        AddSection("Mode de la manette");
+        AddSection("Mode");
         var modes = new[] { (ControlMode.Auto, "Auto"), (ControlMode.Gamepad, "Manette"), (ControlMode.Desktop, "Bureau") };
         List<Border> modeCards = [];
         void PaintModes()
@@ -481,25 +493,50 @@ public sealed class QuickPanel : UserControl
         PaintModes();
 
         AddSection("Accès rapides");
-        AddTiles(84,
+        AddTileRow(84, QuickColumns,
+        [
             ("", "Fin de tâche", EndTask),
             ("", "Afficher le bureau", () => DesktopRequested?.Invoke()),
             ("", "Accueil", () => HomeRequested?.Invoke()),
-            ("", "Capture d'écran", () => ScreenshotRequested?.Invoke()));
-        var radios = AddTiles(84,
-            ("", "Wi-Fi", () => _ = ToggleRadioAsync(RadioKind.WiFi, "Wi-Fi")),
-            ("", "Bluetooth", () => _ = ToggleRadioAsync(RadioKind.Bluetooth, "Bluetooth")),
-            ("", "Mode avion", () => _ = ToggleAirplaneAsync()));
+            ("", "Capture d'écran", () => ScreenshotRequested?.Invoke()),
+        ]);
+        var radios = AddTileRow(84, QuickColumns,
+        [
+            ("", "Wi-Fi", () => WifiRequested?.Invoke()),
+            ("", "Bluetooth", () => BluetoothRequested?.Invoke()),
+            ("", "Mode avion", () => _ = ToggleAirplaneAsync()),
+        ]);
         _radioCards = radios;
         _ = PaintRadiosAsync(screen);
+
+        _items.Children.Add(new Border { Height = 12 });
+        Button? volumeRow = null;
+        if (AudioMixer.ReadMaster() is { } master)
+        {
+            var muted = master.Muted;
+            Slider? volume = null;
+            volume = AddSlider(muted ? "" : "", null, master.Percent, 0, AudioMixer.SetMaster, () =>
+            {
+                muted = !muted;
+                AudioMixer.SetMasterMuted(muted);
+                volume!.SetMuted(muted);
+                volume.Icon.Text = muted ? "" : "";
+            });
+            volume.SetMuted(muted);
+            volumeRow = volume.Row;
+        }
+        _ = AddBrightnessAsync(screen, volumeRow);
     }
 
-    private async Task AddBrightnessAsync(int screen)
+    /// <summary>Remet à jour Wi-Fi, Bluetooth et mode avion : un interrupteur a pu changer depuis leur fenêtre.</summary>
+    public void RefreshRadios() => _ = PaintRadiosAsync(_screen);
+
+    private async Task AddBrightnessAsync(int screen, Button? volumeRow)
     {
         if (await ScreenBrightness.ReadAsync() is not int level || screen != _screen) return;
-        // Sous le volume s'il existe, en respectant l'arrondi du curseur.
+        // Au-dessus du volume s'il existe, en respectant l'arrondi du curseur.
         var rounded = Math.Clamp((int)Math.Round(level / (double)Step, MidpointRounding.AwayFromZero) * Step, BrightnessMin, 100);
-        AddSlider("", null, rounded, BrightnessMin, ScreenBrightness.Set, insertAt: _items.Children.Count > 0 && _items.Children[0] is Button ? 1 : 0);
+        AddSlider("", null, rounded, BrightnessMin, ScreenBrightness.Set, insertAt: volumeRow is null ? null : _items.Children.IndexOf(volumeRow));
         if (Keyboard.FocusedElement is Button focused) _highlight.MoveTo(focused);
     }
 
@@ -512,14 +549,6 @@ public sealed class QuickPanel : UserControl
         Paint(wifi, all.Any(r => r.Kind == RadioKind.WiFi && r.State == RadioState.On));
         Paint(bluetooth, all.Any(r => r.Kind == RadioKind.Bluetooth && r.State == RadioState.On));
         Paint(airplane, all.Count > 0 && all.All(r => r.State != RadioState.On));
-    }
-
-    private async Task ToggleRadioAsync(RadioKind kind, string name)
-    {
-        var screen = _screen;
-        if (await Radios.FindAsync(kind) is not { } radio) SetStatus($"{name} n'est pas disponible sur cette machine.");
-        else if (!await Radios.SetAsync(radio, radio.State != RadioState.On)) SetStatus($"Windows a refusé de changer l'état de {name}.");
-        await PaintRadiosAsync(screen);
     }
 
     /// <summary>Coupe toutes les radios et retient celles qui étaient allumées, pour les rallumer ensuite.</summary>
@@ -802,7 +831,7 @@ public sealed class QuickPanel : UserControl
                 var image = new Image { Stretch = Stretch.UniformToFill };
                 var frame = new Border { Height = 112, CornerRadius = new CornerRadius(12), ClipToBounds = true, Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)), Child = image };
                 Rounded.SetRadius(frame, 12);
-                var button = RowButton(frame, 112, () => OpenViewer(files, index));
+                var button = RowButton(frame, 112, () => ImageRequested?.Invoke(files, index));
                 button.Margin = new Thickness(j == i ? 0 : 4, 0, j == i ? 4 : 0, 0);
                 Grid.SetColumn(button, j - i);
                 grid.Children.Add(button);
@@ -818,32 +847,6 @@ public sealed class QuickPanel : UserControl
     {
         var thumbnail = await Task.Run(() => ScreenCapture.Load(path, 400));
         if (screen == _screen) image.Source = thumbnail;
-    }
-
-    private void OpenViewer(List<string> files, int index)
-    {
-        var screen = BeginScreen("Galerie");
-        SetHints(("←→", "Précédente / suivante"), ("B", "Retour"));
-        _box.Visibility = Visibility.Collapsed;
-        Window.GetWindow(this)?.Focus();
-        _back = BuildTab;
-        var image = new Image { Stretch = Stretch.Uniform };
-        var name = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("TextSecondary"), Margin = new Thickness(4, 10, 4, 0) };
-        _items.Children.Add(image);
-        _items.Children.Add(name);
-        void Show()
-        {
-            name.Text = $"{index + 1} / {files.Count}  ·  {Path.GetFileNameWithoutExtension(files[index])}";
-            _ = LoadThumbnailAsync(image, files[index], screen);
-        }
-        Show();
-        _screenKeys = action =>
-        {
-            if (action is not (NavAction.Left or NavAction.Right)) return false;
-            index = (index + (action == NavAction.Left ? -1 : 1) + files.Count) % files.Count;
-            Show();
-            return true;
-        };
     }
 
     /// <summary>Volet fermé : plus de mesures, et un essai d'affichage non confirmé est annulé.</summary>

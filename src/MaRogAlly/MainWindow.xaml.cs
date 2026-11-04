@@ -97,6 +97,11 @@ public partial class MainWindow : Window
         _tags = new TagService(_http);
         _appUpdater = new AppUpdater(_http);
         _network = new NetworkMenus(OpenOverlay, Toast, () => _ = RefreshRadioButtonsAsync());
+        _quickNetwork = new NetworkMenus(OpenOnQuickStage, ToastOnQuickStage, () =>
+        {
+            _ = RefreshRadioButtonsAsync();
+            _quickPanel?.Panel.RefreshRadios();
+        });
         GameCategories.TagLabel = _tags.Label;
         _imageCache = new ImageCache(_http);
         _settingsView = new SettingsView(_settings);
@@ -111,7 +116,8 @@ public partial class MainWindow : Window
         BuildTabs();
         WireViews();
 
-        _pad.IsActive = () => _desktop.IsForeground || _quickPanel?.IsForeground == true;
+        // Volet ouvert : la manette le pilote, même si Windows lui a refusé le premier plan.
+        _pad.IsActive = () => _desktop.IsForeground || _quickPanel is not null;
         _pad.Action += OnNav;
         _pad.MinimizeRequested += MinimizeForegroundApp;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
@@ -205,6 +211,15 @@ public partial class MainWindow : Window
         // « --quick 2 » : centre de contrôle sur cet onglet à la place de la fenêtre dans la capture, hors de l'écran et sans focus.
         var quickArg = Array.IndexOf(args, "--quick");
         if (quickArg >= 0) OpenQuickPanel(int.TryParse(args.ElementAtOrDefault(quickArg + 1), out var quickTab) ? quickTab : 0, activate: false);
+        // « --quick-open image|wifi|bluetooth|demo » : ce que le volet ouvre en plein écran, pour vérifier l'affichage.
+        var quickOpenArg = Array.IndexOf(args, "--quick-open");
+        if (quickOpenArg >= 0)
+        {
+            var quickOpen = args.ElementAtOrDefault(quickOpenArg + 1);
+            if (quickOpen == "image") OpenOnQuickStage(new ImageViewer(ScreenCapture.List(60), 0));
+            else if (quickOpen == "bluetooth") _quickNetwork.OpenBluetooth();
+            else _quickNetwork.OpenWifi(demo: quickOpen == "demo");
+        }
         if (args.Contains("--sort-size"))
         {
             _installed.Filter.Sort = SortMode.Size;
@@ -269,7 +284,7 @@ public partial class MainWindow : Window
             render.Tick += (_, _) =>
             {
                 render.Stop();
-                Window shot = _quickPanel is { } quickShot ? quickShot : this;
+                Window shot = _quickPanel is { } quickShot ? (Window?)quickShot.Stage ?? quickShot : this;
                 var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)shot.ActualWidth, (int)shot.ActualHeight, 96, 96, PixelFormats.Pbgra32);
                 bmp.Render(shot);
                 var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
@@ -1447,9 +1462,18 @@ public partial class MainWindow : Window
 
     private void OnNav(NavAction action)
     {
-        UiSounds.OnNav(action, onKeyboard: _overlays.LastOrDefault() is KeyboardPanel);
+        // Le volet repart et le jeu a repris la main : ces boutons sont pour lui.
+        if (_quickPanel is { IsClosing: true }) return;
+        var onStage = _quickPanel?.Stage?.Current;
+        UiSounds.OnNav(action, onKeyboard: (onStage ?? _overlays.LastOrDefault()) is KeyboardPanel);
         if (_quickPanel is { } quick)
         {
+            // Entrée valide le clavier (action Menu) ; ailleurs, Menu referme tout le volet.
+            if (onStage is not null && action != NavAction.Home && (action != NavAction.Menu || onStage is KeyboardPanel))
+            {
+                onStage.Handle(action);
+                return;
+            }
             if (action == NavAction.Menu) quick.CloseOnce();
             else if (action == NavAction.Home) QuickPanelHome();
             else quick.Panel.Handle(action);
@@ -1540,7 +1564,8 @@ public partial class MainWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        var typing = _overlays.LastOrDefault() is KeyboardPanel;
+        var onStage = _quickPanel?.Stage?.Current;
+        var typing = (onStage ?? _overlays.LastOrDefault()) is KeyboardPanel;
         NavAction? a = e.Key switch
         {
             Key.Left => NavAction.Left,
@@ -1549,7 +1574,7 @@ public partial class MainWindow : Window
             Key.Down => NavAction.Down,
             Key.Enter => typing ? NavAction.Menu : NavAction.Accept,
             // Échap ouvre le menu Start quand il n'y a rien à refermer.
-            Key.Escape => _overlays.Count == 0 && _subView is null ? NavAction.Menu : NavAction.Back,
+            Key.Escape => onStage is null && _overlays.Count == 0 && _subView is null ? NavAction.Menu : NavAction.Back,
             Key.Back => typing ? NavAction.Option : NavAction.Back,
             Key.Tab => Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? NavAction.PrevTab : NavAction.NextTab,
             Key.PageUp => NavAction.PrevLetter,
@@ -1568,7 +1593,7 @@ public partial class MainWindow : Window
 
     private void OnTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (_overlays.LastOrDefault() is not KeyboardPanel kb || string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
+        if ((_quickPanel?.Stage?.Current ?? _overlays.LastOrDefault()) is not KeyboardPanel kb || string.IsNullOrEmpty(e.Text) || char.IsControl(e.Text[0])) return;
         kb.Type(e.Text);
         e.Handled = true;
     }
@@ -2265,7 +2290,7 @@ public partial class MainWindow : Window
     }
 
     private MainMenu? _systemMenu;
-    private readonly NetworkMenus _network;
+    private readonly NetworkMenus _network, _quickNetwork;
 
     /// <summary>Boutons Wi-Fi et Bluetooth du menu principal : en bleu quand la fonction est activée.</summary>
     private async Task RefreshRadioButtonsAsync()
@@ -2323,8 +2348,16 @@ public partial class MainWindow : Window
     private GlobalHotkeys? _hotkeys;
     private QuickPanelWindow? _quickPanel;
 
+    private DateTime _lastQuickPanelKey;
+
     private void OnQuickPanelKey()
     {
+        // Un appui peut arriver en double depuis Armoury Crate : le volet s'ouvrirait et se refermerait aussitôt.
+        var now = DateTime.UtcNow;
+        var bounced = now - _lastQuickPanelKey < TimeSpan.FromMilliseconds(350);
+        _lastQuickPanelKey = now;
+        Log.Info($"Centre de contrôle : touche reçue{(bounced ? " en double, ignorée" : "")}, volet {(_quickPanel is null ? "fermé" : "ouvert")}");
+        if (bounced) return;
         if (_quickPanel is { } open) open.CloseOnce();
         else OpenQuickPanel();
     }
@@ -2341,11 +2374,31 @@ public partial class MainWindow : Window
             WindowsShell.ShowDesktop();
         };
         panel.ScreenshotRequested += () => _ = TakeScreenshotAsync(window);
+        panel.WifiRequested += () => _quickNetwork.OpenWifi();
+        panel.BluetoothRequested += _quickNetwork.OpenBluetooth;
+        panel.ImageRequested += (files, index) => OpenOnQuickStage(new ImageViewer(files, index));
+        window.StageCreated += stage =>
+        {
+            stage.PreviewKeyDown += OnKeyDown;
+            stage.PreviewTextInput += OnTextInput;
+        };
         window.PreviewKeyDown += OnKeyDown;
         window.Closed += (_, _) => { if (_quickPanel == window) _quickPanel = null; };
         _quickPanel = window;
-        window.Show();
-        if (activate) DesktopHost.TakeForeground(window, window.Handle);
+        window.Open();
+    }
+
+    /// <summary>Par-dessus le jeu tant que le volet est ouvert ; un panneau demandé plus tard (association Bluetooth) revient à la fenêtre principale.</summary>
+    private void OpenOnQuickStage(OverlayBase overlay)
+    {
+        if (_quickPanel is { IsClosing: false } window) window.ShowOnStage(overlay);
+        else OpenOverlay(overlay);
+    }
+
+    private void ToastOnQuickStage(string icon, string text)
+    {
+        if (_quickPanel?.Stage is { } stage) stage.ShowToast(icon, text);
+        else Toast(icon, text);
     }
 
     /// <summary>Retour à l'application : les autres fenêtres sont réduites, et on arrive sur Mes Jeux.</summary>
@@ -2365,7 +2418,8 @@ public partial class MainWindow : Window
     private async Task TakeScreenshotAsync(QuickPanelWindow window)
     {
         window.CloseOnce();
-        await Task.Delay(350);
+        await window.Gone;
+        await Task.Delay(150);
         if (await ScreenCapture.SaveAsync() is not null) UiSounds.PlaySearch();
         else Toast("\uE783", "Impossible d'enregistrer la capture");
     }
