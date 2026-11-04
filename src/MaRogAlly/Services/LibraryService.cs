@@ -69,8 +69,18 @@ public sealed class LibraryService(AppSettings settings, HttpClient http)
             var owned = r.Owned ?? previous.Where(p => p.Platform == r.Scanner.Platform && (!online || !p.IsInstalled)).ToList();
             foreach (var o in owned)
             {
-                if (byId.TryGetValue(o.Id, out var installed))
+                // GOG Galaxy n'a pas toujours le même identifiant que le lanceur (Hearthstone : hs_beta / WTCG) :
+                // à titre identique sur la même plateforme, c'est le jeu installé.
+                var title = Text.Normalize(o.Title);
+                var installed = byId.GetValueOrDefault(o.Id)
+                                ?? (title.Length == 0 ? null : r.Installed.FirstOrDefault(g => Text.Normalize(g.Title) == title));
+                if (installed is not null)
                 {
+                    if (installed.Id != o.Id && galaxy.PlayTime(o.Platform, o.PlatformId) is { } time)
+                    {
+                        installed.PlaytimeMinutes ??= time.Minutes;
+                        installed.PlatformLastPlayed ??= time.Last;
+                    }
                     installed.PlaytimeMinutes ??= o.PlaytimeMinutes;
                     installed.CoverUrl ??= o.CoverUrl;
                     installed.HeroUrl ??= o.HeroUrl;

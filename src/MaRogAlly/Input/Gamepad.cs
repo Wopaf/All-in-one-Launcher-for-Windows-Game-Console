@@ -16,6 +16,7 @@ public enum NavAction
     PrevLetter,  // LT
     NextLetter,  // RT
     Menu,        // Start : menu système
+    Home,        // Select (View) : tout fermer et revenir à Mes Jeux
 }
 
 /// <summary>
@@ -87,6 +88,7 @@ public sealed class Gamepad : IDisposable
         if (Has(pressed, Buttons.LeftShoulder)) Raise(NavAction.PrevTab);
         if (Has(pressed, Buttons.RightShoulder)) Raise(NavAction.NextTab);
         if (Has(pressed, Buttons.Start)) Raise(NavAction.Menu);
+        if (Has(pressed, Buttons.Back)) Raise(NavAction.Home);
 
         var lt = pad.LeftTrigger > TriggerThreshold;
         var rt = pad.RightTrigger > TriggerThreshold;

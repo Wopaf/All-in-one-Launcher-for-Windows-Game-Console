@@ -251,7 +251,7 @@
                 </Grid.RowDefinitions>
                 <TextBlock x:Name="ResultsLabel" Style="{StaticResource Label}" Text="RÉSULTATS" VerticalAlignment="Center" Margin="64,0,0,14"/>
 
-                <ScrollViewer x:Name="HitsScroll" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
+                <ScrollViewer x:Name="HitsScroll" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26" ui:EdgeFade.Size="64">
                     <ItemsControl x:Name="Hits" ItemTemplate="{StaticResource HitCard}" Focusable="False" Margin="64,26,26,26">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
@@ -261,7 +261,7 @@
                     </ItemsControl>
                 </ScrollViewer>
 
-                <ScrollViewer x:Name="NewScroll" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26">
+                <ScrollViewer x:Name="NewScroll" Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26" ui:EdgeFade.Size="64">
                     <ItemsControl x:Name="NewGames" ItemTemplate="{StaticResource NewCard}" Focusable="False" Margin="64,26,26,26">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>

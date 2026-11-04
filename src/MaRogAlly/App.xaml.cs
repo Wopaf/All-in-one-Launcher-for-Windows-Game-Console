@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using MaRogAlly.Core;
 using MaRogAlly.Models;
@@ -38,6 +39,9 @@ public partial class App : Application
         AppPaths.Ensure();
         Log.Info($"Démarrage {typeof(App).Assembly.GetName().Version} ({string.Join(' ', e.Args)})");
         DispatcherUnhandledException += OnUnhandled;
+
+        // Pas d'infobulles Windows dans toute l'appli. La propriété ToolTip reste lue comme texte des libellés maison (barre latérale, fiche de jeu).
+        ToolTipService.IsEnabledProperty.OverrideMetadata(typeof(FrameworkElement), new FrameworkPropertyMetadata(false));
 
         var settings = AppSettings.Load();
         UI.AppTheme.Apply(settings.Theme);

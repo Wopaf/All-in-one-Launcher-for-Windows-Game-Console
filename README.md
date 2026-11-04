@@ -19,6 +19,7 @@ L'exécutable n'est pas signé : Windows peut afficher un avertissement au premi
 | X | F | Filtres |
 | Y | Espace | Trier |
 | Menu (≡) | Échap, T | Menu : réglages, statistiques, plateformes, stockage, mises à jour, veille, arrêt |
+| Select (⧉) | Origine | Tout fermer et revenir à Mes Jeux |
 | B (depuis une autre fenêtre) | | Réduire cette fenêtre, sauf un jeu de la bibliothèque ou une fenêtre en plein écran |
 | LB / RB | Maj+Tab / Tab | Onglet précédent / suivant |
 | LT / RT | Page préc. / suiv. | Bibliothèque : catégorie précédente / suivante |

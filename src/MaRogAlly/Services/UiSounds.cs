@@ -78,7 +78,7 @@ public static class UiSounds
             case NavAction.Accept:
                 Play("clic");
                 break;
-            case NavAction.Back or NavAction.PrevTab or NavAction.NextTab:
+            case NavAction.Back or NavAction.PrevTab or NavAction.NextTab or NavAction.Home:
                 Play("switch");
                 break;
         }

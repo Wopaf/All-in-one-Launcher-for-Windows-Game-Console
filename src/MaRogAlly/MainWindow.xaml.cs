@@ -268,6 +268,22 @@ public partial class MainWindow : Window
             render.Start();
         }
         if (args.Contains("--platforms")) OpenSubPage(_platforms);
+        // « --home 3 » : appuie sur Select après 3 s, pour vérifier la fermeture de tout ce qui est ouvert.
+        var homeArg = Array.IndexOf(args, "--home");
+        if (homeArg >= 0 && double.TryParse(args.ElementAtOrDefault(homeArg + 1), System.Globalization.CultureInfo.InvariantCulture, out var homeAfter))
+        {
+            var home = new DispatcherTimer { Interval = TimeSpan.FromSeconds(homeAfter) };
+            home.Tick += (_, _) => { home.Stop(); OnNav(NavAction.Home); };
+            home.Start();
+        }
+        // « --row 0.5 » : amène la rangée de Découverte à cette position (0 à 1) une fois chargée, pour vérifier ses dégradés.
+        var rowArg = Array.IndexOf(args, "--row");
+        if (rowArg >= 0 && double.TryParse(args.ElementAtOrDefault(rowArg + 1), System.Globalization.CultureInfo.InvariantCulture, out var rowAt))
+        {
+            var row = new DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+            row.Tick += (_, _) => { row.Stop(); _explore.PreviewRow(rowAt); };
+            row.Start();
+        }
         // « --replay » : rejoue l'apparition des jaquettes juste avant la capture (« --render »), pour la voir en cours.
         if (args.Contains("--replay"))
         {
@@ -1420,6 +1436,11 @@ public partial class MainWindow : Window
     private void OnNav(NavAction action)
     {
         UiSounds.OnNav(action, onKeyboard: _overlays.LastOrDefault() is KeyboardPanel);
+        if (action == NavAction.Home)
+        {
+            GoHome();
+            return;
+        }
         if (LaunchSplash.Visibility == Visibility.Visible)
         {
             if (action == NavAction.Back) HideLaunchSplash();
@@ -1485,6 +1506,19 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Bouton Select : referme tous les panneaux et les pages ouvertes, puis revient sur Mes Jeux.</summary>
+    private void GoHome()
+    {
+        HideLaunchSplash();
+        // Pas de retour au menu principal, même si la page fermée a été ouverte depuis lui.
+        _menuBehind = null;
+        foreach (var overlay in Enumerable.Reverse(_overlays).ToList()) overlay.Close();
+        if (Dock.IsKeyboardFocusWithin) FocusSink.Focus();
+
+        var home = Array.FindIndex(_pages, p => p.View == _installed);
+        if (_page != home || _subView is not null) ShowPage(home);
+    }
+
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
         var typing = _overlays.LastOrDefault() is KeyboardPanel;
@@ -1503,6 +1537,7 @@ public partial class MainWindow : Window
             Key.PageDown => NavAction.NextLetter,
             Key.F when !typing => NavAction.Option,
             Key.T when !typing => NavAction.Menu,
+            Key.Home when !typing => NavAction.Home,
             Key.Space when !typing => NavAction.Secondary,
             Key.F4 when Keyboard.Modifiers == ModifierKeys.Alt => null,
             _ => null,
@@ -2288,12 +2323,6 @@ public partial class MainWindow : Window
             _settingsView.ResetSelection();
             OpenSubPage(_settingsView);
         }));
-        menu.AddIconButtons(
-            ("\uE701", "Wi-Fi", () => _network.OpenWifi()),
-            ("\uE702", "Bluetooth", _network.OpenBluetooth),
-            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }),
-            ("\uE7F4", "Bureau", () => { menu.Close(); WindowsShell.ShowDesktop(); }));
-
         if (_brightness is int brightness)
         {
             menu.AddBrightness(brightness, level =>
@@ -2303,6 +2332,12 @@ public partial class MainWindow : Window
             });
             _ = SyncBrightnessAsync(menu);
         }
+
+        menu.AddIconButtons(
+            ("\uE701", "Wi-Fi", () => _network.OpenWifi()),
+            ("\uE702", "Bluetooth", _network.OpenBluetooth),
+            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }),
+            ("\uE7F4", "Bureau", () => { menu.Close(); WindowsShell.ShowDesktop(); }));
 
         menu.AddButtons(
             ("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats)),

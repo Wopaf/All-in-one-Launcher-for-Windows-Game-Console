@@ -228,6 +228,13 @@ public partial class ExploreView : UserControl
         else Dispatcher.BeginInvoke(() => FocusNav.Focus(SearchButton), DispatcherPriority.Input);
     }
 
+    /// <summary>Amène la rangée affichée à une position (0 à 1), pour vérifier l'affichage (« --row »).</summary>
+    public void PreviewRow(double position)
+    {
+        var row = HitsScroll.Visibility == Visibility.Visible ? HitsScroll : NewScroll;
+        row.ScrollToHorizontalOffset(row.ScrollableWidth * position);
+    }
+
     /// <summary>Sans recherche : la section Nouveautés occupe le milieu de l'écran.</summary>
     private void ShowNewSection()
     {

@@ -101,8 +101,7 @@ public partial class DockBar : UserControl
 
     private void Track(Button b)
     {
-        // La même infobulle au survol qu'à la sélection, à la place de celle de Windows.
-        ToolTipService.SetIsEnabled(b, false);
+        // Le même libellé au survol qu'à la sélection.
         b.MouseEnter += (_, _) => ShowLabel(b, LabelOf(b));
         b.MouseLeave += (_, _) =>
         {

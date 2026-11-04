@@ -50,7 +50,8 @@ public sealed class EpicScanner : GameScanner
                 var r = doc.RootElement;
                 var appName = Str(r, "AppName");
                 var main = Str(r, "MainGameAppName");
-                if (appName is null || (main is not null && main != appName)) continue; // DLC
+                // DLC : rattaché à un autre jeu. Les jeux de base ont un MainGameAppName vide ou égal à leur AppName.
+                if (appName is null || (!string.IsNullOrEmpty(main) && main != appName)) continue;
                 if (Str(r, "DisplayName") is { } dn && (dn.Contains("(DLC)", StringComparison.OrdinalIgnoreCase) || IsTool(dn))) continue;
                 if (r.TryGetProperty("bIsIncompleteInstall", out var inc) && inc.ValueKind == JsonValueKind.True) continue;
                 if (r.TryGetProperty("AppCategories", out var cats) && cats.ValueKind == JsonValueKind.Array
