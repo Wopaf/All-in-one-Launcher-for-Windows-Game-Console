@@ -10,7 +10,7 @@
             <Setter Property="FontFamily" Value="{StaticResource Display}"/>
             <Setter Property="FontSize" Value="24"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Height" Value="64"/>
+            <Setter Property="Height" Value="82"/>
             <Setter Property="Margin" Value="3"/>
             <Setter Property="Tag">
                 <Setter.Value>
@@ -145,9 +145,9 @@
                         <!-- Rangées décalées d'un clavier classique. Une touche de lettre fait 2 colonnes : la deuxième rangée part d'une demi-touche, la troisième d'une touche. -->
                         <Grid x:Name="Keys">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="70"/>
-                                <RowDefinition Height="70"/>
-                                <RowDefinition Height="70"/>
+                                <RowDefinition Height="88"/>
+                                <RowDefinition Height="88"/>
+                                <RowDefinition Height="88"/>
                             </Grid.RowDefinitions>
                             <Button x:Name="BackspaceButton" Grid.Column="20" Grid.ColumnSpan="4" Style="{StaticResource FnKey}" ToolTip="Effacer" Click="Backspace_Click">
                                 <TextBlock Text="&#xE750;" FontFamily="{StaticResource Icons}" FontSize="24"/>

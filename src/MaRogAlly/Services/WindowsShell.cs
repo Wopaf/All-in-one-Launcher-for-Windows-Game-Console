@@ -80,6 +80,10 @@ public static class WindowsShell
         return Enumerate(self).FirstOrDefault(w => w.Handle == foreground);
     }
 
+    /// <summary>Application Paramètres de Windows.</summary>
+    public static bool IsWindowsSettings(OpenWindow window)
+        => window.IconSource?.Contains("windows.immersivecontrolpanel_", StringComparison.OrdinalIgnoreCase) == true;
+
     /// <summary>Sans barre de titre et sur tout le moniteur : un jeu, ou une vidéo en plein écran.</summary>
     public static bool IsFullscreen(IntPtr hwnd)
     {

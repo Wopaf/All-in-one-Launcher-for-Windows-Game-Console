@@ -2480,7 +2480,7 @@ public partial class MainWindow : Window
         timer.Tick += (_, _) =>
         {
             if (_desktop.IsForeground || _quickPanel is not null) WriteControlMode(true);
-            else if (WindowsShell.ForegroundApp(_desktop.Handle) is { } app) WriteControlMode(WindowsShell.IsFullscreen(app.Handle) || IsGameWindow(app));
+            else if (WindowsShell.ForegroundApp(_desktop.Handle) is { } app) WriteControlMode(WindowsShell.IsFullscreen(app.Handle) || IsGamepadWindow(app));
         };
         return timer;
     }
@@ -2914,11 +2914,14 @@ public partial class MainWindow : Window
     private void MinimizeForegroundApp()
     {
         if (!_settings.MinimizeWithB) return;
-        if (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || WindowsShell.IsFullscreen(app.Handle) || IsGameWindow(app)) return;
+        if (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || WindowsShell.IsFullscreen(app.Handle) || IsGamepadWindow(app)) return;
         WindowsShell.Minimize(app.Handle);
         // Plus aucune fenêtre affichée : on revient sur l'application plutôt que sur le bureau.
         if (WindowsShell.Enumerate(_desktop.Handle).All(w => w.Minimized)) _desktop.BringToFront();
     }
+
+    /// <summary>Se pilote à la manette : un jeu, ou les paramètres de Windows, où B sert à revenir en arrière et ne doit pas réduire la fenêtre.</summary>
+    private bool IsGamepadWindow(OpenWindow window) => IsGameWindow(window) || WindowsShell.IsWindowsSettings(window);
 
     private bool IsGameWindow(OpenWindow window)
         => window.IconSource is { } path && _games.Any(g => g.InstallDir is { Length: > 0 } dir && path.StartsWith(dir.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase));
