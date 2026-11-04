@@ -24,6 +24,21 @@ public static class Radios
         }
     }
 
+    /// <summary>Toutes les radios de la machine ; liste vide si Windows en refuse l'accès.</summary>
+    public static async Task<List<Radio>> AllAsync()
+    {
+        try
+        {
+            if (await Radio.RequestAccessAsync() != RadioAccessStatus.Allowed) return [];
+            return (await Radio.GetRadiosAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Lecture des connexions sans fil", ex);
+            return [];
+        }
+    }
+
     public static async Task<bool> IsOnAsync(RadioKind kind) => (await FindAsync(kind))?.State == RadioState.On;
 
     /// <summary>Faux si Windows a refusé (ex. mode avion imposé par le système).</summary>

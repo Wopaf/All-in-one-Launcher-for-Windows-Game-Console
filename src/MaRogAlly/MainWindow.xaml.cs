@@ -111,7 +111,7 @@ public partial class MainWindow : Window
         BuildTabs();
         WireViews();
 
-        _pad.IsActive = () => _desktop.IsForeground;
+        _pad.IsActive = () => _desktop.IsForeground || _quickPanel?.IsForeground == true;
         _pad.Action += OnNav;
         _pad.MinimizeRequested += MinimizeForegroundApp;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
@@ -133,6 +133,14 @@ public partial class MainWindow : Window
         };
 
         Loaded += OnLoaded;
+        SourceInitialized += (_, _) =>
+        {
+            // Pas pour une capture de vérification : elle tourne à côté de l'application ouverte.
+            if (Environment.GetCommandLineArgs().Contains("--render")) return;
+            _hotkeys = new GlobalHotkeys(_desktop.Handle);
+            _hotkeys.Pressed += OnQuickPanelKey;
+            _ = PrepareControllerAsync();
+        };
         Activated += OnActivated;
         PreviewKeyDown += OnKeyDown;
         PreviewTextInput += OnTextInput;
@@ -194,6 +202,9 @@ public partial class MainWindow : Window
         if (args.Contains("--storage")) OpenStorage();
         if (args.Contains("--detail") && _installed.Source.FirstOrDefault() is { } firstGame) OpenDetail(firstGame);
         if (args.Contains("--menu")) OpenSystemMenu();
+        // « --quick 2 » : centre de contrôle sur cet onglet à la place de la fenêtre dans la capture, hors de l'écran et sans focus.
+        var quickArg = Array.IndexOf(args, "--quick");
+        if (quickArg >= 0) OpenQuickPanel(int.TryParse(args.ElementAtOrDefault(quickArg + 1), out var quickTab) ? quickTab : 0, activate: false);
         if (args.Contains("--sort-size"))
         {
             _installed.Filter.Sort = SortMode.Size;
@@ -258,8 +269,9 @@ public partial class MainWindow : Window
             render.Tick += (_, _) =>
             {
                 render.Stop();
-                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)ActualWidth, (int)ActualHeight, 96, 96, PixelFormats.Pbgra32);
-                bmp.Render(this);
+                Window shot = _quickPanel is { } quickShot ? quickShot : this;
+                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap((int)shot.ActualWidth, (int)shot.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+                bmp.Render(shot);
                 var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
                 png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
                 using (var file = File.Create(args[renderArg + 1])) png.Save(file);
@@ -1436,6 +1448,13 @@ public partial class MainWindow : Window
     private void OnNav(NavAction action)
     {
         UiSounds.OnNav(action, onKeyboard: _overlays.LastOrDefault() is KeyboardPanel);
+        if (_quickPanel is { } quick)
+        {
+            if (action == NavAction.Menu) quick.CloseOnce();
+            else if (action == NavAction.Home) QuickPanelHome();
+            else quick.Panel.Handle(action);
+            return;
+        }
         if (action == NavAction.Home)
         {
             GoHome();
@@ -2297,6 +2316,107 @@ public partial class MainWindow : Window
         menu.IsHitTestVisible = true;
         OpenOverlay(menu);
         _ = RefreshRadioButtonsAsync();
+    }
+
+    // ---- Centre de contrôle, par-dessus toute application (bouton M1, relié à une touche dans Armoury Crate) ----
+
+    private GlobalHotkeys? _hotkeys;
+    private QuickPanelWindow? _quickPanel;
+
+    private void OnQuickPanelKey()
+    {
+        if (_quickPanel is { } open) open.CloseOnce();
+        else OpenQuickPanel();
+    }
+
+    private void OpenQuickPanel(int tab = 0, bool activate = true)
+    {
+        var panel = new QuickPanel(WindowsShell.ForegroundApp(_desktop.Handle), ReadControlMode, ChooseControlMode, _hasController, tab, activate);
+        var window = new QuickPanelWindow(panel, EffectiveUiScale(_settings.UiScale), activate);
+        panel.HomeRequested += QuickPanelHome;
+        panel.DesktopRequested += () =>
+        {
+            window.RestorePrevious = false;
+            window.CloseOnce();
+            WindowsShell.ShowDesktop();
+        };
+        panel.ScreenshotRequested += () => _ = TakeScreenshotAsync(window);
+        window.PreviewKeyDown += OnKeyDown;
+        window.Closed += (_, _) => { if (_quickPanel == window) _quickPanel = null; };
+        _quickPanel = window;
+        window.Show();
+        if (activate) DesktopHost.TakeForeground(window, window.Handle);
+    }
+
+    /// <summary>Retour à l'application : les autres fenêtres sont réduites, et on arrive sur Mes Jeux.</summary>
+    private void QuickPanelHome()
+    {
+        if (_quickPanel is { } window)
+        {
+            window.RestorePrevious = false;
+            window.CloseOnce();
+        }
+        foreach (var other in WindowsShell.Enumerate(_desktop.Handle).Where(w => !w.Minimized)) WindowsShell.Minimize(other.Handle);
+        _desktop.BringToFront();
+        GoHome();
+    }
+
+    /// <summary>Le volet se ferme d'abord, et le jeu reprend le premier plan : il ne doit pas figurer sur l'image.</summary>
+    private async Task TakeScreenshotAsync(QuickPanelWindow window)
+    {
+        window.CloseOnce();
+        await Task.Delay(350);
+        if (await ScreenCapture.SaveAsync() is not null) UiSounds.PlaySearch();
+        else Toast("\uE783", "Impossible d'enregistrer la capture");
+    }
+
+    // ---- Mode de la manette : rien n'est écrit tant qu'aucun mode n'a été choisi ----
+
+    private bool _hasController;
+    private bool? _writtenGamepad;
+    private DispatcherTimer? _autoControl;
+
+    private ControlMode? ReadControlMode() => Enum.TryParse<ControlMode>(_settings.ControlMode, out var mode) ? mode : null;
+
+    private async Task PrepareControllerAsync()
+    {
+        _hasController = await Task.Run(() => AllyController.IsAvailable);
+        if (_hasController && ReadControlMode() == ControlMode.Auto) StartAutoControl();
+    }
+
+    private void ChooseControlMode(ControlMode mode)
+    {
+        _settings.ControlMode = mode.ToString();
+        _settings.Save();
+        _autoControl?.Stop();
+        _writtenGamepad = null;
+        if (mode == ControlMode.Auto) StartAutoControl();
+        else WriteControlMode(mode == ControlMode.Gamepad);
+    }
+
+    private void WriteControlMode(bool gamepad)
+    {
+        if (_writtenGamepad == gamepad) return;
+        _writtenGamepad = gamepad;
+        _ = AllyController.WriteAsync(gamepad);
+    }
+
+    /// <summary>Auto : manette sur l'application, sur un jeu et en plein écran ; bureau ailleurs. Un volet du système ne change rien.</summary>
+    private void StartAutoControl()
+    {
+        _autoControl ??= CreateAutoControl();
+        _autoControl.Start();
+    }
+
+    private DispatcherTimer CreateAutoControl()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        timer.Tick += (_, _) =>
+        {
+            if (_desktop.IsForeground || _quickPanel is not null) WriteControlMode(true);
+            else if (WindowsShell.ForegroundApp(_desktop.Handle) is { } app) WriteControlMode(WindowsShell.IsFullscreen(app.Handle) || IsGameWindow(app));
+        };
+        return timer;
     }
 
     private bool _menuWarmed;

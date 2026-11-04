@@ -61,11 +61,16 @@ public sealed class DesktopHost
         if (_hwnd == IntPtr.Zero) return;
         if (_window.WindowState == WindowState.Minimized) _window.WindowState = WindowState.Normal;
         _window.Show();
-        // Windows ne cède le premier plan qu'à l'application qui a reçu la dernière saisie : touche sans effet (F24).
+        TakeForeground(_window, _hwnd);
+    }
+
+    /// <summary>Windows ne cède le premier plan qu'à l'application qui a reçu la dernière saisie : touche sans effet (F24).</summary>
+    public static void TakeForeground(Window window, IntPtr hwnd)
+    {
         keybd_event(VK_F24, 0, 0, UIntPtr.Zero);
         keybd_event(VK_F24, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
-        _window.Activate();
-        SetForegroundWindow(_hwnd);
+        window.Activate();
+        SetForegroundWindow(hwnd);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

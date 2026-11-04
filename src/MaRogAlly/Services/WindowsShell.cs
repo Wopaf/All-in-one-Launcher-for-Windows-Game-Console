@@ -88,6 +88,24 @@ public static class WindowsShell
         return GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), ref monitor)
             && window.Left <= monitor.Screen.Left && window.Top <= monitor.Screen.Top && window.Right >= monitor.Screen.Right && window.Bottom >= monitor.Screen.Bottom;
     }
+    /// <summary>Fin de tâche : arrête de force le processus de cette fenêtre. Faux si Windows refuse (application administrateur).</summary>
+    public static bool EndProcess(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out var pid);
+        if (pid == 0 || pid == Environment.ProcessId) return false;
+        try
+        {
+            using var process = System.Diagnostics.Process.GetProcessById((int)pid);
+            process.Kill();
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            Log.Error("Fin de tâche", ex);
+            return false;
+        }
+    }
+
     /// <summary>Demande polie : l'application peut proposer d'enregistrer avant de se fermer.</summary>
     public static void Close(IntPtr hwnd) => PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
 

@@ -17,6 +17,9 @@ public sealed class AppSettings
     /// <summary>SteamID64 ; détecté automatiquement s'il est vide.</summary>
     public string SteamId { get; set; } = "";
 
+    /// <summary>Mode de la manette choisi dans le centre de contrôle (Auto, Gamepad, Desktop) ; vide : on n'y touche pas.</summary>
+    public string? ControlMode { get; set; }
+
     public bool StartWithWindows { get; set; } = true;
     public bool MinimizeOnLaunch { get; set; } = false;
     /// <summary>Masque automatiquement la barre des tâches de Windows tant que l'application tourne.</summary>

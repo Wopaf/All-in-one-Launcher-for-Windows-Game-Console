@@ -20,6 +20,7 @@ L'exécutable n'est pas signé : Windows peut afficher un avertissement au premi
 | Y | Espace | Trier |
 | Menu (≡) | Échap, T | Menu : réglages, statistiques, plateformes, stockage, mises à jour, veille, arrêt |
 | Select (⧉) | Origine | Tout fermer et revenir à Mes Jeux |
+| M1 (à relier dans Armoury Crate) | Arrêt défil, Pause ou F13 | Centre de contrôle à gauche, par-dessus l'application au premier plan : LT / RT changent d'onglet (accueil, performance, audio, affichage, galerie) |
 | B (depuis une autre fenêtre) | | Réduire cette fenêtre, sauf un jeu de la bibliothèque ou une fenêtre en plein écran |
 | LB / RB | Maj+Tab / Tab | Onglet précédent / suivant |
 | LT / RT | Page préc. / suiv. | Bibliothèque : catégorie précédente / suivante |
