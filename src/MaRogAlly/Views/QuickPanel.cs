@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using MaRogAlly.Input;
 using MaRogAlly.Services;
@@ -102,8 +103,10 @@ public sealed class QuickPanel : UserControl
         previous.VerticalAlignment = VerticalAlignment.Center;
         previous.MouseLeftButtonUp += (_, _) => ShowTab(_tab - 1);
         bar.Children.Add(previous);
-        // La pastille de l'onglet choisi glisse derrière les icônes.
-        _tabPill.Background = (Brush)FindResource("Accent");
+        // La pastille de l'onglet choisi glisse derrière les icônes, en blanc discret : la couleur d'accent reste aux réglages activés.
+        _tabPill.Background = new SolidColorBrush(Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF));
+        _tabPill.BorderBrush = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
+        _tabPill.BorderThickness = new Thickness(1);
         _tabPill.RenderTransform = _tabPillMove;
         var tabs = new Grid { HorizontalAlignment = HorizontalAlignment.Center, Children = { _tabPill, _tabBar } };
         Grid.SetColumn(tabs, 1);
@@ -157,7 +160,9 @@ public sealed class QuickPanel : UserControl
 
         // Le fond du volet est légèrement translucide : le fond opaque dessous empêche le jeu de transparaître.
         var round = new CornerRadius(22);
-        Content = new Grid { Children = { new Border { CornerRadius = round, Background = (Brush)FindResource("Bg") }, new Border { CornerRadius = round, Background = (Brush)FindResource("PanelBg") }, _root } };
+        // L'ombre est portée par ce fond immobile : elle n'est pas recalculée quand le contenu s'anime.
+        var shaded = new Border { CornerRadius = round, Background = (Brush)FindResource("Bg"), Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 36, ShadowDepth = 0, Opacity = 0.55 } };
+        Content = new Grid { Children = { shaded, new Border { CornerRadius = round, Background = (Brush)FindResource("PanelBg") }, _root } };
     }
 
     private FrameworkElement BuildClock()
@@ -431,14 +436,16 @@ public sealed class QuickPanel : UserControl
         return new Slider(row, m => { muted = m; Show(); }, icon);
     }
 
-    private static void Paint(Border card, bool active)
+    /// <summary>Réglage activé : dégradé à la couleur d'accent.</summary>
+    private void Paint(Border card, bool active)
     {
-        static Color Blue(byte alpha) => Color.FromArgb(alpha, 0x2D, 0x8C, 0xFF);
+        var accent = (Color)FindResource("AccentColor");
+        Color Tint(byte alpha) => Color.FromArgb(alpha, accent.R, accent.G, accent.B);
         card.BorderThickness = new Thickness(1);
         card.Background = active
-            ? new LinearGradientBrush(new GradientStopCollection { new(Blue(0x4D), 0), new(Blue(0x14), 1) }, new Point(0, 0), new Point(1, 1))
+            ? new LinearGradientBrush(new GradientStopCollection { new(Tint(0x4D), 0), new(Tint(0x14), 1) }, new Point(0, 0), new Point(1, 1))
             : new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
-        card.BorderBrush = active ? new LinearGradientBrush(Blue(0x59), Blue(0x14), new Point(0, 0), new Point(1, 1)) : Brushes.Transparent;
+        card.BorderBrush = active ? new LinearGradientBrush(Tint(0x59), Tint(0x14), new Point(0, 0), new Point(1, 1)) : Brushes.Transparent;
     }
 
     private List<Border> AddTiles(double height, params (string? Glyph, string Label, Action OnClick)[] tiles) => AddTileRow(height, tiles.Length, tiles);
@@ -505,9 +512,12 @@ public sealed class QuickPanel : UserControl
             ("", "Wi-Fi", () => WifiRequested?.Invoke()),
             ("", "Bluetooth", () => BluetoothRequested?.Invoke()),
             ("", "Mode avion", () => _ = ToggleAirplaneAsync()),
+            ("\uE706", "Luminosité auto", () => _ = ToggleAutoBrightnessAsync()),
         ]);
         _radioCards = radios;
+        _autoBrightnessCard = radios[3];
         _ = PaintRadiosAsync(screen);
+        _ = PaintAutoBrightnessAsync(screen);
 
         _items.Children.Add(new Border { Height = 12 });
         Button? volumeRow = null;
@@ -545,10 +555,31 @@ public sealed class QuickPanel : UserControl
     private async Task PaintRadiosAsync(int screen)
     {
         var all = await Radios.AllAsync();
-        if (screen != _screen || _radioCards is not [var wifi, var bluetooth, var airplane]) return;
+        if (screen != _screen || _radioCards is not [var wifi, var bluetooth, var airplane, ..]) return;
         Paint(wifi, all.Any(r => r.Kind == RadioKind.WiFi && r.State == RadioState.On));
         Paint(bluetooth, all.Any(r => r.Kind == RadioKind.Bluetooth && r.State == RadioState.On));
         Paint(airplane, all.Count > 0 && all.All(r => r.State != RadioState.On));
+    }
+
+    private Border? _autoBrightnessCard;
+
+    private async Task PaintAutoBrightnessAsync(int screen)
+    {
+        var on = await Task.Run(() => AutoBrightness.Read());
+        if (screen == _screen && _autoBrightnessCard is { } card) Paint(card, on == true);
+    }
+
+    private async Task ToggleAutoBrightnessAsync()
+    {
+        var screen = _screen;
+        if (!await Task.Run(() => AutoBrightness.HasSensor))
+        {
+            SetStatus("Pas de capteur de lumière sur cette machine : Windows ne peut pas régler la luminosité tout seul.");
+            return;
+        }
+        var on = await Task.Run(() => AutoBrightness.Read());
+        if (on is not { } current || !await Task.Run(() => AutoBrightness.Set(!current))) SetStatus("Windows a refusé de changer la luminosité automatique.");
+        await PaintAutoBrightnessAsync(screen);
     }
 
     /// <summary>Coupe toutes les radios et retient celles qui étaient allumées, pour les rallumer ensuite.</summary>
@@ -668,7 +699,9 @@ public sealed class QuickPanel : UserControl
         {
             value.Text = text;
             bar.Visibility = fraction is null ? Visibility.Collapsed : Visibility.Visible;
-            if (fraction is { } f) fill.Width = bar.ActualWidth * Math.Clamp(f, 0, 1);
+            // Transition lente : la barre suit la mesure sans à-coups. Une valeur invalide ne doit pas casser l'animation.
+            if (fraction is { } f && double.IsFinite(f))
+                fill.BeginAnimation(WidthProperty, new DoubleAnimation(bar.ActualWidth * Math.Clamp(f, 0, 1), Anim.Ms(900)) { EasingFunction = Anim.InOut });
         };
     }
 
@@ -720,23 +753,26 @@ public sealed class QuickPanel : UserControl
         List<int> Rates() => modes.Where(m => (m.Width, m.Height) == sizes[size]).Select(m => m.Hertz).ToList();
         var rate = current.Hertz;
 
-        TextBlock? sizeText = null, rateText = null;
+        // Gauche : plus petit, droite : plus grand (les modes sont rangés du plus grand au plus petit).
+        Action<string, bool, bool>? showSize = null, showRate = null;
         void Show()
         {
-            sizeText!.Text = $"{sizes[size].Width} × {sizes[size].Height}";
-            rateText!.Text = $"{rate} Hz";
+            var rates = Rates();
+            var r = rates.IndexOf(rate);
+            showSize!($"{sizes[size].Width} × {sizes[size].Height}", size < sizes.Count - 1, size > 0);
+            showRate!($"{rate} Hz", r < rates.Count - 1, r > 0);
         }
-        sizeText = AddChoice("Résolution", direction =>
+        showSize = AddChoice("Résolution", direction =>
         {
-            size = Math.Clamp(size + direction, 0, sizes.Count - 1);
+            size = Math.Clamp(size - direction, 0, sizes.Count - 1);
             var rates = Rates();
             if (!rates.Contains(rate)) rate = rates[0];
             Show();
         });
-        rateText = AddChoice("Fréquence de rafraîchissement", direction =>
+        showRate = AddChoice("Fréquence de rafraîchissement", direction =>
         {
             var rates = Rates();
-            rate = rates[Math.Clamp(rates.IndexOf(rate) + direction, 0, rates.Count - 1)];
+            rate = rates[Math.Clamp(rates.IndexOf(rate) - direction, 0, rates.Count - 1)];
             Show();
         });
         Show();
@@ -750,20 +786,43 @@ public sealed class QuickPanel : UserControl
         AddNote($"Un changement revient tout seul à l'ancien réglage après {KeepModeSeconds} secondes s'il n'est pas confirmé.");
     }
 
-    private TextBlock AddChoice(string name, Action<int> change)
+    /// <summary>Choix réglé avec gauche et droite : des flèches de part et d'autre de la valeur, atténuées en bout de liste.</summary>
+    private Action<string, bool, bool> AddChoice(string name, Action<int> change)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        for (var i = 0; i < 3; i++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.Children.Add(new TextBlock { Text = name, FontSize = 15, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap });
-        var value = new TextBlock { FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
-        Grid.SetColumn(value, 1);
+        Button? row = null;
+        TextBlock Arrow(string glyph, int direction, int column)
+        {
+            var arrow = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 8, 8, 8), Background = Brushes.Transparent, Cursor = Cursors.Hand };
+            arrow.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                if (row is not null) FocusNav.Focus(row);
+                change(direction);
+            };
+            Grid.SetColumn(arrow, column);
+            grid.Children.Add(arrow);
+            return arrow;
+        }
+        var left = Arrow("\uE76B", -1, 1);
+        left.Margin = new Thickness(8, 0, 0, 0);
+        var value = new TextBlock { FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 16, VerticalAlignment = VerticalAlignment.Center, TextAlignment = TextAlignment.Center, MinWidth = 96 };
+        Grid.SetColumn(value, 2);
         grid.Children.Add(value);
-        var row = RowButton(Card(grid, new Thickness(18, 0, 18, 0)), 60, () => { });
+        var right = Arrow("\uE76C", 1, 3);
+        row = RowButton(Card(grid, new Thickness(18, 0, 10, 0)), 60, () => { });
         row.Margin = new Thickness(0, 0, 0, 8);
         _adjust[row] = change;
         _items.Children.Add(row);
-        return value;
+        return (text, canLeft, canRight) =>
+        {
+            value.Text = text;
+            left.Opacity = canLeft ? 1 : 0.25;
+            right.Opacity = canRight ? 1 : 0.25;
+        };
     }
 
     private void ConfirmMode(DisplayMode target)

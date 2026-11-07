@@ -20,6 +20,8 @@ namespace MaRogAlly.Views;
 public sealed class QuickPanelWindow : Window
 {
     private const double PanelWidth = 480, ScreenGap = 14;
+    /// <summary>Place laissée autour du volet pour son ombre, et assombrissement du reste de l'écran.</summary>
+    private const double ShadowSpace = 40, DimOpacity = 0.5;
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TOOLWINDOW = 0x80;
     /// <summary>Durée pendant laquelle on redemande le premier plan, puis nombre de relevés (100 ms) sans lui avant de fermer.</summary>
@@ -37,6 +39,8 @@ public sealed class QuickPanelWindow : Window
     private Stopwatch _opened = new();
     private bool _closing, _finished, _gotForeground, _slidIn;
     private int _lostFor;
+    private DimWindow? _dim;
+    private double _dimOpacity;
 
     public QuickPanel Panel { get; }
 
@@ -82,6 +86,8 @@ public sealed class QuickPanelWindow : Window
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.ClearType);
         WindowStartupLocation = WindowStartupLocation.Manual;
         panel.LayoutTransform = new ScaleTransform(uiScale, uiScale);
+        // La marge reste transparente : l'ombre du volet s'y dessine.
+        panel.Margin = new Thickness(Shadow);
         Content = panel;
         Place();
 
@@ -91,12 +97,17 @@ public sealed class QuickPanelWindow : Window
         _watch.Tick += (_, _) => Watch();
 
         // La résolution peut changer depuis l'onglet Affichage.
-        EventHandler replace = (_, _) => Dispatcher.BeginInvoke(Place);
+        EventHandler replace = (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            Place();
+            _dim?.Fit();
+        });
         SystemEvents.DisplaySettingsChanged += replace;
         Closed += (_, _) =>
         {
             SystemEvents.DisplaySettingsChanged -= replace;
             _watch.Stop();
+            _dim?.Close();
             panel.Shutdown();
             _gone.TrySetResult();
         };
@@ -112,6 +123,11 @@ public sealed class QuickPanelWindow : Window
         }
         Left = -Width;
         ContentRendered += (_, _) => SlideIn();
+        // Le voile s'affiche d'abord : propriétaire du volet, il reste toujours dessous.
+        _dim = new DimWindow();
+        _dim.Clicked += CloseOnce;
+        _dim.Show();
+        Owner = _dim;
         Show();
         _opened = Stopwatch.StartNew();
         DesktopHost.TakeForeground(this, Handle);
@@ -139,8 +155,20 @@ public sealed class QuickPanelWindow : Window
         if (_slidIn || _closing) return;
         _slidIn = true;
         Log.Info($"Centre de contrôle : glissement lancé après {_opened.ElapsedMilliseconds} ms");
-        BeginAnimation(LeftProperty, new DoubleAnimation(-Width, Gap, Anim.Ms(OpenMs)) { EasingFunction = OpenEase });
+        BeginAnimation(LeftProperty, new DoubleAnimation(-Width, Gap - Shadow, Anim.Ms(OpenMs)) { EasingFunction = OpenEase });
         Panel.PlayEntrance();
+        FadeDim(DimOpacity, OpenMs);
+    }
+
+    /// <summary>Le voile suit le volet : il s'assombrit à l'ouverture et s'efface à la fermeture.</summary>
+    private void FadeDim(double to, double ms)
+    {
+        if (_dim is not { } dim) return;
+        Anim.Tween(Panel, "dim", _dimOpacity, to, ms, value =>
+        {
+            _dimOpacity = value;
+            dim.SetOpacity(value);
+        });
     }
 
     /// <summary>
@@ -176,14 +204,17 @@ public sealed class QuickPanelWindow : Window
 
     private void Place()
     {
-        Width = PanelWidth * _uiScale;
-        Height = SystemParameters.PrimaryScreenHeight - 2 * Gap;
-        Left = _visible ? Gap : -(Width + 10000);
-        Top = Gap;
+        Width = PanelWidth * _uiScale + 2 * Shadow;
+        Height = SystemParameters.PrimaryScreenHeight - 2 * Gap + 2 * Shadow;
+        Left = _visible ? Gap - Shadow : -(Width + 10000);
+        Top = Gap - Shadow;
     }
 
     /// <summary>Espace laissé entre le volet et les bords de l'écran.</summary>
     private double Gap => ScreenGap * _uiScale;
+
+    /// <summary>Marge transparente autour du volet, où se dessine son ombre.</summary>
+    private double Shadow => ShadowSpace * _uiScale;
 
     public void CloseOnce()
     {
@@ -203,6 +234,7 @@ public sealed class QuickPanelWindow : Window
         slide.Completed += (_, _) => Finish();
         BeginAnimation(LeftProperty, slide);
         Panel.PlayExit();
+        FadeDim(0, CloseMs);
         // Une animation peut ne jamais finir si le rendu s'arrête : le volet doit se fermer quand même.
         _ = Task.Delay(CloseMs + 300).ContinueWith(_ => Dispatcher.BeginInvoke(Finish));
     }
@@ -217,6 +249,53 @@ public sealed class QuickPanelWindow : Window
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
+}
+
+/// <summary>
+/// Voile noir sur tout l'écran, sous le volet. Il n'est redessiné que pendant son fondu : ensuite, son image ne change plus.
+/// Un clic dessus referme le volet.
+/// </summary>
+internal sealed class DimWindow : Window
+{
+    private const int GWL_EXSTYLE = -20;
+    private const long WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;
+
+    public event Action? Clicked;
+
+    public DimWindow()
+    {
+        WindowStyle = WindowStyle.None;
+        ResizeMode = ResizeMode.NoResize;
+        ShowInTaskbar = false;
+        ShowActivated = false;
+        Topmost = true;
+        // Une opacité réglée par Windows sur une fenêtre ordinaire la laisse opaque : la transparence passe par WPF.
+        AllowsTransparency = true;
+        Background = Brushes.Black;
+        Opacity = 0;
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Fit();
+        // Sans jamais prendre le premier plan ni apparaître dans Alt+Tab.
+        SourceInitialized += (_, _) =>
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64() | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE));
+        };
+        MouseLeftButtonUp += (_, _) => Clicked?.Invoke();
+    }
+
+    public void Fit()
+    {
+        Left = 0;
+        Top = 0;
+        Width = SystemParameters.PrimaryScreenWidth;
+        Height = SystemParameters.PrimaryScreenHeight;
+    }
+
+    public void SetOpacity(double opacity) => Opacity = Math.Clamp(opacity, 0, 1);
+
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")] private static extern IntPtr SetWindowLongPtr(IntPtr hwnd, int index, IntPtr value);
 }
