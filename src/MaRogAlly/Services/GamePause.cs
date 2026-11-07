@@ -16,12 +16,15 @@ public static class GamePause
     private static string StateFile => Path.Combine(AppPaths.Root, "paused-game.txt");
     private static int? _paused;
 
-    /// <summary>Suspend le processus de cette fenêtre. Faux si Windows refuse (jeu lancé en administrateur, protégé…).</summary>
-    public static bool Pause(IntPtr window)
+    /// <summary>
+    /// Suspend le processus de cette fenêtre et renvoie son numéro, à rendre à <see cref="Resume"/>.
+    /// Null si Windows refuse (jeu lancé en administrateur, protégé…) ou si un jeu est déjà en pause.
+    /// </summary>
+    public static int? Pause(IntPtr window)
     {
-        if (_paused is not null) return false;
+        if (_paused is not null) return null;
         GetWindowThreadProcessId(window, out var pid);
-        if (pid == 0 || pid == Environment.ProcessId) return false;
+        if (pid == 0 || pid == Environment.ProcessId) return null;
         try
         {
             using var process = Process.GetProcessById((int)pid);
@@ -31,21 +34,27 @@ public static class GamePause
             {
                 File.Delete(StateFile);
                 Log.Info($"Pause du jeu refusée par Windows ({process.ProcessName})");
-                return false;
+                return null;
             }
             _paused = (int)pid;
             Log.Info($"Jeu en pause : {process.ProcessName}");
-            return true;
+            return (int)pid;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
         {
             Log.Error("Pause du jeu", ex);
-            return false;
+            return null;
         }
     }
 
-    /// <summary>Relance le jeu mis en pause, s'il y en a un.</summary>
-    public static void Resume()
+    /// <summary>Relance ce jeu s'il est toujours en pause. Un volet rouvert entre-temps a pu en mettre un autre en pause : celui-là n'est pas touché.</summary>
+    public static void Resume(int pid)
+    {
+        if (_paused == pid) ResumeAll();
+    }
+
+    /// <summary>Relance le jeu en pause, quel qu'il soit (fermeture de l'application).</summary>
+    public static void ResumeAll()
     {
         if (_paused is not { } pid) return;
         _paused = null;

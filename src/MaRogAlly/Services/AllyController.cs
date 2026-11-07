@@ -26,6 +26,8 @@ public static class AllyController
 
     public static Task WriteAsync(bool gamepad) => Task.Run(() =>
     {
+        // Tracé : un changement de mode peut faire perdre à M1 sa touche, le journal dit quand il a eu lieu.
+        Log.Info($"Mode de la manette écrit : {(gamepad ? "manette" : "bureau")}");
         byte[] command = [InputReport, 0xD1, 0x01, 0x01, gamepad ? HardwareGamepad : HardwareMouse];
         lock (WriteLock)
             foreach (var device in Devices())

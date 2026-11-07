@@ -129,6 +129,7 @@ public partial class SidePanel : OverlayBase
     public Button AddApp(string label, string? iconSource, Action onClick, string? glyph = null, object? tag = null, bool star = false)
     {
         var b = AppButton(label, iconSource, onClick, glyph, tag, star);
+        if (_menuStyle) b.Margin = new Thickness(0, 0, 0, 8);
         Items.Children.Add(b);
         return b;
     }
@@ -141,11 +142,49 @@ public partial class SidePanel : OverlayBase
         foreach (var (label, iconSource, onClick, glyph) in items)
         {
             var b = AppButton(label, iconSource, onClick, glyph, null, false);
-            b.Margin = new Thickness(3, 0, 3, 0);
+            b.Margin = new Thickness(3, 0, 3, _menuStyle ? 8 : 0);
             grid.Children.Add(b);
         }
         _hasGrid = true;
         Items.Children.Add(grid);
+    }
+
+    private bool _menuStyle;
+    private static readonly Color CardColor = Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF);
+
+    /// <summary>
+    /// Style du menu principal : panneau opaque, chaque ligne et chaque case sur un fond de carte arrondi,
+    /// et un cadre de sélection blanc qui glisse de l'une à l'autre. À appeler avant d'ajouter le contenu.
+    /// </summary>
+    public void UseMenuStyle()
+    {
+        _menuStyle = true;
+        // La teinte translucide des panneaux, mélangée une fois pour toutes à la couleur du thème : plus rien ne transparaît.
+        var under = ((SolidColorBrush)FindResource("Bg")).Color;
+        var over = ((SolidColorBrush)FindResource("PanelBg")).Color;
+        var a = over.A / 255.0;
+        byte Mix(byte top, byte bottom) => (byte)Math.Round(top * a + bottom * (1 - a));
+        Panel.Background = new SolidColorBrush(Color.FromRgb(Mix(over.R, under.R), Mix(over.G, under.G), Mix(over.B, under.B)));
+        Highlight.Background = Brushes.Transparent;
+        Highlight.BorderBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
+        Highlight.BorderThickness = new Thickness(2);
+        Highlight.CornerRadius = new CornerRadius(14);
+    }
+
+    /// <summary>Contenu d'un bouton posé sur une carte, comme dans le menu principal.</summary>
+    private static void OnCard(ButtonBase b, Thickness padding, double? height)
+    {
+        var content = (UIElement)b.Content;
+        b.Content = null;
+        b.Padding = new Thickness(0);
+        var card = new Border { Background = new SolidColorBrush(CardColor), CornerRadius = new CornerRadius(14), Padding = padding, Child = content };
+        if (height is { } h)
+        {
+            // Le modèle de ligne centre son contenu : le fond prend toute la hauteur du bouton.
+            b.Height = h;
+            card.Height = h;
+        }
+        b.Content = card;
     }
 
     /// <summary>Panneau plus large que d'habitude (contenu en colonnes).</summary>
@@ -177,6 +216,7 @@ public partial class SidePanel : OverlayBase
         Track(b);
         Tagged(b, tag);
         b.Click += (_, _) => onClick();
+        if (_menuStyle) OnCard(b, new Thickness(16, 0, 16, 0), 54);
         return b;
     }
 
@@ -269,6 +309,7 @@ public partial class SidePanel : OverlayBase
     public void AddIconGrid(int columns, IEnumerable<(string? Logo, string? IconSource, string Label, Action OnClick, object? Tag)> items)
     {
         var grid = new UniformGrid { Columns = columns };
+        if (_menuStyle) grid.Margin = new Thickness(-3, 0, -3, 2);
         foreach (var (logo, iconSource, label, onClick, tag) in items)
         {
             var content = new StackPanel { Width = 86 };
@@ -287,6 +328,11 @@ public partial class SidePanel : OverlayBase
             Track(b);
             Tagged(b, tag);
             b.Click += (_, _) => onClick();
+            if (_menuStyle)
+            {
+                OnCard(b, new Thickness(0, 10, 0, 10), null);
+                b.Margin = new Thickness(3, 0, 3, 6);
+            }
             grid.Children.Add(b);
         }
         _hasGrid = true;

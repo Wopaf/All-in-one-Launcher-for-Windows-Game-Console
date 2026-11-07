@@ -18,7 +18,10 @@ public sealed class GlobalHotkeys
     private static readonly int[] Defaults = [ScrollLock, Pause, F13];
 
     private readonly IntPtr _hwnd;
-    private int _registered;
+    private int _registered, _taken;
+
+    /// <summary>Au moins une touche est réservée : le centre de contrôle peut s'ouvrir.</summary>
+    public bool IsListening => _taken > 0;
 
     public event Action? Pressed;
 
@@ -47,7 +50,8 @@ public sealed class GlobalHotkeys
             else Log.Info($"Touche {Name(keys[i])} déjà prise par une autre application");
         }
         _registered = keys.Length;
-        Log.Info($"Centre de contrôle : touche {Describe(key)}");
+        _taken = taken;
+        Log.Info($"Centre de contrôle : touche {Describe(key)}{(taken == 0 ? " (non réservée)" : "")}");
         return taken > 0;
     }
 
@@ -56,6 +60,7 @@ public sealed class GlobalHotkeys
     {
         for (var i = 0; i < _registered; i++) UnregisterHotKey(_hwnd, FirstId + i);
         _registered = 0;
+        _taken = 0;
     }
 
     public static string Describe(int? key) => key is { } k ? Name(k) : "Arrêt défil, Pause ou F13";

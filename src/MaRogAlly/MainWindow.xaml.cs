@@ -145,6 +145,7 @@ public partial class MainWindow : Window
             if (Environment.GetCommandLineArgs().Contains("--render")) return;
             _hotkeys = new GlobalHotkeys(_desktop.Handle, _settings.QuickPanelKey);
             _hotkeys.Pressed += OnQuickPanelKey;
+            if (!_hotkeys.IsListening) _ = RetryHotkeysAsync();
             _ = PrepareControllerAsync();
             // Un jeu resté suspendu par une session arrêtée brutalement repart.
             GamePause.ResumeLeftover();
@@ -1954,6 +1955,15 @@ public partial class MainWindow : Window
             _hotkeys?.Apply(_settings.QuickPanelKey);
         }
 
+        // Pendant la détection, la touche du volet n'est plus écoutée : quitter l'application l'y remet tout de suite.
+        void OnLeave(object? sender, EventArgs e)
+        {
+            if (_keyCapture is null) return;
+            StopCapture();
+            panel.SetSubtitle(Subtitle);
+        }
+        Deactivated += OnLeave;
+
         void Choose(int? key)
         {
             StopCapture();
@@ -2004,7 +2014,11 @@ public partial class MainWindow : Window
         }
         panel.InitialFocus = Build(null);
         // Fermé pendant la détection : les touches enregistrées sont de nouveau écoutées.
-        panel.CloseRequested += _ => StopCapture();
+        panel.CloseRequested += _ =>
+        {
+            Deactivated -= OnLeave;
+            StopCapture();
+        };
         OpenOverlay(panel);
     }
 
@@ -2217,8 +2231,9 @@ public partial class MainWindow : Window
     {
         var panel = DockPanelOf(WindowsMenu, bottom: false);
         panel.HideTitle();
-        // Plus large : les accès rapides y tiennent deux par ligne.
+        // Plus large : les accès rapides y tiennent deux par ligne. Même style que le menu principal.
         panel.Widen(660);
+        panel.UseMenuStyle();
         // Dernière liste connue : affichée tout de suite, la lecture (quelques secondes) se fait derrière.
         var (apps, launchers, recent) = _windowsMenuData;
         var search = "";
@@ -2286,12 +2301,12 @@ public partial class MainWindow : Window
             if (favorites.Count > 0)
             {
                 panel.AddHeader("Favoris");
-                panel.AddIconGrid(4, favorites.Select(AppCell));
+                panel.AddIconGrid(5, favorites.Select(AppCell));
             }
             if (search.Length == 0 && launchers.Count > 0)
             {
                 panel.AddHeader("Lanceurs de jeux");
-                panel.AddIconGrid(4, launchers.Select(l => ((string?)l.Logo, (string?)null, l.Name, (Action)(() =>
+                panel.AddIconGrid(5, launchers.Select(l => ((string?)l.Logo, (string?)null, l.Name, (Action)(() =>
                 {
                     panel.Close();
                     // Lanceur connu de l'application, sinon son entrée dans la liste de Windows.
@@ -2441,15 +2456,30 @@ public partial class MainWindow : Window
 
     private DateTime _lastQuickPanelKey;
 
+    /// <summary>
+    /// Touche prise au démarrage (l'ancienne instance qui se ferme après une mise à jour, une autre application) :
+    /// on réessaie un moment au lieu de rester sans centre de contrôle jusqu'au prochain lancement.
+    /// </summary>
+    private async Task RetryHotkeysAsync()
+    {
+        for (var attempt = 0; attempt < 15 && _hotkeys is { IsListening: false } hotkeys; attempt++)
+        {
+            await Task.Delay(2000);
+            if (_keyCapture is null) hotkeys.Apply(_settings.QuickPanelKey);
+        }
+    }
+
     private void OnQuickPanelKey()
     {
         // Un appui peut arriver en double depuis Armoury Crate : le volet s'ouvrirait et se refermerait aussitôt.
         var now = DateTime.UtcNow;
         var bounced = now - _lastQuickPanelKey < TimeSpan.FromMilliseconds(350);
         _lastQuickPanelKey = now;
-        Log.Info($"Centre de contrôle : touche reçue{(bounced ? " en double, ignorée" : "")}, volet {(_quickPanel is null ? "fermé" : "ouvert")}");
+        var state = _quickPanel is null ? "fermé" : _quickPanel.IsClosing ? "en train de se fermer" : "ouvert";
+        Log.Info($"Centre de contrôle : touche reçue{(bounced ? " en double, ignorée" : "")}, volet {state}");
         if (bounced) return;
-        if (_quickPanel is { } open) open.CloseOnce();
+        // Un appui pendant le glissement de fermeture rouvre le volet au lieu d'être perdu.
+        if (_quickPanel is { IsClosing: false } open) open.CloseOnce();
         else OpenQuickPanel();
     }
 
@@ -2459,10 +2489,10 @@ public partial class MainWindow : Window
         var panel = new QuickPanel(target, ReadControlMode, ChooseControlMode, _hasController, tab, activate);
         var window = new QuickPanelWindow(panel, EffectiveUiScale(_settings.UiScale), activate);
         // Un jeu de la bibliothèque s'arrête pendant que le volet est ouvert, et repart avant de reprendre le premier plan.
-        if (activate && _settings.PauseGameWithPanel && target is { } game && IsGameWindow(game) && GamePause.Pause(game.Handle))
+        if (activate && _settings.PauseGameWithPanel && target is { } game && IsGameWindow(game) && GamePause.Pause(game.Handle) is { } paused)
         {
-            window.CloseStarted += GamePause.Resume;
-            window.Closed += (_, _) => GamePause.Resume();
+            window.CloseStarted += () => GamePause.Resume(paused);
+            window.Closed += (_, _) => GamePause.Resume(paused);
         }
         panel.HomeRequested += QuickPanelHome;
         panel.DesktopRequested += () =>
@@ -2556,42 +2586,47 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Le volet se pilote toujours à la manette, quel que soit le mode choisi : en mode bureau, la manette de l'Ally imite
-    /// une souris et n'est plus lue comme une manette. Armoury Crate peut repasser en mode bureau juste après l'ouverture
-    /// (il ne reconnaît pas le volet comme un jeu) : le mode manette est réécrit plusieurs fois pendant les premières secondes.
+    /// Le volet se pilote toujours à la manette. En mode bureau, la manette de l'Ally imite une souris et n'est plus lue comme
+    /// une manette : le mode manette est alors écrit, puis le mode bureau rétabli à la fermeture. Déjà en mode manette, rien
+    /// n'est écrit : chaque changement de mode peut faire perdre à M1 sa touche dans Armoury Crate.
     /// </summary>
     private void KeepGamepadMode(QuickPanelWindow window)
     {
         if (!_hasController) return;
-        foreach (var delay in new[] { 0, 500, 1500, 3000 })
+        var wrote = false;
+        // Armoury Crate peut repasser en mode bureau juste après l'ouverture : vérifié encore deux fois.
+        foreach (var delay in new[] { 0, 1500, 3000 })
             _ = Task.Delay(delay).ContinueWith(_ =>
             {
-                if (_quickPanel != window || window.IsClosing) return;
+                if (_quickPanel != window || window.IsClosing || _pad.IsConnected) return;
+                wrote = true;
                 _writtenGamepad = true;
                 _ = AllyController.WriteAsync(true);
             }, TaskScheduler.FromCurrentSynchronizationContext());
-        window.CloseStarted += () => _ = RestoreModeAfterPanelAsync();
+        window.CloseStarted += () =>
+        {
+            if (wrote) _ = RestoreModeAfterPanelAsync();
+        };
     }
 
-    /// <summary>Volet fermé : le mode revient à celui choisi, ou à celui qui convient à l'application revenue devant.</summary>
+    /// <summary>Volet fermé après un passage forcé en mode manette : le mode d'avant revient (ou le mode Auto décide).</summary>
     private async Task RestoreModeAfterPanelAsync()
     {
         // Le premier plan vient d'être rendu : on attend qu'il soit en place.
         await Task.Delay(400);
         if (_quickPanel is not null) return;
-        _writtenGamepad = null;
         switch (ReadControlMode())
         {
             case ControlMode.Gamepad:
-                WriteControlMode(true);
                 break;
-            case ControlMode.Desktop:
-                WriteControlMode(false);
+            case ControlMode.Auto:
+                // La minuterie du mode Auto réécrit le mode qui convient à l'application revenue devant.
+                _writtenGamepad = null;
                 break;
             default:
-                // Auto, ou mode laissé à Armoury Crate : le mode manette n'est gardé que sur l'application, un jeu ou le plein écran.
-                WriteControlMode(_desktop.IsForeground
-                    || WindowsShell.ForegroundApp(_desktop.Handle) is { } app && (WindowsShell.IsFullscreen(app.Handle) || IsGamepadWindow(app)));
+                // Mode bureau, choisi ici ou par Armoury Crate : c'était celui d'avant l'ouverture.
+                _writtenGamepad = false;
+                _ = AllyController.WriteAsync(false);
                 break;
         }
     }
