@@ -23,7 +23,7 @@ public partial class SettingsView : UserControl
     /// <summary>Saisie d'un texte : titre, valeur actuelle, application de la nouvelle valeur.</summary>
     public event Action<string, string, Action<string>>? EditRequested;
     public event Action? Changed, KeysChanged, RescanRequested, RefreshMetadataRequested, MissingMetadataRequested;
-    public event Action? HiddenGamesRequested, AccentRequested, UiScaleRequested, ThemeRequested, AppUpdateRequested;
+    public event Action? HiddenGamesRequested, AccentRequested, UiScaleRequested, ThemeRequested, AppUpdateRequested, QuickPanelKeyRequested;
     private Border? _themeSwatch;
     private TextBlock? _themeName;
     private TextBlock? _uiScaleValue;
@@ -96,6 +96,11 @@ public partial class SettingsView : UserControl
             "Réduire avec B", "Le bouton B de la manette réduit l'application au premier plan, si ce n'est pas Ma ROG Ally. Il reste sans effet dans un jeu de ta bibliothèque et dans toute fenêtre en plein écran.\n\nDésactive cette option si B réduit par erreur un jeu en fenêtre qui n'est pas dans ta bibliothèque.");
         Switch("Masquer la barre des tâches de Windows", () => _settings.HideWindowsTaskbar, v => { _settings.HideWindowsTaskbar = v; WindowsTaskbar.Apply(_settings); },
             "Barre des tâches de Windows", "Active le masquage automatique de Windows tant que l'application tourne : la barre ne repasse plus devant les autres applications, qui gagnent aussi sa place à l'écran. Elle reste accessible en glissant depuis le bas de l'écran. Ton réglage d'origine revient quand tu quittes l'application.");
+
+        Header("Centre de contrôle");
+        QuickPanelKeyRow();
+        Switch("Mettre le jeu en pause", () => _settings.PauseGameWithPanel, v => _settings.PauseGameWithPanel = v,
+            "Jeu en pause", "Un jeu de ta bibliothèque s'arrête complètement tant que le centre de contrôle est ouvert, puis repart là où il en était à sa fermeture.\n\nÀ éviter avec un jeu en ligne : le serveur peut te déconnecter, et un anti-triche peut le signaler. Le son du jeu se coupe pendant la pause.");
 
         Header("Mises à jour de l'application");
         Switch("Chercher les nouvelles versions", () => _settings.CheckAppUpdates, v => _settings.CheckAppUpdates = v,
@@ -354,6 +359,25 @@ public partial class SettingsView : UserControl
         var b = Row(new Button { Content = grid }, "Taille de l'interface",
             "Agrandit ou réduit toute l'application. En automatique, elle est réduite sur un petit écran comme celui de la ROG Ally (1920×1080 à 150 %).");
         b.Click += (_, _) => UiScaleRequested?.Invoke();
+    }
+
+    private TextBlock? _quickPanelKeyValue;
+
+    private void QuickPanelKeyRow()
+    {
+        _quickPanelKeyValue = new TextBlock { FontSize = 15, Foreground = (Brush)FindResource("TextSecondary"), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var grid = new Grid();
+        grid.Children.Add(new TextBlock { Text = "Touche du centre de contrôle", VerticalAlignment = VerticalAlignment.Center });
+        grid.Children.Add(_quickPanelKeyValue);
+        var b = Row(new Button { Content = grid }, "Touche du centre de contrôle",
+            "La touche du clavier qui ouvre le centre de contrôle, quelle que soit l'application devant toi.\n\nSur la ROG Ally, relie la même touche à M1 (ou M2) dans Armoury Crate, dans le mode manette comme dans le mode bureau : leurs réglages sont séparés.\n\n« Détecter une touche » affiche la touche que tu presses : pratique pour vérifier ce que M1 envoie vraiment.");
+        b.Click += (_, _) => QuickPanelKeyRequested?.Invoke();
+        UpdateQuickPanelKey();
+    }
+
+    public void UpdateQuickPanelKey()
+    {
+        if (_quickPanelKeyValue is not null) _quickPanelKeyValue.Text = GlobalHotkeys.Describe(_settings.QuickPanelKey);
     }
 
     public void UpdateUiScale(string label)

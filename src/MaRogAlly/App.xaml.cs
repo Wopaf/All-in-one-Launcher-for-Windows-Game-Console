@@ -89,6 +89,8 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Fermée pendant qu'un jeu est en pause : il ne doit pas rester figé.
+        Services.GamePause.Resume();
         _mutex?.Dispose();
         _showEvent?.Dispose();
         base.OnExit(e);

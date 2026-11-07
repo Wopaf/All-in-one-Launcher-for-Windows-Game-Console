@@ -143,9 +143,11 @@ public partial class MainWindow : Window
         {
             // Pas pour une capture de vérification : elle tourne à côté de l'application ouverte.
             if (Environment.GetCommandLineArgs().Contains("--render")) return;
-            _hotkeys = new GlobalHotkeys(_desktop.Handle);
+            _hotkeys = new GlobalHotkeys(_desktop.Handle, _settings.QuickPanelKey);
             _hotkeys.Pressed += OnQuickPanelKey;
             _ = PrepareControllerAsync();
+            // Un jeu resté suspendu par une session arrêtée brutalement repart.
+            GamePause.ResumeLeftover();
         };
         CursorHider.Attach(this);
         Activated += OnActivated;
@@ -1374,6 +1376,7 @@ public partial class MainWindow : Window
         _settingsView.ThemeRequested += OpenThemePicker;
         _settingsView.UiScaleRequested += OpenUiScalePicker;
         _settingsView.HiddenGamesRequested += OpenHiddenGames;
+        _settingsView.QuickPanelKeyRequested += OpenQuickPanelKeyPicker;
     }
 
     private void OnSelectionChanged(Game? game)
@@ -1574,6 +1577,13 @@ public partial class MainWindow : Window
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
+        // Choix de la touche du centre de contrôle : la prochaine touche pressée est proposée, rien d'autre ne la reçoit.
+        if (_keyCapture is { } capture)
+        {
+            e.Handled = true;
+            capture(e.Key == Key.System ? e.SystemKey : e.Key);
+            return;
+        }
         var onStage = _quickPanel?.Stage?.Current;
         var typing = (onStage ?? _overlays.LastOrDefault()) is KeyboardPanel;
         NavAction? a = e.Key switch
@@ -1930,6 +1940,63 @@ public partial class MainWindow : Window
             if (isCurrent) panel.InitialFocus = b;
         }
         panel.CloseRequested += _ => ApplyUiScale();
+        OpenOverlay(panel);
+    }
+
+    private Action<Key>? _keyCapture;
+
+    /// <summary>
+    /// Touche qui ouvre le centre de contrôle : une liste de touches sans autre usage, ou la détection de la touche pressée
+    /// (celle que M1 envoie, par exemple). Les touches écoutées sont libérées pendant la détection pour arriver à la fenêtre.
+    /// </summary>
+    private void OpenQuickPanelKeyPicker()
+    {
+        const string Subtitle = "Relie la même touche à M1 dans Armoury Crate";
+        var panel = new SidePanel("Touche du centre de contrôle", Subtitle);
+
+        void StopCapture()
+        {
+            if (_keyCapture is null) return;
+            _keyCapture = null;
+            _hotkeys?.Apply(_settings.QuickPanelKey);
+        }
+
+        void Choose(int? key)
+        {
+            StopCapture();
+            _settings.QuickPanelKey = key;
+            _settings.Save();
+            var ok = _hotkeys?.Apply(key) != false;
+            _settingsView.UpdateQuickPanelKey();
+            panel.Close();
+            if (!ok) Toast("\uE783", $"{GlobalHotkeys.Describe(key)} est déjà prise par une autre application");
+            else Toast("\uE765", $"Centre de contrôle : {GlobalHotkeys.Describe(key)}");
+        }
+
+        panel.AddChoice("Détecter une touche", false, () =>
+        {
+            _hotkeys?.Suspend();
+            panel.SetSubtitle("Appuie sur la touche à utiliser, ou sur M1… (Échap ou B pour annuler)");
+            _keyCapture = key =>
+            {
+                if (key == Key.Escape)
+                {
+                    StopCapture();
+                    panel.SetSubtitle(Subtitle);
+                }
+                else if (GlobalHotkeys.CanUse(key)) Choose(KeyInterop.VirtualKeyFromKey(key));
+                else panel.SetSubtitle($"{key} sert à taper ou à naviguer : appuie sur une autre touche (Échap ou B pour annuler)");
+            };
+        }, detail: "Puis appuie sur la touche, ou sur M1");
+        var current = panel.AddChoice(GlobalHotkeys.Describe(null), _settings.QuickPanelKey is null, () => Choose(null), detail: "Par défaut");
+        foreach (var key in GlobalHotkeys.Choices)
+        {
+            var b = panel.AddChoice(GlobalHotkeys.Name(key), _settings.QuickPanelKey == key, () => Choose(key));
+            if (_settings.QuickPanelKey == key) current = b;
+        }
+        panel.InitialFocus = current;
+        // Fermé pendant la détection : les touches enregistrées sont de nouveau écoutées.
+        panel.CloseRequested += _ => StopCapture();
         OpenOverlay(panel);
     }
 
@@ -2374,8 +2441,15 @@ public partial class MainWindow : Window
 
     private void OpenQuickPanel(int tab = 0, bool activate = true)
     {
-        var panel = new QuickPanel(WindowsShell.ForegroundApp(_desktop.Handle), ReadControlMode, ChooseControlMode, _hasController, tab, activate);
+        var target = WindowsShell.ForegroundApp(_desktop.Handle);
+        var panel = new QuickPanel(target, ReadControlMode, ChooseControlMode, _hasController, tab, activate);
         var window = new QuickPanelWindow(panel, EffectiveUiScale(_settings.UiScale), activate);
+        // Un jeu de la bibliothèque s'arrête pendant que le volet est ouvert, et repart avant de reprendre le premier plan.
+        if (activate && _settings.PauseGameWithPanel && target is { } game && IsGameWindow(game) && GamePause.Pause(game.Handle))
+        {
+            window.CloseStarted += GamePause.Resume;
+            window.Closed += (_, _) => GamePause.Resume();
+        }
         panel.HomeRequested += QuickPanelHome;
         panel.DesktopRequested += () =>
         {
@@ -2398,6 +2472,12 @@ public partial class MainWindow : Window
         window.Closed += (_, _) => { if (_quickPanel == window) _quickPanel = null; };
         _quickPanel = window;
         window.Open();
+        // Pas pour une capture de vérification : le volet n'y apparaît pas à l'écran.
+        if (activate)
+        {
+            UiSounds.PlayPanelOpen();
+            window.CloseStarted += UiSounds.PlayPanelClose;
+        }
     }
 
     /// <summary>Par-dessus le jeu tant que le volet est ouvert ; un panneau demandé plus tard (association Bluetooth) revient à la fenêtre principale.</summary>

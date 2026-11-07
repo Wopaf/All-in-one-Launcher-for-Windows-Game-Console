@@ -63,6 +63,9 @@ public sealed class QuickPanelWindow : Window
     /// <summary>La fenêtre plein écran vient d'être créée : le clavier physique doit y être branché.</summary>
     public event Action<QuickStageWindow>? StageCreated;
 
+    /// <summary>La fermeture commence, avant que l'application d'avant ne reprenne le premier plan (un jeu en pause doit être relancé d'abord).</summary>
+    public event Action? CloseStarted;
+
     /// <param name="activate">Faux pour une capture de vérification : ni focus, ni au premier plan, et hors de l'écran.</param>
     public QuickPanelWindow(QuickPanel panel, double uiScale, bool activate)
     {
@@ -221,6 +224,7 @@ public sealed class QuickPanelWindow : Window
         if (_closing) return;
         _closing = true;
         _watch.Stop();
+        CloseStarted?.Invoke();
         // Le jeu reprend la main dès le début du glissement, sans attendre sa fin.
         if (RestorePrevious && IsForeground && IsWindow(_previous)) SetForegroundWindow(_previous);
         Stage?.Close();

@@ -35,6 +35,12 @@ public sealed class AppSettings
     /// <summary>Sons de navigation (déplacement, validation, ouverture).</summary>
     public bool UiSounds { get; set; } = true;
 
+    /// <summary>Touche (code virtuel) qui ouvre le centre de contrôle ; null : Arrêt défil, Pause ou F13.</summary>
+    public int? QuickPanelKey { get; set; }
+
+    /// <summary>Un jeu de la bibliothèque au premier plan est suspendu tant que le centre de contrôle est ouvert.</summary>
+    public bool PauseGameWithPanel { get; set; } = true;
+
     /// <summary>Échelle de l'interface (0 = automatique : réduite sur petit écran comme la ROG Ally).</summary>
     public double UiScale { get; set; }
 

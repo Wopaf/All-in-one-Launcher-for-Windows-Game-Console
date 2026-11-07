@@ -30,6 +30,8 @@ public sealed class QuickPanel : UserControl
     private readonly bool _hasController, _interactive;
 
     private readonly Grid _root = new();
+    /// <summary>Titre et contenu de l'onglet : glissent ensemble au changement d'onglet.</summary>
+    private readonly Grid _body = new();
     private const double TabWidth = 56, TabGap = 3;
     private readonly StackPanel _tabBar = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly Border _tabPill = new() { Width = TabWidth, Height = 40, CornerRadius = new CornerRadius(12), HorizontalAlignment = HorizontalAlignment.Left, IsHitTestVisible = false };
@@ -137,7 +139,7 @@ public sealed class QuickPanel : UserControl
             _tabBar.Children.Add(tab);
         }
 
-        var body = new Grid();
+        var body = _body;
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -213,12 +215,15 @@ public sealed class QuickPanel : UserControl
     {
         // Un essai d'affichage non confirmé ne survit pas à un changement d'onglet.
         CancelModeTrial();
+        // Vers la droite pour l'onglet suivant, vers la gauche pour le précédent ; rien au premier affichage.
+        var direction = _tabPillPlaced ? Math.Sign(index - _tab) : 0;
         _tab = (index + Names.Length) % Names.Length;
         var x = TabGap + _tab * (TabWidth + 2 * TabGap);
         if (_tabPillPlaced) _tabPillMove.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, Anim.Ms(260)) { EasingFunction = Anim.Spring });
         else _tabPillMove.X = x;
         _tabPillPlaced = true;
         BuildTab();
+        if (direction != 0) Anim.Enter(_body, dx: 28 * direction, dy: 0, ms: 260);
     }
 
     private void BuildTab()
@@ -398,10 +403,17 @@ public sealed class QuickPanel : UserControl
         grid.Children.Add(text);
 
         var muted = false;
-        void Show()
+        // Un réglage fait glisser la barre jusqu'à sa valeur, comme la luminosité du menu principal ; une mise en page l'y place directement.
+        void Show(bool animate = true)
         {
             text.Text = muted ? "Muet" : $"{value} %";
-            fill.Width = muted ? 0 : bar.ActualWidth * value / 100;
+            var width = muted ? 0 : bar.ActualWidth * value / 100;
+            if (animate) fill.BeginAnimation(WidthProperty, new DoubleAnimation(width, Anim.Ms(220)) { EasingFunction = Anim.Out });
+            else
+            {
+                fill.BeginAnimation(WidthProperty, null);
+                fill.Width = width;
+            }
         }
         void Change(int next)
         {
@@ -411,7 +423,7 @@ public sealed class QuickPanel : UserControl
             Show();
             apply(value);
         }
-        bar.SizeChanged += (_, _) => Show();
+        bar.SizeChanged += (_, _) => Show(animate: false);
 
         var row = RowButton(Card(grid, new Thickness(20, 0, 20, 0)), name is null ? 56 : 66, onClick ?? (() => { }));
         row.Margin = new Thickness(0, 0, 0, 8);
@@ -432,7 +444,7 @@ public sealed class QuickPanel : UserControl
         };
         if (insertAt is { } at) _items.Children.Insert(at, row);
         else _items.Children.Add(row);
-        Show();
+        Show(animate: false);
         return new Slider(row, m => { muted = m; Show(); }, icon);
     }
 

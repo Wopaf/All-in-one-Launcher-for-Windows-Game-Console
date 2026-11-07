@@ -12,7 +12,8 @@ namespace MaRogAlly.Services;
 /// - keyboard : se déplacer entre les touches du clavier virtuel ;
 /// - clic : valider ;
 /// - open : au démarrage de l'application ;
-/// - search : quand une recherche aboutit.
+/// - search : quand une recherche aboutit ;
+/// - OpenVolet / CloseVolet : ouverture et fermeture du centre de contrôle.
 ///
 /// Les fichiers sont en WAV 32 bits flottants : au premier lancement (et à chaque nouvelle version),
 /// ils sont convertis en 16 bits, mis au même niveau de crête et gardés en cache, puis joués à un
@@ -29,7 +30,7 @@ public static class UiSounds
     /// <summary>Volume des sons courts (switch, keyboard, clic), de 0 à 1.</summary>
     private const double ShortVolume = 0.5;
 
-    /// <summary>Volume des sons longs (open, search), de 0 à 1.</summary>
+    /// <summary>Volume des sons longs (open, search, volet), de 0 à 1.</summary>
     private const double LongVolume = 0.7;
 
     /// <summary>Plusieurs lecteurs par son court : un déplacement rapide n'interrompt pas le précédent.</summary>
@@ -40,6 +41,9 @@ public static class UiSounds
     private static DateTime _lastMove;
     private static bool _openPending;
 
+    /// <summary>Sons longs : un seul lecteur, joués moins fort que leur crête normalisée.</summary>
+    private static readonly string[] Long = ["open", "search", "OpenVolet", "CloseVolet"];
+
     public static bool Enabled { get; set; } = true;
 
     /// <summary>Prépare les sons en tâche de fond ; les lecteurs sont créés sur le fil de l'interface.</summary>
@@ -48,7 +52,7 @@ public static class UiSounds
         var files = await Task.Run(PrepareFiles);
         foreach (var (name, path) in files)
         {
-            var count = name is "open" or "search" ? 1 : Voices;
+            var count = Long.Contains(name) ? 1 : Voices;
             Players[name] = Enumerable.Range(0, count).Select(_ =>
             {
                 var player = new MediaPlayer { Volume = count == 1 ? LongVolume : ShortVolume };
@@ -94,6 +98,16 @@ public static class UiSounds
     /// <summary>Recherche aboutie.</summary>
     public static void PlaySearch() => Play("search");
 
+    public static void PlayPanelOpen() => Play("OpenVolet");
+
+    /// <summary>Fermeture du volet : B joue déjà le son de retour juste avant, il laisse la place à celui-ci.</summary>
+    public static void PlayPanelClose()
+    {
+        if (Players.TryGetValue("switch", out var voices))
+            foreach (var player in voices) player.Stop();
+        Play("CloseVolet");
+    }
+
     private static void Play(string name)
     {
         if (!Enabled || !Players.TryGetValue(name, out var voices)) return;
@@ -118,7 +132,7 @@ public static class UiSounds
             try { File.Delete(old); } catch { /* fichier en cours de lecture */ }
 
         var assembly = typeof(UiSounds).Assembly;
-        foreach (var name in new[] { "switch", "keyboard", "clic", "open", "search" })
+        foreach (var name in new[] { "switch", "keyboard", "clic", "open", "search", "OpenVolet", "CloseVolet" })
         {
             try
             {
