@@ -30,8 +30,11 @@ public static class UiSounds
     /// <summary>Volume des sons courts (switch, keyboard, clic), de 0 à 1.</summary>
     private const double ShortVolume = 0.5;
 
-    /// <summary>Volume des sons longs (open, search, volet), de 0 à 1.</summary>
+    /// <summary>Volume des sons longs (open, search), de 0 à 1.</summary>
     private const double LongVolume = 0.7;
+
+    /// <summary>Volume des sons du centre de contrôle : moitié moins fort que les autres sons longs, il s'ouvre souvent par-dessus un jeu.</summary>
+    private const double PanelVolume = LongVolume / 2;
 
     /// <summary>Plusieurs lecteurs par son court : un déplacement rapide n'interrompt pas le précédent.</summary>
     private const int Voices = 3;
@@ -55,7 +58,7 @@ public static class UiSounds
             var count = Long.Contains(name) ? 1 : Voices;
             Players[name] = Enumerable.Range(0, count).Select(_ =>
             {
-                var player = new MediaPlayer { Volume = count == 1 ? LongVolume : ShortVolume };
+                var player = new MediaPlayer { Volume = name is "OpenVolet" or "CloseVolet" ? PanelVolume : count == 1 ? LongVolume : ShortVolume };
                 player.Open(new Uri(path));
                 return player;
             }).ToArray();

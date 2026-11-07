@@ -14,7 +14,7 @@ public sealed class GlobalHotkeys
 {
     private const int WM_HOTKEY = 0x0312, FirstId = 0xB001;
     private const uint MOD_NOREPEAT = 0x4000;
-    public const int ScrollLock = 0x91, Pause = 0x13, F13 = 0x7C, F23 = 0x86, F24 = 0x87;
+    public const int ScrollLock = 0x91, Pause = 0x13, F13 = 0x7C, F24 = 0x87;
     private static readonly int[] Defaults = [ScrollLock, Pause, F13];
 
     private readonly IntPtr _hwnd;
@@ -22,8 +22,11 @@ public sealed class GlobalHotkeys
 
     public event Action? Pressed;
 
-    /// <summary>Touches proposées dans les réglages : aucune ne sert à taper ni à naviguer.</summary>
-    public static IEnumerable<int> Choices => [ScrollLock, Pause, .. Enumerable.Range(F13, F23 - F13 + 1)];
+    /// <summary>
+    /// Touches proposées dans les réglages : aucune ne sert à taper ni à naviguer, et Armoury Crate sait les envoyer
+    /// (il ne propose pas F14 à F24). Une autre touche reste possible avec la détection.
+    /// </summary>
+    public static IEnumerable<int> Choices => [ScrollLock, Pause, F13];
 
     public GlobalHotkeys(IntPtr hwnd, int? key)
     {

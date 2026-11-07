@@ -139,6 +139,13 @@ public partial class SettingsView : UserControl
             $"Laisse vide pour utiliser le compte connecté sur cette machine{(SteamScanner.DetectSteamId() is { } id ? $" ({id})" : "")}.\n\n" +
             $"Pour un autre compte, retrouve son identifiant sur [steamid.io]({SteamIdFinder}).");
 
+        Category("Application", "\uE770", "Redémarrer ou fermer",
+            "Relance ou ferme Ma ROG Ally.");
+        ActionRow("Redémarrer l'application", "\uE72C", () => App.Restart(),
+            "Redémarrer l'application", "Ferme Ma ROG Ally puis la relance aussitôt. Utile si quelque chose ne répond plus comme prévu.\n\nUn jeu en pause est relancé avant.");
+        ActionRow("Fermer l'application", "\uE711", () => Application.Current.Shutdown(),
+            "Fermer l'application", "Ferme complètement Ma ROG Ally : la barre des tâches de Windows reprend son réglage, et le centre de contrôle ne s'ouvre plus jusqu'au prochain lancement.");
+
         MenuSummary.Text = $"{_categories.Count} catégories";
         ShowCategory(Math.Clamp(_category, 0, _categories.Count - 1));
     }

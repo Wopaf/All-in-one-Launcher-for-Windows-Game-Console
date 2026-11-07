@@ -111,8 +111,6 @@
                             <TextBlock Text="Menu" FontSize="14" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-                    <!-- Mises à jour en attente, toutes sources confondues -->
-                    <ui:UpdateBadge x:Name="MenuBadge" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-7,-7,0"/>
                 </Grid>
             </StackPanel>
         </Grid>

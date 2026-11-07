@@ -128,6 +128,31 @@ public partial class SidePanel : OverlayBase
     /// <summary>Ligne d'application : son icône Windows (chargée après coup), son nom ; ou un glyphe si elle n'a pas d'icône.</summary>
     public Button AddApp(string label, string? iconSource, Action onClick, string? glyph = null, object? tag = null, bool star = false)
     {
+        var b = AppButton(label, iconSource, onClick, glyph, tag, star);
+        Items.Children.Add(b);
+        return b;
+    }
+
+    /// <summary>Applications côte à côte, en colonnes de même largeur : chaque case est une ligne d'application.</summary>
+    public void AddAppGrid(int columns, IEnumerable<(string Label, string? IconSource, Action OnClick, string? Glyph)> items)
+    {
+        // Même marge de chaque côté de toutes les cases, que la grille rattrape sur ses bords : elles ont toutes la même largeur.
+        var grid = new UniformGrid { Columns = columns, Margin = new Thickness(-3, 0, -3, 0) };
+        foreach (var (label, iconSource, onClick, glyph) in items)
+        {
+            var b = AppButton(label, iconSource, onClick, glyph, null, false);
+            b.Margin = new Thickness(3, 0, 3, 0);
+            grid.Children.Add(b);
+        }
+        _hasGrid = true;
+        Items.Children.Add(grid);
+    }
+
+    /// <summary>Panneau plus large que d'habitude (contenu en colonnes).</summary>
+    public void Widen(double width) => Panel.Width = width;
+
+    private Button AppButton(string label, string? iconSource, Action onClick, string? glyph, object? tag, bool star)
+    {
         var row = new Grid { ColumnDefinitions = { new() { Width = GridLength.Auto }, new(), new() { Width = GridLength.Auto } } };
         if (glyph is not null)
             row.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, Width = 26, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 14, 0) });
@@ -152,7 +177,6 @@ public partial class SidePanel : OverlayBase
         Track(b);
         Tagged(b, tag);
         b.Click += (_, _) => onClick();
-        Items.Children.Add(b);
         return b;
     }
 

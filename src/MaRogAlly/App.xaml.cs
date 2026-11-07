@@ -12,6 +12,9 @@ public partial class App : Application
     private const string MutexName = "MaRogAlly.SingleInstance";
     private const string ShowEventName = "MaRogAlly.Show";
 
+    /// <summary>Relancée depuis les réglages : comme après une mise à jour, elle attend que l'ancienne instance se ferme.</summary>
+    public const string RestartArg = "--restarted";
+
     private Mutex? _mutex;
     private EventWaitHandle? _showEvent;
 
@@ -24,7 +27,7 @@ public partial class App : Application
         _mutex = new Mutex(true, MutexName, out var isFirst);
         _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
         // Relancée par une mise à jour : l'ancienne instance est en train de se fermer, on attend qu'elle libère la place.
-        if (!isFirst && e.Args.Contains(AppUpdater.UpdatedArg))
+        if (!isFirst && (e.Args.Contains(AppUpdater.UpdatedArg) || e.Args.Contains(RestartArg)))
         {
             try { isFirst = _mutex.WaitOne(TimeSpan.FromSeconds(15)); }
             catch (AbandonedMutexException) { isFirst = true; }
@@ -85,6 +88,18 @@ public partial class App : Application
         Log.Error("Erreur non gérée", e.Exception);
         Log.Info(e.Exception.ToString());
         e.Handled = true;
+    }
+
+    /// <summary>Relance l'application avec les mêmes options, puis ferme celle-ci.</summary>
+    public static void Restart()
+    {
+        var exe = Environment.ProcessPath;
+        if (exe is null) return;
+        var start = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+        foreach (var arg in Environment.GetCommandLineArgs().Skip(1).Where(a => a is not (AppUpdater.UpdatedArg or RestartArg))) start.ArgumentList.Add(arg);
+        start.ArgumentList.Add(RestartArg);
+        System.Diagnostics.Process.Start(start);
+        Current.Shutdown();
     }
 
     protected override void OnExit(ExitEventArgs e)

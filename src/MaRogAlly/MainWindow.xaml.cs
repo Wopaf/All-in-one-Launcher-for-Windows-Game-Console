@@ -170,7 +170,6 @@ public partial class MainWindow : Window
         {
             _windowsUpdates = updates.Windows;
             _asusApp = updates.Asus;
-            SyncUpdateBadge();
         }
         _ = UiSounds.InitAsync();
         PlayIntro();
@@ -361,9 +360,12 @@ public partial class MainWindow : Window
                 else if (button == "background") ToggleDockPanel(BackgroundApps, OpenBackgroundApps);
             }
         }
-        if (args.Contains("--settings"))
+        // « --settings Application » : réglages ouverts sur cette catégorie (« Au démarrage » par défaut), pour vérifier l'affichage.
+        var settingsArg = Array.IndexOf(args, "--settings");
+        if (settingsArg >= 0)
         {
-            _settingsView.PreviewCategory("Au démarrage");
+            var category = args.ElementAtOrDefault(settingsArg + 1) is { } named && !named.StartsWith("--") ? named : "Au démarrage";
+            _settingsView.PreviewCategory(category);
             OpenSubPage(_settingsView);
         }
         _ = CheckUpdatesAsync();
@@ -812,13 +814,6 @@ public partial class MainWindow : Window
     // Mises à jour (Windows Update, Armoury Crate)
     // =====================================================================
 
-    /// <summary>Pastille du bouton Menu : mises à jour Windows (ou redémarrage qui les termine) et nouvelle version de l'application.</summary>
-    private void SyncUpdateBadge()
-    {
-        var windows = _windowsUpdates is { } w ? Math.Max(w.Count, w.RebootRequired ? 1 : 0) : 0;
-        MenuBadge.Count = windows + (_appRelease is null ? 0 : 1);
-    }
-
     private DateTime _lastUpdateCheck;
     private AsusAppInfo? _asusApp;
     private WindowsUpdateStatus? _windowsUpdates;
@@ -837,7 +832,6 @@ public partial class MainWindow : Window
             _updatesFailed = status.Error is not null;
             if (!_updatesFailed || _windowsUpdates is null) _windowsUpdates = status;
             new UpdateSnapshot(_windowsUpdates, _asusApp).Save();
-            SyncUpdateBadge();
             // Menu ouvert pendant la vérification : ses tuiles suivent.
             if (_systemMenu is { } menu)
             {
@@ -867,7 +861,6 @@ public partial class MainWindow : Window
         _lastAppUpdateCheck = DateTime.Now;
         var known = _appRelease?.Version;
         _appRelease = await _appUpdater.CheckAsync(CancellationToken.None) ?? _appRelease;
-        SyncUpdateBadge();
         if (_appRelease is not { } release || release.Version == known) return;
         Toast("", $"Ma ROG Ally {release.Version.ToString(3)} est disponible : voir le menu");
         var (text, color) = AppUpdateStatus;
@@ -1973,28 +1966,43 @@ public partial class MainWindow : Window
             else Toast("\uE765", $"Centre de contrôle : {GlobalHotkeys.Describe(key)}");
         }
 
-        panel.AddChoice("Détecter une touche", false, () =>
+        // La détection montre d'abord la touche reçue : rien n'est enregistré sans le confirmer. Elle sert aussi à vérifier
+        // ce que M1 envoie vraiment, selon le mode de la manette et l'application devant.
+        Button Build(int? detected)
         {
-            _hotkeys?.Suspend();
-            panel.SetSubtitle("Appuie sur la touche à utiliser, ou sur M1… (Échap ou B pour annuler)");
-            _keyCapture = key =>
+            panel.Clear();
+            Button? focus = null;
+            if (detected is { } found)
+                focus = panel.AddChoice($"Utiliser {GlobalHotkeys.Name(found)}", false, () => Choose(found), detail: "Touche reçue à l'instant");
+            panel.AddChoice("Détecter une touche", false, () =>
             {
-                if (key == Key.Escape)
+                _hotkeys?.Suspend();
+                panel.SetSubtitle("Appuie sur la touche, ou sur M1… (Échap ou B pour annuler)");
+                _keyCapture = key =>
                 {
                     StopCapture();
-                    panel.SetSubtitle(Subtitle);
-                }
-                else if (GlobalHotkeys.CanUse(key)) Choose(KeyInterop.VirtualKeyFromKey(key));
-                else panel.SetSubtitle($"{key} sert à taper ou à naviguer : appuie sur une autre touche (Échap ou B pour annuler)");
-            };
-        }, detail: "Puis appuie sur la touche, ou sur M1");
-        var current = panel.AddChoice(GlobalHotkeys.Describe(null), _settings.QuickPanelKey is null, () => Choose(null), detail: "Par défaut");
-        foreach (var key in GlobalHotkeys.Choices)
-        {
-            var b = panel.AddChoice(GlobalHotkeys.Name(key), _settings.QuickPanelKey == key, () => Choose(key));
-            if (_settings.QuickPanelKey == key) current = b;
+                    if (key == Key.Escape)
+                    {
+                        panel.SetSubtitle(Subtitle);
+                        return;
+                    }
+                    var vk = KeyInterop.VirtualKeyFromKey(key);
+                    var name = vk > 0 ? GlobalHotkeys.Name(vk) : key.ToString();
+                    var usable = GlobalHotkeys.CanUse(key);
+                    panel.SetSubtitle(usable ? $"Touche reçue : {name}" : $"Touche reçue : {name}. Elle sert à taper ou à naviguer, elle ne peut pas ouvrir le volet.");
+                    var first = Build(usable ? vk : null);
+                    Dispatcher.BeginInvoke(() => FocusNav.Focus(first), DispatcherPriority.Loaded);
+                };
+            }, detail: "Puis appuie sur la touche, ou sur M1");
+            var current = panel.AddChoice(GlobalHotkeys.Describe(null), _settings.QuickPanelKey is null, () => Choose(null), detail: "Par défaut");
+            foreach (var key in GlobalHotkeys.Choices)
+            {
+                var b = panel.AddChoice(GlobalHotkeys.Name(key), _settings.QuickPanelKey == key, () => Choose(key));
+                if (_settings.QuickPanelKey == key) current = b;
+            }
+            return focus ?? current;
         }
-        panel.InitialFocus = current;
+        panel.InitialFocus = Build(null);
         // Fermé pendant la détection : les touches enregistrées sont de nouveau écoutées.
         panel.CloseRequested += _ => StopCapture();
         OpenOverlay(panel);
@@ -2209,6 +2217,8 @@ public partial class MainWindow : Window
     {
         var panel = DockPanelOf(WindowsMenu, bottom: false);
         panel.HideTitle();
+        // Plus large : les accès rapides y tiennent deux par ligne.
+        panel.Widen(660);
         // Dernière liste connue : affichée tout de suite, la lecture (quelques secondes) se fait derrière.
         var (apps, launchers, recent) = _windowsMenuData;
         var search = "";
@@ -2231,7 +2241,7 @@ public partial class MainWindow : Window
             panel.FocusTag(app);
         };
 
-        void Quick(string glyph, string label, Action run) => panel.AddApp(label, null, () =>
+        (string Label, string? IconSource, Action OnClick, string? Glyph) Quick(string glyph, string label, Action run) => (label, null, () =>
         {
             panel.Close();
             run();
@@ -2260,10 +2270,14 @@ public partial class MainWindow : Window
                     var self = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                     if (!WindowsShell.ShowBrowser(browser, self)) Toast("", "Impossible d'ouvrir le navigateur");
                 }, browser is null ? "" : null);
-                Quick("", "Paramètres", () => GameLauncher.Open("ms-settings:"));
-                Quick("", "Explorateur de fichiers", () => GameLauncher.Open("explorer.exe"));
-                Quick("", "Gestionnaire des tâches", () => GameLauncher.Open("taskmgr.exe"));
-                Quick("", "Menu Démarrer de Windows", WindowsShell.ShowStartMenu);
+                // Navigateur seul sur sa ligne, les autres deux par deux.
+                panel.AddAppGrid(2,
+                [
+                    Quick("", "Paramètres", () => GameLauncher.Open("ms-settings:")),
+                    Quick("", "Explorateur de fichiers", () => GameLauncher.Open("explorer.exe")),
+                    Quick("", "Gestionnaire des tâches", () => GameLauncher.Open("taskmgr.exe")),
+                    Quick("", "Menu Démarrer de Windows", WindowsShell.ShowStartMenu),
+                ]);
             }
             // Favoris, dans l'ordre d'ajout (une application désinstallée n'apparaît plus).
             var favorites = search.Length == 0 && apps is not null
@@ -2477,6 +2491,7 @@ public partial class MainWindow : Window
         {
             UiSounds.PlayPanelOpen();
             window.CloseStarted += UiSounds.PlayPanelClose;
+            KeepGamepadMode(window);
         }
     }
 
@@ -2538,6 +2553,47 @@ public partial class MainWindow : Window
         _writtenGamepad = null;
         if (mode == ControlMode.Auto) StartAutoControl();
         else WriteControlMode(mode == ControlMode.Gamepad);
+    }
+
+    /// <summary>
+    /// Le volet se pilote toujours à la manette, quel que soit le mode choisi : en mode bureau, la manette de l'Ally imite
+    /// une souris et n'est plus lue comme une manette. Armoury Crate peut repasser en mode bureau juste après l'ouverture
+    /// (il ne reconnaît pas le volet comme un jeu) : le mode manette est réécrit plusieurs fois pendant les premières secondes.
+    /// </summary>
+    private void KeepGamepadMode(QuickPanelWindow window)
+    {
+        if (!_hasController) return;
+        foreach (var delay in new[] { 0, 500, 1500, 3000 })
+            _ = Task.Delay(delay).ContinueWith(_ =>
+            {
+                if (_quickPanel != window || window.IsClosing) return;
+                _writtenGamepad = true;
+                _ = AllyController.WriteAsync(true);
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        window.CloseStarted += () => _ = RestoreModeAfterPanelAsync();
+    }
+
+    /// <summary>Volet fermé : le mode revient à celui choisi, ou à celui qui convient à l'application revenue devant.</summary>
+    private async Task RestoreModeAfterPanelAsync()
+    {
+        // Le premier plan vient d'être rendu : on attend qu'il soit en place.
+        await Task.Delay(400);
+        if (_quickPanel is not null) return;
+        _writtenGamepad = null;
+        switch (ReadControlMode())
+        {
+            case ControlMode.Gamepad:
+                WriteControlMode(true);
+                break;
+            case ControlMode.Desktop:
+                WriteControlMode(false);
+                break;
+            default:
+                // Auto, ou mode laissé à Armoury Crate : le mode manette n'est gardé que sur l'application, un jeu ou le plein écran.
+                WriteControlMode(_desktop.IsForeground
+                    || WindowsShell.ForegroundApp(_desktop.Handle) is { } app && (WindowsShell.IsFullscreen(app.Handle) || IsGamepadWindow(app)));
+                break;
+        }
     }
 
     private void WriteControlMode(bool gamepad)
