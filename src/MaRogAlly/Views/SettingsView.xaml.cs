@@ -94,6 +94,8 @@ public partial class SettingsView : UserControl
             "Réduire au lancement", "Réduit l'application dans la barre des tâches dès qu'un jeu est lancé.");
         Switch("Réduire les autres applications avec B", () => _settings.MinimizeWithB, v => _settings.MinimizeWithB = v,
             "Réduire avec B", "Le bouton B de la manette réduit l'application au premier plan, si ce n'est pas Ma ROG Ally. Il reste sans effet dans un jeu de ta bibliothèque et dans toute fenêtre en plein écran.\n\nDésactive cette option si B réduit par erreur un jeu en fenêtre qui n'est pas dans ta bibliothèque.");
+        Switch("Souris à la manette", () => _settings.PadMouse, v => _settings.PadMouse = v,
+            "Souris à la manette", "Sur le bureau et les applications de bureau, la manette pilote la souris : stick gauche pour le curseur, RB pour le clic gauche (maintenu pour glisser), LB pour le clic droit, stick droit pour défiler. B réduit toujours l'application pour revenir ici.\n\nJamais dans Ma ROG Ally, dans un jeu de ta bibliothèque, en plein écran ou dans les paramètres de Windows.\n\nPlus besoin du mode bureau de la ROG Ally : en mode Auto, la manette reste en mode manette, et le bouton du centre de contrôle marche partout.");
         Switch("Masquer la barre des tâches de Windows", () => _settings.HideWindowsTaskbar, v => { _settings.HideWindowsTaskbar = v; WindowsTaskbar.Apply(_settings); },
             "Barre des tâches de Windows", "Active le masquage automatique de Windows tant que l'application tourne : la barre ne repasse plus devant les autres applications, qui gagnent aussi sa place à l'écran. Elle reste accessible en glissant depuis le bas de l'écran. Ton réglage d'origine revient quand tu quittes l'application.");
 

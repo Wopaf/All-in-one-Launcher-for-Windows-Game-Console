@@ -28,6 +28,9 @@ public sealed class AppSettings
     public bool? TaskbarAutoHideBefore { get; set; }
     /// <summary>Le bouton B de la manette réduit l'application au premier plan (jamais un jeu).</summary>
     public bool MinimizeWithB { get; set; } = true;
+
+    /// <summary>Souris à la manette sur les applications de bureau (la manette reste alors en mode manette en Auto).</summary>
+    public bool PadMouse { get; set; } = true;
     /// <summary>Lanceurs ouverts avec l'application, s'ils sont installés.</summary>
     public HashSet<Platform> StartupLaunchers { get; set; } = [Platform.Steam, Platform.Epic];
     /// <summary>Cherche toute seule une nouvelle version sur GitHub (l'installation reste toujours à valider).</summary>

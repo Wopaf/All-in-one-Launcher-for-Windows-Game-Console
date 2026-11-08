@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private List<FreeGame> _freeGames = [];
     private DateTime _lastEpicFetch = DateTime.MinValue;
     private readonly Gamepad _pad = new();
+    private readonly PadMouse _padMouse = new();
 
     private readonly GamesView _installed = new() { InstalledOnly = true };
     private readonly GamesView _all = new();
@@ -123,6 +124,8 @@ public partial class MainWindow : Window
         _pad.Action += OnNav;
         _pad.MinimizeRequested += MinimizeForegroundApp;
         _pad.PanelChord = _settings.QuickPanelPadButtons;
+        _padMouse.IsWanted = PadMouseWanted;
+        _pad.BackgroundPoll += _padMouse.Update;
         _pad.PanelChordPressed += OnQuickPanelKey;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
 
@@ -491,6 +494,8 @@ public partial class MainWindow : Window
 
     private void OnActivated(object? sender, EventArgs e)
     {
+        // Un clic de la souris à la manette encore enfoncé ne doit pas rester appuyé.
+        _padMouse.Release();
         _ = RefreshDockAsync();
         RefreshDue(returned: true);
     }
@@ -2580,6 +2585,7 @@ public partial class MainWindow : Window
 
     private void OpenQuickPanel(int tab = 0, bool activate = true)
     {
+        _padMouse.Release();
         var target = WindowsShell.ForegroundApp(_desktop.Handle);
         var panel = new QuickPanel(target, ReadControlMode, ChooseControlMode, _hasController, tab, activate);
         var window = new QuickPanelWindow(panel, EffectiveUiScale(_settings.UiScale), activate);
@@ -2735,6 +2741,23 @@ public partial class MainWindow : Window
         _ = AllyController.WriteAsync(gamepad);
     }
 
+    private DateTime _padMouseChecked;
+    private bool _padMouseWanted;
+
+    /// <summary>
+    /// Souris à la manette : sur le bureau ou une application de bureau, jamais dans l'application, le volet, un jeu,
+    /// le plein écran ou les paramètres de Windows. Réévalué quatre fois par seconde (lister les fenêtres coûte).
+    /// </summary>
+    private bool PadMouseWanted()
+    {
+        var now = DateTime.UtcNow;
+        if (now - _padMouseChecked < TimeSpan.FromMilliseconds(250)) return _padMouseWanted;
+        _padMouseChecked = now;
+        _padMouseWanted = _settings.PadMouse && !_desktop.IsForeground && _quickPanel is null
+            && (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || !WindowsShell.IsFullscreen(app.Handle) && !IsGamepadWindow(app));
+        return _padMouseWanted;
+    }
+
     /// <summary>Auto : manette sur l'application, sur un jeu et en plein écran ; bureau ailleurs. Un volet du système ne change rien.</summary>
     private void StartAutoControl()
     {
@@ -2747,7 +2770,8 @@ public partial class MainWindow : Window
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         timer.Tick += (_, _) =>
         {
-            if (_desktop.IsForeground || _quickPanel is not null) WriteControlMode(true);
+            // Avec la souris à la manette, le mode bureau n'est plus utile : la manette reste lue partout.
+            if (_desktop.IsForeground || _quickPanel is not null || _settings.PadMouse) WriteControlMode(true);
             else if (WindowsShell.ForegroundApp(_desktop.Handle) is { } app) WriteControlMode(WindowsShell.IsFullscreen(app.Handle) || IsGamepadWindow(app));
         };
         return timer;

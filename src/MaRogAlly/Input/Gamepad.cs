@@ -29,6 +29,8 @@ public sealed class Gamepad : IDisposable
     public event Action<bool>? ConnectionChanged;
     /// <summary>B pressé alors que l'application n'est pas au premier plan : réduire celle qui l'est.</summary>
     public event Action? MinimizeRequested;
+    /// <summary>État de la manette à chaque relevé quand l'application n'est pas au premier plan (souris à la manette).</summary>
+    public event Action<PadState>? BackgroundPoll;
 
     /// <summary>Ne lire la manette que si cette condition est vraie (ex. fenêtre au premier plan).</summary>
     public Func<bool> IsActive { get; set; } = () => true;
@@ -125,6 +127,7 @@ public sealed class Gamepad : IDisposable
             // déclencher d'action avec un appui fait dans le jeu.
             var newlyPressed = (ushort)(pad.Buttons & ~_previousButtons);
             if (!active && Has(newlyPressed, Buttons.B)) MinimizeRequested?.Invoke();
+            if (!active) BackgroundPoll?.Invoke(new PadState(pad.Buttons, pad.ThumbLX, pad.ThumbLY, pad.ThumbRX, pad.ThumbRY));
             _previousButtons = pad.Buttons;
             _previousLt = pad.LeftTrigger > TriggerThreshold;
             _previousRt = pad.RightTrigger > TriggerThreshold;
