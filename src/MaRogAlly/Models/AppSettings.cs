@@ -21,6 +21,9 @@ public sealed class AppSettings
     public string? ControlMode { get; set; }
 
     public bool StartWithWindows { get; set; } = true;
+
+    /// <summary>Ferme Armoury Crate au lancement de l'application.</summary>
+    public bool CloseArmouryCrate { get; set; } = true;
     public bool MinimizeOnLaunch { get; set; } = false;
     /// <summary>Masque automatiquement la barre des tâches de Windows tant que l'application tourne.</summary>
     public bool HideWindowsTaskbar { get; set; } = true;

@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private DateTime _lastEpicFetch = DateTime.MinValue;
     private readonly Gamepad _pad = new();
     private readonly PadMouse _padMouse = new();
+    private PointerOverlay? _pointer;
 
     private readonly GamesView _installed = new() { InstalledOnly = true };
     private readonly GamesView _all = new();
@@ -125,6 +126,9 @@ public partial class MainWindow : Window
         _pad.MinimizeRequested += MinimizeForegroundApp;
         _pad.PanelChord = _settings.QuickPanelPadButtons;
         _padMouse.IsWanted = PadMouseWanted;
+        // Notre curseur, créé à la première utilisation : Windows cache le sien quand aucune souris n'est branchée.
+        _padMouse.ShowPointer = (x, y) => (_pointer ??= new PointerOverlay()).ShowAt(x, y);
+        _padMouse.HidePointer = () => _pointer?.HidePointer();
         _pad.BackgroundPoll += _padMouse.Update;
         _pad.PanelChordPressed += OnQuickPanelKey;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
@@ -156,6 +160,7 @@ public partial class MainWindow : Window
             _ = PrepareControllerAsync();
             // Un jeu resté suspendu par une session arrêtée brutalement repart.
             GamePause.ResumeLeftover();
+            if (_settings.CloseArmouryCrate) _ = Task.Run(ArmouryCrate.CloseAll);
         };
         CursorHider.Attach(this);
         Activated += OnActivated;
