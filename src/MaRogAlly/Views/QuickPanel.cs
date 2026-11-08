@@ -557,7 +557,7 @@ public sealed class QuickPanel : UserControl
     private List<Border> AddTiles(double height, params (string? Glyph, string Label, Action OnClick)[] tiles) => AddTileRow(height, tiles.Length, tiles);
 
     /// <summary>Rangée de tuiles de même taille : icône (facultative) au-dessus du libellé. Une rangée incomplète garde des colonnes vides.</summary>
-    private List<Border> AddTileRow(double height, int columns, (string? Glyph, string Label, Action OnClick)[] tiles)
+    private List<Border> AddTileRow(double height, int columns, (string? Glyph, string Label, Action OnClick)[] tiles, double fontSize = 13)
     {
         // Même marge de chaque côté de toutes les tuiles, que la grille rattrape sur ses bords : aucune n'est plus large qu'une autre.
         var grid = new Grid { Margin = new Thickness(-4, 0, -4, 8) };
@@ -568,7 +568,7 @@ public sealed class QuickPanel : UserControl
             var (glyph, label, onClick) = tiles[i];
             var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             if (glyph is not null) content.Children.Add(new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 20, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 6) });
-            content.Children.Add(new TextBlock { Text = label, FontSize = 13, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center });
+            content.Children.Add(new TextBlock { Text = label, FontSize = fontSize, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, HorizontalAlignment = HorizontalAlignment.Center });
             var card = Card(content, new Thickness(6, 0, 6, 0));
             card.Height = height;
             cards.Add(card);
@@ -583,6 +583,9 @@ public sealed class QuickPanel : UserControl
 
     // ================= Accueil =================
 
+    /// <summary>Libellés des accès rapides : plus petits que ceux des autres tuiles.</summary>
+    private const double QuickFont = 11.5;
+
     private void BuildHome()
     {
         var screen = _screen;
@@ -591,16 +594,16 @@ public sealed class QuickPanel : UserControl
         [
             ("", "Accueil", () => HomeRequested?.Invoke()),
             ("", "Fin de tâche", EndTask),
-            ("", "Afficher le bureau", () => DesktopRequested?.Invoke()),
+            ("", "Bureau", () => DesktopRequested?.Invoke()),
             ("\uE71D", "Menu Démarrer", () => StartMenuRequested?.Invoke()),
-        ]);
+        ], QuickFont);
         var radios = AddTileRow(84, QuickColumns,
         [
             ("", "Wi-Fi", () => WifiRequested?.Invoke()),
             ("", "Bluetooth", () => BluetoothRequested?.Invoke()),
             ("", "Mode avion", () => _ = ToggleAirplaneAsync()),
             ("", "Capture d'écran", () => ScreenshotRequested?.Invoke()),
-        ]);
+        ], QuickFont);
         _radioCards = radios;
         _ = PaintRadiosAsync(screen);
 

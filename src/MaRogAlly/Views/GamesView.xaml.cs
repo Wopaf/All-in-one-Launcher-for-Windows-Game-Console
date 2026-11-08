@@ -252,9 +252,10 @@ public partial class GamesView : UserControl
         TitleText.FontSize = compact ? 32 : 44;
         TitleText.LineHeight = compact ? 36 : 50;
         MetaRow.Margin = new Thickness(0, compact ? 8 : 16, 0, 0);
-        DetailPanel.Margin = new Thickness(SidePadding, 0, SidePadding, compact ? 10 : 20);
-        // Hauteur fixe (logo + badges) : le bloc centré ne saute pas d'un jeu à l'autre.
-        DetailPanel.Height = LogoBox.Height + MetaRow.Margin.Top + MetaRow.Height;
+        // Un peu d'air entre le logo et ce qui suit (catégories de la Bibliothèque, jaquettes de Mes Jeux).
+        DetailPanel.Margin = new Thickness(SidePadding, 0, SidePadding, compact ? 22 : 34);
+        // Hauteur fixe (le logo seul, sans badges) : le bloc centré ne saute pas d'un jeu à l'autre.
+        DetailPanel.Height = LogoBox.Height;
     }
 
     private void BuildRows()

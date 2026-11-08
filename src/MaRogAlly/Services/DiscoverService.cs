@@ -8,7 +8,7 @@ using MaRogAlly.Models;
 
 namespace MaRogAlly.Services;
 
-/// <summary>Jeu mis en avant dans l'onglet Découverte (données du magasin Steam).</summary>
+/// <summary>Jeu mis en avant dans l'onglet Découverte : magasin Steam, et IGDB pour les tendances toutes plateformes.</summary>
 public sealed class DiscoverGame : ObservableObject
 {
     private static readonly CultureInfo Fr = CultureInfo.GetCultureInfo("fr-FR");
@@ -31,6 +31,22 @@ public sealed class DiscoverGame : ObservableObject
     /// <summary>Visuels fournis par le magasin (jaquette, fond, capsule large en dernier recours).</summary>
     public List<string> CoverUrls { get; set; } = [];
     public List<string> HeroUrls { get; set; } = [];
+
+    /// <summary>Fiche IGDB (tendances toutes plateformes). AppId à 0 : jeu absent du magasin Steam (console, autre boutique).</summary>
+    public long? IgdbId { get; set; }
+    /// <summary>Plateformes en libellés courts (PC, PS5, Xbox Series, Switch 2…), d'après IGDB.</summary>
+    public List<string> Platforms { get; set; } = [];
+    public List<string> Screenshots { get; set; } = [];
+    public string? Developer { get; set; }
+    public string? Publisher { get; set; }
+    /// <summary>Raison de sa place « À la une » (ex. « N° 1 des tendances »).</summary>
+    public string? Spotlight { get; set; }
+
+    [JsonIgnore] public bool HasSteam => AppId > 0;
+    [JsonIgnore] public bool OnPc => HasSteam || Platforms.Contains("PC");
+    [JsonIgnore] public string? PlatformsText => Platforms.Count > 0 ? string.Join(" · ", Platforms) : null;
+    /// <summary>Clé des visuels en cache : celle de Steam (partagée avec les fiches), sinon celle d'IGDB.</summary>
+    [JsonIgnore] public string ImageKey => HasSteam ? $"steam-{AppId}" : $"igdb-{IgdbId}";
 
     private string? _coverPath, _heroPath;
     [JsonIgnore] public string? CoverPath { get => _coverPath; set => Set(ref _coverPath, value); }
@@ -60,6 +76,7 @@ public sealed class DiscoverGame : ObservableObject
     [JsonIgnore]
     public string? CardBadge => IsOwned ? "Possédé"
         : PriceText is { } price ? (DiscountText is { } d ? $"{d}  {price}" : price)
+        : ComingSoon && Release is { } soon ? soon.ToString("d MMM yyyy", Fr)
         : null;
     [JsonIgnore] public bool IsDiscounted => DiscountPercent > 0 || IsFree || StoreDiscounted;
     /// <summary>Liste de souhaits : jeu d'une autre boutique que Steam (sa page, sa plateforme, sa promotion).</summary>
@@ -74,7 +91,7 @@ public sealed class DiscoverGame : ObservableObject
     [JsonIgnore]
     public string? ReleaseText => Release is { } d
         ? (ComingSoon || d > DateTime.Now ? $"Sortie le {d.ToString("d MMMM yyyy", Fr)}" : $"Sorti le {d.ToString("d MMMM yyyy", Fr)}")
-        : ComingSoon ? "Prochainement" : null;
+        : ComingSoon ? "Date à venir" : null;
     [JsonIgnore] public string? GenresText => Genres.Count > 0 ? string.Join(" · ", Genres.Take(3)) : null;
     /// <summary>Petite ligne sous la jaquette.</summary>
     [JsonIgnore] public string? CardLine => PlayersText is not null ? PlayersText.Replace(" au pic du jour", "") : ComingSoon ? ReleaseText : PriceText;
@@ -96,13 +113,17 @@ public sealed class DiscoverSection
 }
 
 /// <summary>
-/// Tendances du magasin Steam, sans clé d'API : jeux les plus joués (ISteamChartsService),
-/// nouveautés, meilleures ventes et sorties à venir (featuredcategories), détaillés par IStoreBrowseService.
+/// Onglet Découverte. Avec IGDB : « En tendance » et « Les plus attendus » toutes plateformes (consoles comprises),
+/// complétés par le magasin Steam pour les jeux qui y sont vendus (prix, avis, description en français).
+/// Sans IGDB : les listes du magasin Steam (nouveautés populaires, sorties à venir). Dans les deux cas, « Les plus joués »
+/// (ISteamChartsService) et « En promotion » (meilleures ventes en promotion) viennent de Steam.
 /// </summary>
-public sealed class DiscoverService(HttpClient http)
+public sealed class DiscoverService(HttpClient http, IgdbClient? igdb = null)
 {
     private static readonly string CachePath = Path.Combine(AppPaths.Root, "discover.json");
     private readonly ImageCache _images = new(http);
+
+    public const string FeaturedKey = "featured";
 
     /// <summary>Dernières sections connues (affichage immédiat au démarrage).</summary>
     public static List<DiscoverSection> LoadCached() => Json.Load<List<DiscoverSection>>(CachePath) ?? [];
@@ -112,18 +133,28 @@ public sealed class DiscoverService(HttpClient http)
         var sections = new List<DiscoverSection>();
         try
         {
+            IgdbTrends? trends = null;
+            if (igdb is { IsConfigured: true })
+            {
+                try { trends = await igdb.TrendsAsync(ct); }
+                catch (Exception ex) when (ex is not OperationCanceledException) { Log.Error("Découverte : tendances IGDB", ex); }
+            }
+
             // Recherche Steam limitée aux jeux (category1=998) : pas de DLC, démos ni bandes-son.
             var played = await MostPlayedAsync(ct);
-            var popularNew = await SearchAsync("popularnew", 60, ct);
-            var sellers = await SearchAsync("topsellers", 20, ct);
-            var soon = await SearchAsync("popularcomingsoon", 20, ct);
-            var ids = played.Select(p => p.AppId).Concat(popularNew).Concat(sellers).Concat(soon).Distinct().ToList();
+            var deals = await SearchAsync("topsellers", 30, ct, "&specials=1");
+            List<int> popularNew = [], soon = [];
+            if (trends is null)
+            {
+                popularNew = await SearchAsync("popularnew", 60, ct);
+                soon = await SearchAsync("popularcomingsoon", 20, ct);
+            }
+            IEnumerable<int> fromIgdb = trends is null ? [] : trends.Trending.Concat(trends.Anticipated).Select(t => t.SteamAppId).OfType<int>();
+            var ids = played.Select(p => p.AppId).Concat(deals).Concat(popularNew).Concat(soon).Concat(fromIgdb).Distinct().ToList();
             var details = await DetailsAsync(ids, ct);
 
             // Copie : un même jeu peut figurer dans plusieurs catégories.
-            DiscoverGame? Make(int id) => details.TryGetValue(id, out var d)
-                ? JsonSerializer.Deserialize<DiscoverGame>(JsonSerializer.Serialize(d))
-                : null;
+            DiscoverGame? Make(int id) => details.TryGetValue(id, out var d) ? Copy(d) : null;
 
             var mostPlayed = played.Select(p =>
             {
@@ -134,26 +165,40 @@ public sealed class DiscoverService(HttpClient http)
                 return g;
             }).OfType<DiscoverGame>().ToList();
 
-            // « Nouveautés en tendance » : les jeux populaires sortis ces quatre derniers mois.
-            var trending = popularNew.Select(Make).OfType<DiscoverGame>()
-                .Where(g => !g.ComingSoon && g.Release is { } r && r <= DateTime.Now && DateTime.Now - r < TimeSpan.FromDays(120))
-                .Take(20).ToList();
+            List<DiscoverGame> trending, anticipated;
+            string trendingSubtitle, anticipatedSubtitle;
+            if (trends is not null)
+            {
+                trending = trends.Trending.Select(t => FromIgdb(t, Make, upcoming: false)).ToList();
+                anticipated = trends.Anticipated.Select(t => FromIgdb(t, Make, upcoming: true)).ToList();
+                trendingSubtitle = "Cette semaine, toutes plateformes";
+                anticipatedSubtitle = "Les sorties à venir, toutes plateformes";
+            }
+            else
+            {
+                // Sans IGDB : les jeux populaires sortis ces quatre derniers mois, et les sorties à venir de Steam.
+                trending = popularNew.Select(Make).OfType<DiscoverGame>()
+                    .Where(g => !g.ComingSoon && g.Release is { } r && r <= DateTime.Now && DateTime.Now - r < TimeSpan.FromDays(120))
+                    .Take(20).ToList();
+                anticipated = soon.Select(Make).OfType<DiscoverGame>().Select(g => { g.ComingSoon = true; return g; }).ToList();
+                trendingSubtitle = "Sorties récentes populaires sur Steam";
+                anticipatedSubtitle = "Les sorties les plus attendues sur Steam";
+            }
+            for (var i = 0; i < trending.Count; i++) trending[i].Rank ??= i + 1;
+            for (var i = 0; i < anticipated.Count; i++) anticipated[i].Rank ??= i + 1;
 
+            sections.Add(new DiscoverSection { Key = FeaturedKey, Title = "À la une", Subtitle = "Les jeux du moment", Games = Featured(trending, anticipated) });
+            sections.Add(new DiscoverSection { Key = "trending", Title = "En tendance", Subtitle = trendingSubtitle, Games = trending });
+            sections.Add(new DiscoverSection { Key = "anticipated", Title = "Les plus attendus", Subtitle = anticipatedSubtitle, Games = anticipated });
             sections.Add(new DiscoverSection { Key = "played", Title = "Les plus joués", Subtitle = "En ce moment sur Steam", Games = mostPlayed });
-            sections.Add(new DiscoverSection { Key = "new", Title = "Nouveautés en tendance", Subtitle = "Sorties récentes populaires", Games = trending });
             sections.Add(new DiscoverSection
             {
-                Key = "sellers", Title = "Meilleures ventes", Subtitle = "Les plus achetés sur Steam",
-                Games = sellers.Select(Make).OfType<DiscoverGame>().ToList(),
-            });
-            sections.Add(new DiscoverSection
-            {
-                Key = "soon", Title = "Prochainement", Subtitle = "Les sorties les plus attendues",
-                Games = soon.Select(Make).OfType<DiscoverGame>().Select(g => { g.ComingSoon = true; return g; }).ToList(),
+                Key = "deals", Title = "En promotion", Subtitle = "Les meilleures ventes en promotion sur Steam",
+                Games = deals.Select(Make).OfType<DiscoverGame>().Where(g => g.DiscountPercent > 0).ToList(),
             });
             sections.RemoveAll(s => s.Games.Count == 0);
             if (sections.Count > 0) Json.Save(CachePath, sections);
-            Log.Info($"Découverte : {string.Join(", ", sections.Select(s => $"{s.Title} ({s.Games.Count})"))}");
+            Log.Info($"Découverte ({(trends is null ? "Steam" : "IGDB et Steam")}) : {string.Join(", ", sections.Select(s => $"{s.Title} ({s.Games.Count})"))}");
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -161,6 +206,64 @@ public sealed class DiscoverService(HttpClient http)
             Log.Error("Découverte indisponible", ex);
         }
         return sections;
+    }
+
+    private static DiscoverGame Copy(DiscoverGame d) => JsonSerializer.Deserialize<DiscoverGame>(JsonSerializer.Serialize(d))!;
+
+    /// <summary>
+    /// Jeu des tendances IGDB : sa fiche Steam s'il y est vendu (prix, avis, description en français), complétée par IGDB
+    /// (plateformes, studio, captures) ; sinon la fiche IGDB seule, sans magasin.
+    /// </summary>
+    private static DiscoverGame FromIgdb(IgdbTrendGame t, Func<int, DiscoverGame?> steam, bool upcoming)
+    {
+        var g = t.SteamAppId is int id ? steam(id) : null;
+        if (g is null)
+            g = new DiscoverGame
+            {
+                Name = t.Name,
+                Description = t.Summary ?? "",
+                Release = t.Release,
+                ComingSoon = upcoming,
+                Genres = t.Genres,
+                CoverUrls = t.CoverUrl is { } cover ? [cover] : [],
+                HeroUrls = t.HeroUrls,
+            };
+        else
+        {
+            if (upcoming) g.ComingSoon = true;
+            g.Release ??= t.Release;
+            if (g.Genres.Count == 0) g.Genres = t.Genres;
+            // Visuels IGDB après ceux de Steam : un jeu à venir n'a pas toujours de grand visuel sur Steam.
+            g.HeroUrls = g.HeroUrls.Concat(t.HeroUrls).ToList();
+            if (t.CoverUrl is { } cover) g.CoverUrls = g.CoverUrls.Append(cover).ToList();
+        }
+        g.IgdbId = t.Id;
+        g.Platforms = g.HasSteam && !t.Platforms.Contains("PC") ? ["PC", .. t.Platforms] : t.Platforms;
+        g.Developer = t.Developer;
+        g.Publisher = t.Publisher;
+        g.Screenshots = t.Screenshots;
+        return g;
+    }
+
+    /// <summary>À la une : les trois premiers des tendances et les deux premiers des plus attendus, en alternance.</summary>
+    private static List<DiscoverGame> Featured(List<DiscoverGame> trending, List<DiscoverGame> anticipated)
+    {
+        var picks = new List<DiscoverGame>();
+        void Pick(List<DiscoverGame> list, int index, Func<DiscoverGame, string> reason)
+        {
+            if (list.ElementAtOrDefault(index) is not { } g || picks.Any(p => p.Name == g.Name)) return;
+            var copy = Copy(g);
+            copy.Spotlight = reason(g);
+            picks.Add(copy);
+        }
+        string Trend(DiscoverGame g) => $"N° {g.Rank} des tendances";
+        string Wait(DiscoverGame g) => $"N° {g.Rank} des plus attendus · {g.ReleaseText}";
+        Pick(trending, 0, Trend);
+        Pick(anticipated, 0, Wait);
+        Pick(trending, 1, Trend);
+        Pick(anticipated, 1, Wait);
+        Pick(trending, 2, Trend);
+        return picks;
     }
 
     /// <summary>Fiches à jour de ces jeux (prix, promotions) ; vide si le magasin ne répond pas.</summary>
@@ -191,16 +294,18 @@ public sealed class DiscoverService(HttpClient http)
     /// <summary>Jaquettes et visuels de fond, partagés avec le cache des fiches (clé steam-{appid}).</summary>
     public async Task LoadImagesAsync(IEnumerable<DiscoverGame> games, CancellationToken ct)
     {
-        var all = games.GroupBy(g => g.AppId).ToList();
+        var all = games.GroupBy(g => g.ImageKey).ToList();
         await Parallel.ForEachAsync(all, new ParallelOptions { MaxDegreeOfParallelism = 6, CancellationToken = ct }, async (group, token) =>
         {
-            var key = $"steam-{group.Key}";
+            var key = group.Key;
             var first = group.First();
+            IEnumerable<string> steamCovers = first.HasSteam ? SteamStore.CoverUrls(first.AppId) : [];
+            IEnumerable<string> steamHeroes = first.HasSteam ? SteamStore.HeroUrls(first.AppId) : [];
             // Jaquette verticale d'abord ; à défaut (jeu récent), la capsule large recadrée.
             var cover = ImageCache.Existing(key, "cover")
-                        ?? await _images.GetAsync(key, "cover", first.CoverUrls.Take(2).Concat(SteamStore.CoverUrls(group.Key)).Concat(first.CoverUrls.Skip(2)), token);
+                        ?? await _images.GetAsync(key, "cover", first.CoverUrls.Take(2).Concat(steamCovers).Concat(first.CoverUrls.Skip(2)), token);
             var hero = ImageCache.Existing(key, "hero")
-                       ?? await _images.GetAsync(key, "hero", first.HeroUrls.Concat(SteamStore.HeroUrls(group.Key)), token);
+                       ?? await _images.GetAsync(key, "hero", first.HeroUrls.Concat(steamHeroes), token);
             foreach (var g in group)
             {
                 g.CoverPath = cover;
@@ -214,8 +319,8 @@ public sealed class DiscoverService(HttpClient http)
     {
         foreach (var g in games)
         {
-            g.CoverPath = ImageCache.Existing($"steam-{g.AppId}", "cover");
-            g.HeroPath = ImageCache.Existing($"steam-{g.AppId}", "hero");
+            g.CoverPath = ImageCache.Existing(g.ImageKey, "cover");
+            g.HeroPath = ImageCache.Existing(g.ImageKey, "hero");
         }
     }
 
@@ -232,11 +337,11 @@ public sealed class DiscoverService(HttpClient http)
         return list;
     }
 
-    /// <summary>Résultats d'une liste du magasin (popularnew, topsellers, popularcomingsoon), jeux uniquement.</summary>
-    private async Task<List<int>> SearchAsync(string filter, int count, CancellationToken ct)
+    /// <summary>Résultats d'une liste du magasin (popularnew, topsellers, popularcomingsoon), jeux uniquement (« &amp;specials=1 » : en promotion).</summary>
+    private async Task<List<int>> SearchAsync(string filter, int count, CancellationToken ct, string extra = "")
     {
         using var doc = await GetJsonAsync(
-            $"https://store.steampowered.com/search/results/?filter={filter}&json=1&cc=FR&l=french&count={count}&category1=998", ct);
+            $"https://store.steampowered.com/search/results/?filter={filter}&json=1&cc=FR&l=french&count={count}&category1=998{extra}", ct);
         var ids = new List<int>();
         if (doc?.RootElement.TryGetProperty("items", out var items) != true) return ids;
         foreach (var i in items.EnumerateArray())

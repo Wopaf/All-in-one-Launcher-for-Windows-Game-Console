@@ -7,6 +7,50 @@
              Focusable="False">
     <UserControl.Resources>
 
+        <!-- Bandeau À la une : comme une jaquette (halo et contour à la sélection), sans zoom, qui le ferait sortir de l'écran -->
+        <Style x:Key="BannerCard" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Glow" CornerRadius="16" Background="{DynamicResource Accent}" Margin="-6" Opacity="0" Visibility="Hidden">
+                                <Border.Effect>
+                                    <BlurEffect Radius="22" RenderingBias="Performance"/>
+                                </Border.Effect>
+                            </Border>
+                            <Grid ui:Rounded.Radius="14" Background="#1A1F2A">
+                                <ContentPresenter/>
+                            </Grid>
+                            <Border x:Name="Frame" CornerRadius="14" BorderThickness="3" BorderBrush="White" Opacity="0" Margin="-1"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Glow" Property="Visibility" Value="Visible"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity" To="0.45" Duration="0:0:0.25"/>
+                                            <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
+                                            <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Barre de recherche : un grand bouton qui ouvre le clavier -->
         <Style x:Key="SearchBar" TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -95,7 +139,7 @@
 
         <!-- Jeu offert par Epic : visuel large, titre et compte à rebours ; badge GRATUIT, BIENTÔT ou OBTENU -->
         <DataTemplate x:Key="FreeCard" DataType="{x:Type s:FreeGame}">
-            <Button Style="{StaticResource MediaCard}" Tag="10" Margin="6" Click="Free_Click" GotKeyboardFocus="Free_Focus"
+            <Button Style="{StaticResource MediaCard}" Tag="10" Margin="0,0,18,0" Click="Free_Click" GotKeyboardFocus="Free_Focus"
                     Width="{Binding FreeCardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
                     Height="{Binding FreeHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
                 <Grid>
@@ -131,7 +175,7 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- Jeu de la section Nouveautés : jaquette, prix ou « Possédé » -->
+        <!-- Jeu de la rangée En tendance : jaquette, prix (ou date de sortie) ou « Possédé » -->
         <DataTemplate x:Key="NewCard" DataType="{x:Type s:DiscoverGame}">
             <Button Style="{StaticResource MediaCard}" Tag="8" Margin="0,0,18,0" Click="New_Click" GotKeyboardFocus="New_Focus"
                     Width="{Binding CoverWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -161,36 +205,74 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- Tuile d'une liste de tendances Steam (ouvre la page des tendances) ; les tuiles se partagent toute la largeur -->
-        <DataTemplate x:Key="TrendTile" DataType="{x:Type v:DiscoverTile}">
-            <Button Style="{StaticResource MediaCard}" Tag="10" Margin="0,0,18,0" Click="Tile_Click" GotKeyboardFocus="Tile_Focus"
-                    Height="{Binding TileHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
-                <Grid>
-                    <Rectangle Fill="{Binding Tint}" Opacity="0.28"/>
-                    <Image ui:ImageLoader.Source="{Binding Lead.HeroPath}" ui:ImageLoader.DecodeWidth="640" Stretch="UniformToFill"/>
-                    <Rectangle Fill="#990A0C11"/>
-                    <TextBlock Text="{Binding Title}" Margin="14,0" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontFamily="{StaticResource Display}" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"
-                               FontSize="{Binding TileTitleSize, RelativeSource={RelativeSource AncestorType=UserControl}}">
-                        <TextBlock.Effect>
-                            <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.7"/>
-                        </TextBlock.Effect>
-                    </TextBlock>
+        <!-- Rangée d'une liste (les plus attendus, les plus joués, en promotion) : titre, sous-titre à droite, jaquettes -->
+        <DataTemplate x:Key="TrendRowTemplate" DataType="{x:Type v:TrendRow}">
+            <StackPanel Margin="0,28,0,0">
+                <Grid Margin="64,0,64,14">
+                    <TextBlock Text="{Binding Label}" Style="{StaticResource Label}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Subtitle}" HorizontalAlignment="Right" VerticalAlignment="Center" FontSize="13" Foreground="{StaticResource TextMuted}"/>
                 </Grid>
-            </Button>
+                <ScrollViewer Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26" ui:EdgeFade.Size="64">
+                    <ItemsControl ItemsSource="{Binding Games}" ItemTemplate="{StaticResource NewCard}" Focusable="False" Margin="64,26,26,26"
+                                  RequestBringIntoView="Row_RequestBringIntoView">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+            </StackPanel>
         </DataTemplate>
     </UserControl.Resources>
 
-    <!-- De haut en bas : recherche, accès aux listes, puis les jeux à voir (nouveautés à gauche, offres Epic à droite) -->
-    <Grid x:Name="Root" VerticalAlignment="Center">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <!-- Page qui défile : à la une, recherche, la rangée En tendance (ou les résultats d'une recherche),
+         une rangée par liste (liste de souhaits comprise), puis les jeux offerts par Epic. La page suit la sélection (voir ScrollPage). -->
+    <ScrollViewer x:Name="PageScroll" Focusable="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
+        <StackPanel x:Name="PageContent" Margin="0,14,0,48">
+        <!-- ====== À la une : les jeux du moment, l'un après l'autre (←→ quand il est sélectionné) ====== -->
+        <Button x:Name="Spotlight" Style="{StaticResource BannerCard}" Margin="64,0,64,0" Height="220" Visibility="Collapsed"
+                Click="Spotlight_Click" GotKeyboardFocus="Spotlight_Focus" LostKeyboardFocus="Spotlight_Blur">
+            <Grid>
+                <Grid x:Name="SpotlightBody">
+                    <Image ui:ImageLoader.Source="{Binding HeroPath}" ui:ImageLoader.DecodeWidth="1600" Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <Rectangle>
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#F20A0C11" Offset="0"/>
+                                <GradientStop Color="#A60A0C11" Offset="0.5"/>
+                                <GradientStop Color="#1A0A0C11" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                    <StackPanel x:Name="SpotlightText" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="36,0,36,0" MaxWidth="820">
+                        <TextBlock Text="À LA UNE" Style="{StaticResource Label}" Foreground="{DynamicResource Accent}"/>
+                        <TextBlock x:Name="SpotlightTitle" Text="{Binding Name}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="36"
+                                   Foreground="White" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
+                        <TextBlock Text="{Binding Spotlight}" FontSize="15" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                        <ItemsControl ItemsSource="{Binding Platforms}" Focusable="False" Margin="0,14,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="6" Padding="9,3" Margin="0,0,6,0" Background="#33FFFFFF">
+                                        <TextBlock Text="{Binding}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="12" Foreground="White"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+                <StackPanel x:Name="SpotlightDots" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,18"/>
+            </Grid>
+        </Button>
 
         <!-- ====== Recherche ====== -->
-        <Grid Margin="64,0,64,0">
+        <Grid x:Name="SearchRow" Grid.Row="1" Margin="64,0,64,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -221,24 +303,9 @@
             </Button>
         </Grid>
 
-        <!-- ====== Accès aux listes ====== -->
-        <!-- Marge droite réduite de l'écart entre tuiles : la dernière s'aligne sur le bord -->
-        <!-- Sans arrondi de la mise en page : des colonnes à largeur fractionnaire feraient couper le cadre de la sélection à la rangée -->
-        <ItemsControl x:Name="Tiles" Grid.Row="1" ItemTemplate="{StaticResource TrendTile}" Focusable="False" Margin="64,14,46,0" UseLayoutRounding="False">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <UniformGrid Rows="1"/>
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-        </ItemsControl>
 
-        <Grid x:Name="MainArea" Grid.Row="2" Margin="0,14,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-
-            <!-- ====== Nouveautés, ou résultats de la recherche ====== -->
+        <StackPanel x:Name="MainArea" Margin="0,24,0,0">
+            <!-- ====== En tendance, ou résultats de la recherche ====== -->
             <Grid x:Name="ResultsArea">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -289,22 +356,23 @@
                 </Grid>
             </Grid>
 
-            <!-- ====== Jeux offerts par Epic (masqués pendant une recherche, pour laisser la place aux résultats) ====== -->
-            <StackPanel x:Name="FreeSection" Grid.Column="1" Margin="36,0,64,0" Visibility="Collapsed"
-                        Width="{Binding FreeWidth, RelativeSource={RelativeSource AncestorType=UserControl}}">
-                <TextBlock Text="OFFERTS PAR EPIC GAMES" Style="{StaticResource Label}" Margin="0,0,0,12"/>
-                <!-- Marges opposées : le halo de la sélection n'est pas coupé -->
-                <ScrollViewer Margin="-26,-26,-26,-26" Focusable="False" PanningMode="VerticalOnly" Height="{Binding FreeScrollHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                              VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
-                    <ItemsControl x:Name="FreeGames" ItemTemplate="{StaticResource FreeCard}" Focusable="False" Margin="20">
+            <!-- ====== Les autres listes, une rangée chacune (masquées pendant une recherche) ====== -->
+            <ItemsControl x:Name="MoreRows" ItemTemplate="{StaticResource TrendRowTemplate}" Focusable="False"/>
+
+            <!-- ====== Jeux offerts par Epic (masqués pendant une recherche) ====== -->
+            <StackPanel x:Name="FreeSection" Margin="0,28,0,0" Visibility="Collapsed">
+                <TextBlock Text="OFFERTS PAR EPIC GAMES" Style="{StaticResource Label}" Margin="64,0,0,14"/>
+                <ScrollViewer Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26" ui:EdgeFade.Size="64">
+                    <ItemsControl x:Name="FreeGames" ItemTemplate="{StaticResource FreeCard}" Focusable="False" Margin="64,26,26,26">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <WrapPanel/>
+                                <StackPanel Orientation="Horizontal"/>
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                     </ItemsControl>
                 </ScrollViewer>
             </StackPanel>
-        </Grid>
-    </Grid>
+        </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

@@ -92,7 +92,7 @@ public partial class MainWindow : Window
             && int.TryParse(sw, out var fw) && int.TryParse(sh, out var fh))
             _desktop.ForcedSize = (fw, fh);
         _epic = new EpicFreeGamesService(_http);
-        _discover = new DiscoverService(_http);
+        _discover = new DiscoverService(_http, _metadata.Igdb);
         _achievements = new AchievementService(_http, _settings);
         _steamStore = new SteamStore(_http);
         _storeSizes = new StoreSizes(_steamStore);
@@ -231,7 +231,8 @@ public partial class MainWindow : Window
             RefreshDue();
         };
         pulse.Start();
-        _pad.Start();
+        // Capture de vérification : la manette reste à l'application ouverte (ses touches ne doivent pas changer la capture).
+        if (!Environment.GetCommandLineArgs().Contains("--render")) _pad.Start();
 
         // 1. Affichage immédiat du dernier scan connu.
         var cached = _library.LoadCached();
@@ -285,8 +286,9 @@ public partial class MainWindow : Window
             store.Tick += (_, _) =>
             {
                 store.Stop();
-                // « --free » / « --paid » : un jeu gratuit / payant.
-                if (_discoverView.AllGames.FirstOrDefault(g => g.Owned is null && (!args.Contains("--free") || g.IsKnownFree) && (!args.Contains("--paid") || !g.IsKnownFree)) is { } d) OpenStoreDetail(d);
+                // « --free » / « --paid » / « --console » : un jeu gratuit / payant / absent du PC.
+                if (_discoverView.AllGames.FirstOrDefault(g => g.Owned is null && (!args.Contains("--free") || g.IsKnownFree) && (!args.Contains("--paid") || !g.IsKnownFree)
+                        && (!args.Contains("--console") || !g.OnPc)) is { } d) OpenStoreDetail(d);
             };
             store.Start();
         }
@@ -838,7 +840,7 @@ public partial class MainWindow : Window
             _discoverView.SetSections(cached, loaded: false);
             _explore.SetTrends(cached);
         }
-        Activity("discover", "Découverte", "Récupération des tendances Steam…");
+        Activity("discover", "Découverte", "Récupération des tendances…");
         try
         {
             var sections = await _discover.FetchAsync(CancellationToken.None);
@@ -846,8 +848,9 @@ public partial class MainWindow : Window
             DiscoverService.ApplyCachedImages(sections.SelectMany(c => c.Games));
             _discoverView.SetSections(sections, loaded: true);
             _explore.SetTrends(sections);
-            var games = _discoverView.AllGames.ToList();
-            Activity("discover", "Découverte", $"Téléchargement des jaquettes de {games.Select(g => g.AppId).Distinct().Count()} jeux…");
+            // Toutes les sections, À la une compris (elle n'est pas dans la page des listes).
+            var games = sections.SelectMany(s => s.Games).ToList();
+            Activity("discover", "Découverte", $"Téléchargement des jaquettes de {games.Select(g => g.ImageKey).Distinct().Count()} jeux…");
             await _discover.LoadImagesAsync(games, CancellationToken.None);
             if (_subView == _discoverView && _overlays.Count == 0) _discoverView.ImagesLoaded();
             else if (CurrentView == _explore && _overlays.Count == 0) SetHero(_explore.CurrentHero);
@@ -1000,17 +1003,26 @@ public partial class MainWindow : Window
     /// </summary>
     private void OpenStoreDetail(DiscoverGame d)
     {
-        var known = _storeMeta.GetValueOrDefault(d.AppId);
+        // Jeu absent de Steam (console, autre boutique) : la fiche IGDB suffit, rien à compléter.
+        var known = d.HasSteam ? _storeMeta.GetValueOrDefault(d.AppId) : new GameMetadata
+        {
+            Title = d.Name, Description = d.Description, Genres = d.Genres, ReleaseDate = d.Release,
+            Developer = d.Developer, Publisher = d.Publisher, Screenshots = [.. d.Screenshots],
+        };
         var game = new Game
         {
             Platform = Platform.Steam,
-            PlatformId = d.AppId.ToString(),
+            PlatformId = d.HasSteam ? d.AppId.ToString() : d.ImageKey,
             Title = d.Name,
-            SteamAppId = d.AppId,
+            SteamAppId = d.HasSteam ? d.AppId : null,
             CoverPath = d.CoverPath,
             HeroPath = d.HeroPath,
-            LogoPath = ImageCache.Existing($"steam-{d.AppId}", "logo"),
-            Meta = known ?? new GameMetadata { Title = d.Name, Description = d.Description, Genres = d.Genres, ReleaseDate = d.Release },
+            LogoPath = d.HasSteam ? ImageCache.Existing($"steam-{d.AppId}", "logo") : null,
+            Meta = known ?? new GameMetadata
+            {
+                Title = d.Name, Description = d.Description, Genres = d.Genres, ReleaseDate = d.Release,
+                Developer = d.Developer, Publisher = d.Publisher,
+            },
         };
         var detail = new DetailView();
         detail.SetGame(game);
@@ -1161,19 +1173,28 @@ public partial class MainWindow : Window
         SyncTopBar();
         var next = _pages[index].View;
 
+        // L'ancienne page s'efface vite, avant que la nouvelle n'apparaisse : les deux ne se superposent presque pas.
         if (old != next && animate)
-            Anim.Exit(old, -24 * direction, 0, 280, () => { if (CurrentView != old) old.Visibility = Visibility.Collapsed; });
+            Anim.Exit(old, -16 * direction, 0, 150, () => { if (CurrentView != old) old.Visibility = Visibility.Collapsed; });
         else if (old != next)
             old.Visibility = Visibility.Collapsed;
 
         _page = index;
         _installed.SetActive(next == _installed);
         _all.SetActive(next == _all);
-        // Fondu enchaîné : l'ancienne page s'efface pendant que la nouvelle glisse doucement à sa place.
+        // La nouvelle page glisse doucement à sa place une fois l'ancienne presque effacée.
         var stillVisible = next.Visibility == Visibility.Visible && old != next;
         next.Visibility = Visibility.Visible;
-        if (animate && stillVisible) Anim.Resume(next, 420);
-        else if (animate) Anim.Enter(next, 32 * (direction == 0 ? 1 : direction), 0, 460, delay: 50);
+        if (animate && stillVisible) Anim.Resume(next, 380);
+        else if (animate)
+        {
+            // Mise en page faite avant de lancer l'animation, et animation lancée après l'image qui la paie :
+            // un ralentissement ne lui fait plus sauter son début.
+            next.Opacity = 0;
+            next.UpdateLayout();
+            var slide = 28 * (direction == 0 ? 1 : direction);
+            Dispatcher.BeginInvoke(() => { if (CurrentView == next) Anim.Enter(next, slide, 0, 380, delay: 100); }, DispatcherPriority.Render);
+        }
         else next.Opacity = 1;
 
         // Onglet actif et soulignement animé.
@@ -1352,9 +1373,10 @@ public partial class MainWindow : Window
         _explore.OpenNew += d =>
         {
             if (d.Owned is { } owned) OpenDetail(owned);
+            // Liste de souhaits : un jeu d'une autre boutique s'ouvre sur sa page.
+            else if (d.OtherStoreUrl is { } url) OpenStorePrompt(d.Name, PlatformInfo.Of(d.StorePlatform), () => GameLauncher.Open(url));
             else OpenStoreDetail(d);
         };
-        _explore.OpenTrends += OpenDiscover;
         _explore.IsWished = _wishlist.Contains;
         _explore.WishNewGame += d => ToggleWish(WishOf(d), d.Name);
         _explore.WishHit += h =>
@@ -1370,7 +1392,7 @@ public partial class MainWindow : Window
             () => GameLauncher.Open(_epicInstalled ? g.LauncherUrl : g.WebUrl));
 
         _discoverView.OpenGame += OpenDetail;
-        _discoverView.OpenStore += OpenStorePage;
+        _discoverView.OpenStore += d => { if (d.HasSteam) OpenStorePage(d); };
         _discoverView.OpenDetails += d =>
         {
             if (d.OtherStoreUrl is { } url) OpenStorePrompt(d.Name, PlatformInfo.Of(d.StorePlatform), () => GameLauncher.Open(url));
@@ -1555,12 +1577,6 @@ public partial class MainWindow : Window
         {
             // Start referme le menu système.
             if (action == NavAction.Menu && _overlays[^1] == _systemMenu) _systemMenu.Close();
-            else if (action == NavAction.Menu && _overlays[^1] is { } top && top == _updatesMenu)
-            {
-                // Start referme aussi le menu des mises à jour, sans revenir au menu principal.
-                _menuBehind = _systemMenu = null;
-                top.Close();
-            }
             else _overlays[^1].Handle(action);
             return;
         }
@@ -1718,7 +1734,8 @@ public partial class MainWindow : Window
         overlay.CloseRequested -= CloseOverlay;
         overlay.HintsChanged -= UpdateHints;
         // Rouvert entre-temps (retour au menu) : il reste à l'écran.
-        Anim.Exit(overlay, 30, 0, 180, () => { if (!_overlays.Contains(overlay)) RemoveFromHost(overlay); });
+        overlay.OnClosing();
+        Anim.Exit(overlay, overlay.ExitToX, 0, overlay.ExitMs, () => { if (!_overlays.Contains(overlay)) RemoveFromHost(overlay); });
         if (overlay is KeyboardPanel) SyncTopBar();
         if (overlay is DetailView or StatsView or StorageView && !_overlays.Any(o => o is DetailView or StatsView or StorageView))
         {
@@ -2455,7 +2472,7 @@ public partial class MainWindow : Window
     {
         var panel = DockPanelOf(WindowsMenu, bottom: false);
         // Plus large : les accès rapides y tiennent deux par ligne. Même style que le menu principal.
-        panel.Widen(660);
+        panel.Widen(610);
         panel.UseMenuStyle();
         // Dernière liste connue : affichée tout de suite, la lecture (quelques secondes) se fait derrière.
         var (apps, launchers, recent) = _windowsMenuData;
@@ -2514,7 +2531,7 @@ public partial class MainWindow : Window
                     Quick("", "Paramètres", () => GameLauncher.Open("ms-settings:")),
                     Quick("", "Explorateur de fichiers", () => GameLauncher.Open("explorer.exe")),
                     Quick("", "Gestionnaire des tâches", () => GameLauncher.Open("taskmgr.exe")),
-                    Quick("", "Menu Démarrer de Windows", WindowsShell.ShowStartMenu),
+                    Quick("", "Menu Démarrer", WindowsShell.ShowStartMenu),
                 ]);
             }
             // Favoris, dans l'ordre d'ajout (une application désinstallée n'apparaît plus).
@@ -2628,6 +2645,7 @@ public partial class MainWindow : Window
         menu.CloseRequested += _ =>
         {
             if (_menuBehind != menu) _systemMenu = null;
+            if (_updatesMenu == menu) _updatesMenu = null;
         };
         _systemMenu = menu;
         OpenOverlay(menu);
@@ -2922,12 +2940,11 @@ public partial class MainWindow : Window
             OpenSubPage(_settingsView);
         }));
         // Luminosité, Wi-Fi, Bluetooth et bureau : dans le centre de contrôle.
-        menu.AddButtons(
-            ("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats)),
-            ("", "Plateformes", () => OpenFromMenu(menu, () => OpenSubPage(_platforms))));
-        menu.AddButtons(
-            ("\uE895", "Mises à jour", () => OpenFromMenu(menu, OpenUpdatesMenu)),
-            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }));
+        menu.AddButton("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats));
+        menu.AddButton("", "Plateformes", () => OpenFromMenu(menu, () => OpenSubPage(_platforms)));
+        menu.AddButton("\uE895", "Mises à jour", () => OpenUpdatesMenu(menu));
+        menu.AddButton("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); });
+        menu.SubMenuClosed += () => { if (_updatesMenu == menu) _updatesMenu = null; };
 
         menu.AddDrives();
         menu.AddButton("\uEDA2", "Gérer vos espaces de stockage", () => OpenFromMenu(menu, OpenStorage));
@@ -2938,54 +2955,42 @@ public partial class MainWindow : Window
     private MainMenu? _updatesMenu;
 
     /// <summary>
-    /// Bouton « Mises à jour » du menu principal : un menu du même style avec Windows, Armoury Crate et l'application.
-    /// B ramène au menu principal ; une tuile choisie ferme tout.
+    /// Bouton « Mises à jour » du menu principal : le contenu du menu glisse vers la gauche et laisse place à Windows,
+    /// Armoury Crate et l'application. B ramène les boutons du menu ; une tuile choisie ferme tout.
     /// </summary>
-    private void OpenUpdatesMenu()
+    private void OpenUpdatesMenu(MainMenu menu)
     {
-        var menu = new MainMenu();
-        menu.AddTitle("Mises à jour");
-        var acted = false;
-        var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
-        var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
-        void Act() => acted = true;
-        var updates = new List<MenuTile>
-        {
-            new("\uE895", "Windows", winText, () =>
-            {
-                Act();
-                menu.Close();
-                _updatesDirty = true;
-                GameLauncher.Open("ms-settings:windowsupdate");
-            }, winColor),
-        };
-        // Armoury Crate seulement s'il est installé sur cette machine.
-        if (_asusApp is { } asus)
-            updates.Add(new MenuTile("\uE7FC", "Armoury Crate", asusText, async () =>
-            {
-                Act();
-                menu.Close();
-                _updatesDirty = true;
-                if (!await UpdateChecker.LaunchAsync(asus)) Toast("\uE783", "Impossible d'ouvrir Armoury Crate");
-            }, asusColor));
-        menu.AddTiles([.. updates]);
-        var (appText, appColor) = AppUpdateStatus;
-        menu.AddTiles(new MenuTile("", AppTile, appText, () =>
-        {
-            Act();
-            menu.Close();
-            _ = ManualAppUpdateAsync();
-        }, appColor));
-
-        menu.CloseRequested += _ =>
-        {
-            if (_updatesMenu == menu) _updatesMenu = null;
-            // Après la fermeture du menu des mises à jour : le menu principal reprend sa place.
-            if (!acted) Dispatcher.BeginInvoke(ReturnToMenu);
-            else _menuBehind = _systemMenu = null;
-        };
         _updatesMenu = menu;
-        OpenOverlay(menu);
+        menu.OpenSubMenu(() =>
+        {
+            menu.AddTitle("Mises à jour");
+            var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
+            var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
+            var updates = new List<MenuTile>
+            {
+                new("\uE895", "Windows", winText, () =>
+                {
+                    menu.Close();
+                    _updatesDirty = true;
+                    GameLauncher.Open("ms-settings:windowsupdate");
+                }, winColor),
+            };
+            // Armoury Crate seulement s'il est installé sur cette machine.
+            if (_asusApp is { } asus)
+                updates.Add(new MenuTile("\uE7FC", "Armoury Crate", asusText, async () =>
+                {
+                    menu.Close();
+                    _updatesDirty = true;
+                    if (!await UpdateChecker.LaunchAsync(asus)) Toast("\uE783", "Impossible d'ouvrir Armoury Crate");
+                }, asusColor));
+            menu.AddTiles([.. updates]);
+            var (appText, appColor) = AppUpdateStatus;
+            menu.AddTiles(new MenuTile("", AppTile, appText, () =>
+            {
+                menu.Close();
+                _ = ManualAppUpdateAsync();
+            }, appColor));
+        });
     }
 
     // ---- Recherche sur toutes les boutiques (onglet Découverte) ----

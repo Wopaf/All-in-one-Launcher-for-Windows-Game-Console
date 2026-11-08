@@ -140,7 +140,7 @@
 
             <!-- Méta -->
             <WrapPanel x:Name="MetaRow" Grid.Row="1" Margin="0,18,0,0">
-                <Border CornerRadius="6" Padding="10,4" Margin="0,0,16,0"
+                <Border x:Name="PlatformBadge" CornerRadius="6" Padding="10,4" Margin="0,0,16,0"
                         Background="{Binding PlatformInfo.Color, Converter={StaticResource ColorBrush}, ConverterParameter=0.18}">
                     <StackPanel Orientation="Horizontal">
                         <Path Data="{Binding PlatformInfo.Logo}" Fill="White" Stretch="Uniform" Width="15" Height="15"
@@ -169,6 +169,15 @@
 
             <!-- Actions : « Jouer », puis des boutons ronds (ou, pour un jeu non possédé, les liens vers les magasins) -->
             <StackPanel x:Name="Actions" Grid.Row="2" Orientation="Horizontal" Margin="0,26,0,0">
+                <!-- Jeu absent du PC : ses plateformes à la place des liens vers les magasins -->
+                <Border x:Name="OnlyOnBox" Visibility="Collapsed" Height="48" CornerRadius="24" Padding="22,0" Background="#1FFFFFFF">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource Icons}" FontSize="17" Foreground="{DynamicResource Accent}"
+                                   VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <TextBlock x:Name="OnlyOnText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16"
+                                   Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
                 <Button x:Name="SteamButton" Style="{StaticResource PillButton}" Click="Steam_Click" Background="#33FFFFFF" Height="48" Padding="26,0"
                         Visibility="Collapsed">
                     <StackPanel Orientation="Horizontal">

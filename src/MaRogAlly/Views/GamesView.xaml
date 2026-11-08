@@ -185,8 +185,8 @@
                            Visibility="{Binding LogoPath, Converter={StaticResource VisibleIf}, ConverterParameter=invert}"/>
             </Grid>
 
-            <!-- Une seule ligne de badges : la hauteur de la fiche reste fixe, la rangée ne bouge pas -->
-            <StackPanel x:Name="MetaRow" Orientation="Horizontal" Margin="0,16,0,0" Height="30" ClipToBounds="True">
+            <!-- Badges sous le logo : masqués, Mes Jeux et Bibliothèque n'affichent que le logo -->
+            <StackPanel x:Name="MetaRow" Visibility="Collapsed" Orientation="Horizontal" Margin="0,16,0,0" Height="30" ClipToBounds="True">
                 <Border Style="{StaticResource MetaBadge}" BorderThickness="0"
                         Background="{Binding PlatformInfo.Color, Converter={StaticResource ColorBrush}, ConverterParameter=0.22}">
                     <StackPanel Orientation="Horizontal">

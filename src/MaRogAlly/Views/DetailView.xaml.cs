@@ -301,7 +301,7 @@ public partial class DetailView : OverlayBase
     /// <summary>À l'ouverture, le contenu de la page grandit très légèrement jusqu'à sa taille, en même temps que son fondu.</summary>
     public override void OnOpened()
     {
-        var grow = new ScaleTransform(0.94, 0.94);
+        var grow = _grow = new ScaleTransform(0.94, 0.94);
         Body.RenderTransformOrigin = new Point(0.5, 0.5);
         Body.RenderTransform = new TransformGroup { Children = { grow, new TranslateTransform() } };
         base.OnOpened();
@@ -310,6 +310,19 @@ public partial class DetailView : OverlayBase
         grow.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
     }
     protected override double EnterFromX => 0;
+
+    private ScaleTransform? _grow;
+
+    /// <summary>À la fermeture, l'inverse : le contenu rapetisse légèrement pendant qu'il s'efface.</summary>
+    public override void OnClosing()
+    {
+        if (_grow is not { } grow) return;
+        var shrink = new DoubleAnimation(0.94, Anim.Ms(ExitMs)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } };
+        grow.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
+        grow.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
+    }
+    public override double ExitToX => 0;
+    public override double ExitMs => 280;
     protected override FrameworkElement FocusScope => Body;
 
     /// <summary>Taille du jeu sur la ligne d'informations ; null la masque.</summary>
@@ -491,17 +504,24 @@ public partial class DetailView : OverlayBase
     /// <summary>Jeu non possédé : seuls les liens vers les magasins, et une fiche technique orientée achat.</summary>
     private void ShowStore(Game g, DiscoverGame store)
     {
-        // Pas d'offres à chercher pour un jeu connu comme gratuit.
+        // Steam et liste de souhaits pour un jeu vendu sur Steam ; offres Instant Gaming pour un jeu PC payant ;
+        // rien pour un jeu absent du PC (console) : aucun lien, juste la fiche.
+        var offers = store.OnPc && !store.IsKnownFree;
         foreach (UIElement child in Actions.Children)
-            child.Visibility = child == SteamButton || child == WishButton || (child == InstantGamingButton && !store.IsKnownFree) ? Visibility.Visible : Visibility.Collapsed;
-        SteamButton.Margin = new Thickness(0, 0, store.IsKnownFree ? 0 : 12, 0);
+            child.Visibility = (child == SteamButton || child == WishButton) && store.HasSteam || child == InstantGamingButton && offers
+                               || child == OnlyOnBox && !store.OnPc
+                ? Visibility.Visible : Visibility.Collapsed;
+        OnlyOnText.Text = OnlyOn(store.Platforms);
+        SteamButton.Margin = new Thickness(0, 0, offers ? 12 : 0, 0);
+        PlatformBadge.Visibility = store.HasSteam ? Visibility.Visible : Visibility.Collapsed;
         InstantGamingButton.Margin = new Thickness(0);
 
         var fr = new System.Globalization.CultureInfo("fr-FR");
         InfoList.Children.Clear();
         AddInfo("Prix", store.PriceText is { } price
             ? store.DiscountText is { } d ? $"{price}  ({d}{(store.OriginalPrice is { } o ? $", au lieu de {o}" : "")})" : price
-            : store.ComingSoon ? "Pas encore en vente" : null);
+            : store.ComingSoon && store.OnPc ? "Pas encore en vente" : null);
+        AddInfo("Plateformes", store.PlatformsText);
         AddInfo("Avis", store.ReviewText);
         AddInfo("Joueurs", store.PlayersText);
         AddInfo("Sortie", g.Meta?.ReleaseDate?.ToString("d MMMM yyyy", fr) ?? store.ReleaseText);
@@ -509,11 +529,19 @@ public partial class DetailView : OverlayBase
         AddInfo("Éditeur", g.Meta?.Publisher);
     }
 
+    /// <summary>« Uniquement disponible sur PS5, Xbox Series et Switch 2 ».</summary>
+    private static string OnlyOn(List<string> platforms) => platforms.Count switch
+    {
+        0 => "Pas disponible sur PC",
+        1 => $"Uniquement disponible sur {platforms[0]}",
+        _ => $"Uniquement disponible sur {string.Join(", ", platforms.SkipLast(1))} et {platforms[^1]}",
+    };
+
     private static readonly Dictionary<string, string> InfoIcons = new()
     {
         ["Prix"] = "\uE7BF", ["Avis"] = "\uE8E1", ["Joueurs"] = "\uE716",
         ["Développeur"] = "\uE943", ["Éditeur"] = "\uE8F1", ["Sortie"] = "\uE787",
-        ["Dernière partie"] = "\uE81C",
+        ["Dernière partie"] = "\uE81C", ["Plateformes"] = "\uE7FC",
     };
 
     /// <summary>Une info de la fiche technique : icône à la couleur d'accent, intitulé discret, valeur.</summary>

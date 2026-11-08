@@ -17,6 +17,8 @@ public sealed class MetadataService
     private readonly AppSettings _settings;
     private readonly SteamStore _steam;
     private readonly IgdbClient _igdb;
+    /// <summary>Client IGDB partagé (tendances de l'onglet Découverte) : une seule limite de 4 requêtes par seconde.</summary>
+    public IgdbClient Igdb => _igdb;
     private readonly SteamGridDbClient _grid;
     private readonly ImageCache _images;
     private readonly ConcurrentDictionary<string, GameMetadata> _cache = new();

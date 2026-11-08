@@ -29,7 +29,66 @@ public partial class MainMenu : OverlayBase
     }
 
     protected override FrameworkElement FocusScope => Items;
-    public override string Hints => _brightnessRow?.IsKeyboardFocused == true ? "←→:Luminosité|B:Fermer" : "A:Valider|B:Fermer";
+    public override string Hints => _brightnessRow?.IsKeyboardFocused == true ? "←→:Luminosité|B:Fermer"
+        : InSubMenu ? "A:Valider|B:Retour" : "A:Valider|B:Fermer";
+
+    // ---------------- Sous-menu (ex. Mises à jour) ----------------
+
+    /// <summary>Boutons du menu mis de côté pendant qu'un sous-menu les remplace.</summary>
+    private List<UIElement>? _parentItems;
+    private bool _swapping;
+    public bool InSubMenu => _parentItems is not null;
+    /// <summary>B a ramené les boutons du menu.</summary>
+    public event Action? SubMenuClosed;
+
+    /// <summary>
+    /// Sous-menu dans le même panneau : les boutons glissent vers la gauche en s'effaçant, le sous-menu arrive de la droite.
+    /// Le fond et le panneau ne bougent pas.
+    /// </summary>
+    public void OpenSubMenu(Action build)
+    {
+        if (_parentItems is not null || _swapping) return;
+        _parentItems = Items.Children.Cast<UIElement>().ToList();
+        Swap(forward: true, () =>
+        {
+            Items.Children.Clear();
+            build();
+        });
+        RaiseHintsChanged();
+    }
+
+    private void CloseSubMenu()
+    {
+        if (_parentItems is not { } items || _swapping) return;
+        _parentItems = null;
+        Swap(forward: false, () =>
+        {
+            Items.Children.Clear();
+            foreach (var e in items) Items.Children.Add(e);
+        });
+        SubMenuClosed?.Invoke();
+        RaiseHintsChanged();
+    }
+
+    private const double SwapShift = 48;
+
+    private void Swap(bool forward, Action change)
+    {
+        _swapping = true;
+        _highlight.Hide();
+        var dir = forward ? 1 : -1;
+        Anim.Exit(ItemsHost, -SwapShift * dir, 0, 150, () =>
+        {
+            change();
+            Scroll.ScrollToVerticalOffset(0);
+            ItemsHost.UpdateLayout();
+            Anim.Enter(ItemsHost, SwapShift * dir, 0, 300);
+            _swapping = false;
+            // En avant : la première tuile ; au retour : le bouton qui a ouvert le sous-menu.
+            if (!forward && _lastButton is { } b) FocusNav.Focus(b);
+            else FocusNav.FocusFirst(Items);
+        });
+    }
 
     public override void OnOpened()
     {
@@ -514,6 +573,13 @@ public partial class MainMenu : OverlayBase
 
     public override bool Handle(NavAction action)
     {
+        // Pendant le changement de contenu, les touches attendent.
+        if (_swapping) return true;
+        if (action == NavAction.Back && InSubMenu)
+        {
+            CloseSubMenu();
+            return true;
+        }
         if (action is not (NavAction.Up or NavAction.Down or NavAction.Left or NavAction.Right)) return base.Handle(action);
         if (action is NavAction.Left or NavAction.Right && _brightnessRow?.IsKeyboardFocused == true)
         {

@@ -29,6 +29,13 @@ public class OverlayBase : UserControl
         Dispatcher.BeginInvoke(FocusOnOpen, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
+    /// <summary>Sortie : glissement horizontal et durée du fondu de fermeture.</summary>
+    public virtual double ExitToX => 30;
+    public virtual double ExitMs => 180;
+
+    /// <summary>Le panneau commence à se refermer (son fondu de sortie démarre en même temps).</summary>
+    public virtual void OnClosing() { }
+
     /// <summary>Sélection à l'ouverture.</summary>
     protected virtual void FocusOnOpen() => FocusNav.FocusFirst(FocusScope);
 

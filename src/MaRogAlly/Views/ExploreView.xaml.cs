@@ -12,9 +12,9 @@ using MaRogAlly.UI;
 namespace MaRogAlly.Views;
 
 /// <summary>
-/// Onglet Découverte : une barre de recherche (bibliothèque, Steam et GOG à la fois), les tuiles des listes, puis
-/// les nouveautés (remplacées par les résultats pendant une recherche) à côté des jeux offerts par Epic.
-/// La navigation se fait par zones : recherche, tuiles, jaquettes, offres Epic.
+/// Onglet Découverte, une page qui défile : « À la une » (les jeux du moment, l'un après l'autre), une barre de recherche
+/// (bibliothèque, Steam et GOG à la fois), la rangée En tendance (remplacée par les résultats pendant une recherche),
+/// une rangée par liste (liste de souhaits, les plus attendus, les plus joués, en promotion), puis les jeux offerts par Epic. La navigation se fait par zones, de haut en bas.
 /// </summary>
 public partial class ExploreView : UserControl
 {
@@ -24,8 +24,6 @@ public partial class ExploreView : UserControl
     public static readonly DependencyProperty FreeHeightProperty = DependencyProperty.Register(nameof(FreeHeight), typeof(double), typeof(ExploreView), new PropertyMetadata(110.0));
     public static readonly DependencyProperty FreeCardWidthProperty = DependencyProperty.Register(nameof(FreeCardWidth), typeof(double), typeof(ExploreView), new PropertyMetadata(240.0));
     public static readonly DependencyProperty FreeScrollHeightProperty = DependencyProperty.Register(nameof(FreeScrollHeight), typeof(double), typeof(ExploreView), new PropertyMetadata(300.0));
-    public static readonly DependencyProperty TileHeightProperty = DependencyProperty.Register(nameof(TileHeight), typeof(double), typeof(ExploreView), new PropertyMetadata(90.0));
-    public static readonly DependencyProperty TileTitleSizeProperty = DependencyProperty.Register(nameof(TileTitleSize), typeof(double), typeof(ExploreView), new PropertyMetadata(19.0));
 
     public double CoverWidth { get => (double)GetValue(CoverWidthProperty); set => SetValue(CoverWidthProperty, value); }
     public double CoverHeight { get => (double)GetValue(CoverHeightProperty); set => SetValue(CoverHeightProperty, value); }
@@ -33,8 +31,6 @@ public partial class ExploreView : UserControl
     public double FreeHeight { get => (double)GetValue(FreeHeightProperty); set => SetValue(FreeHeightProperty, value); }
     public double FreeCardWidth { get => (double)GetValue(FreeCardWidthProperty); set => SetValue(FreeCardWidthProperty, value); }
     public double FreeScrollHeight { get => (double)GetValue(FreeScrollHeightProperty); set => SetValue(FreeScrollHeightProperty, value); }
-    public double TileHeight { get => (double)GetValue(TileHeightProperty); set => SetValue(TileHeightProperty, value); }
-    public double TileTitleSize { get => (double)GetValue(TileTitleSizeProperty); set => SetValue(TileTitleSizeProperty, value); }
 
     public static Geometry SteamLogo { get; } = Logo(Platform.Steam);
     public static Geometry GogLogo { get; } = Logo(Platform.Gog);
@@ -45,35 +41,34 @@ public partial class ExploreView : UserControl
         return g;
     }
 
-    /// <summary>Nombre de jeux affichés dans la section Nouveautés (la liste complète reste sur son bouton).</summary>
-    private const int NewGamesShown = 8;
+    /// <summary>Nombre de jeux affichés dans la rangée En tendance (la liste complète reste sur sa tuile).</summary>
+    private const int NewGamesShown = 12;
+    /// <summary>Jeux par rangée des autres listes.</summary>
+    private const int RowGamesShown = 12;
+    private List<TrendRow> _rows = [];
     private const string SearchPlaceholder = "Rechercher un jeu sur Steam et GOG…";
 
     /// <summary>A sur la barre : ouvrir le clavier.</summary>
     public event Action? SearchRequested;
     public event Action<SearchHit>? OpenHit;
-    /// <summary>Jeu de la section Nouveautés.</summary>
+    /// <summary>Jeu de la rangée En tendance, ou d'À la une.</summary>
     public event Action<DiscoverGame>? OpenNew;
     /// <summary>Page d'un jeu offert dans le magasin Epic (confirmée par un écran dédié).</summary>
     public event Action<FreeGame>? OpenFree;
-    /// <summary>Tuile : ouvre la page des tendances sur cette liste (ou sur la liste de souhaits).</summary>
-    public event Action<string>? OpenTrends;
-    /// <summary>Y sur un jeu de la section Nouveautés, ou sur un résultat.</summary>
+    /// <summary>Y sur un jeu d'une rangée (vendu sur Steam, ou déjà dans la liste de souhaits), ou sur un résultat.</summary>
     public event Action<DiscoverGame>? WishNewGame;
     public event Action<SearchHit>? WishHit;
     public event Action<string?>? HeroRequested;
 
-    private readonly List<DiscoverTile> _tiles =
-    [
-        new(DiscoverView.WishlistKey, "Ma liste de souhaits", "Les jeux que tu veux garder à l'œil", Color.FromRgb(0xFF, 0x5C, 0x8A)),
-        new("soon", "Prochainement", "Les sorties les plus attendues", Color.FromRgb(0xA6, 0x5C, 0xFF)),
-        new("played", "Les plus joués", "En ce moment sur Steam", Color.FromRgb(0xFF, 0x7A, 0x2E)),
-        new("new", "Nouveautés", "Sorties récentes populaires", Color.FromRgb(0x2D, 0x8C, 0xFF)),
-        new("sellers", "Meilleures ventes", "Les plus achetés sur Steam", Color.FromRgb(0x22, 0xB0, 0x63)),
-    ];
+    private IReadOnlyList<DiscoverSection> _sections = [];
+    private List<DiscoverGame> _wishGames = [];
     private List<DiscoverGame> _newGames = [];
+    private string _trendingSubtitle = "";
+    /// <summary>À la une : les jeux qui défilent dans le grand bandeau.</summary>
+    private List<DiscoverGame> _featured = [];
+    private int _featuredIndex;
+    private readonly DispatcherTimer _spotlightTimer = new() { Interval = TimeSpan.FromSeconds(7) };
     private List<FreeGame> _free = [];
-    private int _freeColumns = 1;
     private string _query = "";
 
     /// <summary>Dit si un jeu est dans la liste de souhaits (pour les cœurs sur les jaquettes).</summary>
@@ -85,12 +80,82 @@ public partial class ExploreView : UserControl
     public ExploreView()
     {
         InitializeComponent();
-        Tiles.ItemsSource = _tiles;
         QueryText.Text = SearchPlaceholder;
         SizeChanged += (_, _) => Relayout();
         // Le défilement est animé par FocusNav : sans ça, WPF saute d'abord jusqu'à la jaquette et l'animation repart de l'ancienne position.
         foreach (var list in new[] { Hits, NewGames, FreeGames }) list.RequestBringIntoView += (_, e) => e.Handled = true;
+        // La page défile d'elle-même vers la sélection (sans le saut de WPF).
+        PageContent.RequestBringIntoView += (_, e) => e.Handled = true;
+        PreviewGotKeyboardFocus += (_, e) =>
+        {
+            if (e.NewFocus is FrameworkElement f) Dispatcher.BeginInvoke(() => ScrollPage(f), DispatcherPriority.Loaded);
+        };
         ShowNewSection();
+        // Le bandeau défile tout seul tant qu'il est à l'écran et que la sélection n'y est pas (←→ le font défiler).
+        _spotlightTimer.Tick += (_, _) => ShowFeatured(_featuredIndex + 1, 1);
+        IsVisibleChanged += (_, _) => UpdateSpotlightTimer();
+    }
+
+    // ---------------- À la une ----------------
+
+    private void UpdateSpotlightTimer()
+    {
+        if (IsVisible && _featured.Count > 1 && !Spotlight.IsKeyboardFocused) _spotlightTimer.Start();
+        else _spotlightTimer.Stop();
+    }
+
+    /// <summary>Jeu suivant (direction 1) ou précédent (-1) : le contenu s'efface en glissant, le nouveau arrive de l'autre côté.</summary>
+    private void ShowFeatured(int index, int direction)
+    {
+        if (_featured.Count == 0) return;
+        index = (index % _featured.Count + _featured.Count) % _featured.Count;
+        var game = _featured[index];
+        _featuredIndex = index;
+        UpdateDots();
+        if (direction == 0 || SpotlightBody.DataContext is null)
+        {
+            SpotlightBody.DataContext = game;
+        }
+        else
+        {
+            Anim.Exit(SpotlightBody, -30 * direction, 0, 160, () =>
+            {
+                SpotlightBody.DataContext = game;
+                Anim.Enter(SpotlightBody, 40 * direction, 0, 420);
+            });
+        }
+        if (Spotlight.IsKeyboardFocused) Select(game);
+        // Minuterie relancée : un jeu choisi à la main reste affiché sept secondes.
+        if (_spotlightTimer.IsEnabled) { _spotlightTimer.Stop(); _spotlightTimer.Start(); }
+    }
+
+    private void UpdateDots()
+    {
+        SpotlightDots.Children.Clear();
+        if (_featured.Count < 2) return;
+        for (var i = 0; i < _featured.Count; i++)
+        {
+            var active = i == _featuredIndex;
+            SpotlightDots.Children.Add(new Border
+            {
+                Width = active ? 22 : 8, Height = 8, CornerRadius = new CornerRadius(4), Margin = new Thickness(6, 0, 0, 0),
+                Background = active ? (Brush)FindResource("Accent") : new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0xFF, 0xFF)),
+            });
+        }
+    }
+
+    private void Spotlight_Focus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        _lastFocused = Spotlight;
+        UpdateSpotlightTimer();
+        if (SpotlightBody.DataContext is DiscoverGame g) Select(g);
+    }
+
+    private void Spotlight_Blur(object sender, KeyboardFocusChangedEventArgs e) => UpdateSpotlightTimer();
+
+    private void Spotlight_Click(object sender, RoutedEventArgs e)
+    {
+        if (SpotlightBody.DataContext is DiscoverGame g) OpenNew?.Invoke(g);
     }
 
     public string Query => _query;
@@ -102,54 +167,117 @@ public partial class ExploreView : UserControl
     {
         if (ActualHeight <= 0) return;
         var compact = ActualHeight < 760;
-        var gap = compact ? 14 : 24;
+        var gap = compact ? 16 : 24;
         SearchButton.Height = compact ? 50 : 60;
-        TileHeight = compact ? 88 : 116;
-        TileTitleSize = compact ? 17 : 20;
-        Tiles.Margin = new Thickness(64, gap, 46, 0);
-        MainArea.Margin = new Thickness(0, gap, 0, 0);
-        FreeWidth = Math.Clamp(Math.Floor(ActualWidth * 0.25), 260, 460);
-        // Un peu plus de quatre jaquettes visibles (la cinquième, coupée, annonce la suite), sans dépasser la hauteur restante.
-        var coversWidth = ActualWidth - 2 * 64 - FreeWidth - 36;
-        var fromWidth = ((coversWidth + 18) / 4.4 - 18) * 1.5;
-        var fromHeight = ActualHeight - SearchButton.Height - TileHeight - 2 * gap - 44 - InfoRowHeight;
-        CoverHeight = Math.Clamp(Math.Floor(Math.Min(fromWidth, fromHeight)), 110, 420);
-        CoverWidth = Math.Floor(CoverHeight / 1.5);
-        LayoutFree();
-        // Hauteur stable : le bloc centré ne saute pas entre les nouveautés, une recherche en cours et les résultats.
+        // La page défile : chaque bloc garde une taille confortable au lieu de se tasser pour tenir dans l'écran.
+        var spot = Spotlight.Visibility == Visibility.Visible;
+        Spotlight.Height = compact ? 290 : Math.Clamp(Math.Floor(ActualHeight * 0.44), 320, 560);
+        SpotlightTitle.FontSize = compact ? 34 : 46;
+        SpotlightText.Margin = compact ? new Thickness(30, 0, 30, 0) : new Thickness(44, 0, 44, 0);
+        SearchRow.Margin = new Thickness(64, spot ? gap : 0, 64, 0);
+        MainArea.Margin = new Thickness(0, gap + 10, 0, 0);
+        // Un peu plus de cinq jaquettes visibles par rangée (la suivante, coupée, annonce la suite).
+        CoverWidth = Math.Clamp(Math.Floor((ActualWidth - 128 + 18) / 5.5 - 18), 120, 260);
+        CoverHeight = Math.Floor(CoverWidth * 1.5);
+        FreeCardWidth = compact ? 320 : 420;
+        FreeHeight = Math.Floor(FreeCardWidth * 0.46);
+        // Hauteur stable : la rangée ne saute pas entre les tendances, une recherche en cours et les résultats.
         ResultsArea.MinHeight = 30 + CoverHeight + InfoRowHeight;
     }
 
-    /// <summary>Jeux offerts sur la hauteur des jaquettes : empilés, en deux colonnes à partir de quatre (trois rangées visibles, les suivantes défilent).</summary>
-    private void LayoutFree()
+    /// <summary>
+    /// La page suit la sélection : tout en haut pour à la une et la recherche ; sinon la rangée choisie au milieu
+    /// de l'écran, avec son titre.
+    /// </summary>
+    private void ScrollPage(FrameworkElement f)
     {
-        _freeColumns = _free.Count >= 4 ? 2 : 1;
-        var rows = Math.Clamp((_free.Count + _freeColumns - 1) / _freeColumns, 1, 3);
-        FreeCardWidth = Math.Floor((FreeWidth - 12 * (_freeColumns - 1)) / _freeColumns);
-        FreeHeight = Math.Floor((CoverHeight - 12 * (rows - 1)) / rows);
-        FreeScrollHeight = CoverHeight + 52;
+        if (!f.IsVisible || !f.IsDescendantOf(PageContent) || PageScroll.ScrollableHeight <= 0) return;
+        double target;
+        if (f == Spotlight || f == SearchButton || f == ResetButton) target = 0;
+        else
+        {
+            var y = f.TranslatePoint(new Point(0, 0), PageContent).Y;
+            target = y - (PageScroll.ViewportHeight - f.ActualHeight) / 2 - 16;
+        }
+        target = Math.Clamp(target, 0, PageScroll.ScrollableHeight);
+        if (Math.Abs(target - PageScroll.VerticalOffset) > 1) Anim.ScrollTo(PageScroll, target);
     }
 
-    private void UpdateFreeSection() => FreeSection.Visibility = _free.Count > 0 && _query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    private void Row_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e) => e.Handled = true;
+
+    /// <summary>Pendant une recherche, seuls les résultats restent sous les tuiles.</summary>
+    private void UpdateFreeSection()
+    {
+        FreeSection.Visibility = _free.Count > 0 && _query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        MoreRows.Visibility = _query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     // ---------------- Données ----------------
 
-    /// <summary>Tendances Steam : les nouveautés sont affichées telles quelles, le n° 1 des autres listes sert de visuel à leur tuile.</summary>
+    /// <summary>Tendances : à la une dans le bandeau, la rangée En tendance, puis une rangée par liste.</summary>
     public void SetTrends(IReadOnlyList<DiscoverSection> sections)
     {
-        foreach (var t in _tiles.Where(t => t.Key != DiscoverView.WishlistKey)) t.Section = sections.FirstOrDefault(s => s.Key == t.Key);
+        _sections = sections;
         var hadFocus = NewGames.IsKeyboardFocusWithin;
         if (_selected is DiscoverGame) Select(null);
-        _newGames = sections.FirstOrDefault(s => s.Key == "new")?.Games.Take(NewGamesShown).ToList() ?? [];
-        RefreshWishMarks();
+
+        var spotWasVisible = Spotlight.Visibility == Visibility.Visible;
+        _featured = sections.FirstOrDefault(s => s.Key == DiscoverService.FeaturedKey)?.Games ?? [];
+        Spotlight.Visibility = _featured.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (spotWasVisible && _featured.Count == 0 && Spotlight.IsKeyboardFocused) FocusNav.Focus(SearchButton);
+        SpotlightBody.DataContext = null;
+        ShowFeatured(0, 0);
+        UpdateSpotlightTimer();
+        if (spotWasVisible != (_featured.Count > 0)) Relayout();
+
+        var trending = sections.FirstOrDefault(s => s.Key == "trending");
+        _trendingSubtitle = trending?.Subtitle ?? "";
+        _newGames = trending?.Games.Take(NewGamesShown).ToList() ?? [];
+
+        BuildRows();
         NewGames.ItemsSource = _newGames;
         if (_query.Length == 0) ShowNewSection();
         if (hadFocus && _newGames.Count > 0) FocusIn(NewGames, 0);
     }
 
-    /// <summary>Le premier jeu de la liste de souhaits sert de visuel à sa tuile.</summary>
+    /// <summary>Liste de souhaits : sa rangée, juste sous En tendance (absente tant qu'elle est vide).</summary>
     public void SetWishlist(List<DiscoverGame> games)
-        => _tiles.First(t => t.Key == DiscoverView.WishlistKey).Section = new DiscoverSection { Games = games };
+    {
+        _wishGames = games;
+        BuildRows();
+    }
+
+    /// <summary>Rangées sous En tendance ; la sélection garde sa place (même rangée, même jaquette) si elle y était.</summary>
+    private void BuildRows()
+    {
+        var lists = RowLists();
+        var current = Keyboard.FocusedElement as Button;
+        var row = lists.FindIndex(r => current is not null && r.Contains(current));
+        var column = row >= 0 ? lists[row].IndexOf(current!) : -1;
+
+        var rows = new List<TrendRow>();
+        if (_wishGames.Count > 0)
+            rows.Add(new TrendRow("MA LISTE DE SOUHAITS", "Les jeux que tu veux garder à l'œil", _wishGames.Take(RowGamesShown).ToList()));
+        rows.AddRange(new[] { "anticipated", "played", "deals" }
+            .Select(key => _sections.FirstOrDefault(s => s.Key == key)).OfType<DiscoverSection>().Where(s => s.Games.Count > 0)
+            .Select(s => new TrendRow(s.Title.ToUpperInvariant(), s.Subtitle, s.Games.Take(RowGamesShown).ToList())));
+        _rows = rows;
+        MoreRows.ItemsSource = _rows;
+        RefreshWishMarks();
+        if (row < 0) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            MoreRows.UpdateLayout();
+            var fresh = RowLists().Where(r => r.Count > 0).ToList();
+            if (fresh.Count == 0)
+            {
+                FocusNav.Focus(SearchButton);
+                return;
+            }
+            var target = fresh[Math.Min(row, fresh.Count - 1)];
+            FocusNav.Focus(target[Math.Clamp(column, 0, target.Count - 1)]);
+        }, DispatcherPriority.Loaded);
+    }
 
     /// <summary>Jeux offerts par Epic (actuels et à venir).</summary>
     public void SetFreeGames(List<FreeGame> games)
@@ -158,7 +286,6 @@ public partial class ExploreView : UserControl
         if (_selected is FreeGame) Select(null);
         _free = games;
         FreeGames.ItemsSource = games;
-        LayoutFree();
         UpdateFreeSection();
         if (hadFocus && games.Count > 0) FocusIn(FreeGames, 0);
     }
@@ -216,7 +343,7 @@ public partial class ExploreView : UserControl
     public void RefreshWishMarks()
     {
         if (IsWished is null) return;
-        foreach (var game in _newGames) game.IsWished = IsWished(game.WishKey);
+        foreach (var game in _newGames.Concat(_rows.SelectMany(r => r.Games))) game.IsWished = IsWished(game.WishKey);
         if (Hits.ItemsSource is List<SearchHit> hits)
             foreach (var hit in hits) hit.IsWished = hit.WishKey is { } key && IsWished(key);
     }
@@ -239,11 +366,11 @@ public partial class ExploreView : UserControl
     private void ShowNewSection()
     {
         PlaceInfo(searching: false);
-        ResultsLabel.Text = "NOUVEAUTÉS";
-        ResultsCount.Text = _newGames.Count > 0 ? "Sorties récentes populaires sur Steam" : "";
+        ResultsLabel.Text = "EN TENDANCE CETTE SEMAINE";
+        ResultsCount.Text = _newGames.Count > 0 ? _trendingSubtitle : "";
         if (_newGames.Count == 0)
         {
-            ShowMessage("Chargement des nouveautés…", "Les sorties récentes populaires sur Steam arrivent.");
+            ShowMessage("Chargement des tendances…", "Les jeux du moment arrivent.");
             return;
         }
         EmptyState.Visibility = HitsScroll.Visibility = Visibility.Collapsed;
@@ -256,7 +383,7 @@ public partial class ExploreView : UserControl
         Grid.SetRow(InfoLine, searching ? 2 : 0);
         Grid.SetColumn(InfoLine, searching ? 0 : 1);
         Grid.SetColumnSpan(InfoLine, searching ? 2 : 1);
-        InfoLine.Margin = searching ? new Thickness(64, 12, 64, 0) : new Thickness(24, 0, 0, 14);
+        InfoLine.Margin = searching ? new Thickness(64, 12, 64, 0) : new Thickness(24, 0, 64, 14);
         ResultsCount.HorizontalAlignment = HitInfo.HorizontalAlignment = searching ? HorizontalAlignment.Left : HorizontalAlignment.Right;
     }
 
@@ -309,7 +436,6 @@ public partial class ExploreView : UserControl
         SearchHit h => h.HeroPath ?? h.Owned?.HeroPath ?? h.Steam?.HeroPath ?? h.CoverPath,
         DiscoverGame d => d.HeroPath ?? d.CoverPath,
         FreeGame f => f.ImagePath,
-        DiscoverTile t => t.HeroPath,
         _ => null,
     };
 
@@ -348,17 +474,6 @@ public partial class ExploreView : UserControl
         if ((sender as FrameworkElement)?.DataContext is FreeGame g) OpenFree?.Invoke(g);
     }
 
-    private void Tile_Focus(object sender, KeyboardFocusChangedEventArgs e)
-    {
-        _lastFocused = sender as Button;
-        if ((sender as FrameworkElement)?.DataContext is DiscoverTile t) Select(t);
-    }
-
-    private void Tile_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.DataContext is not DiscoverTile t) return;
-        OpenTrends?.Invoke(t.Key);
-    }
 
     private void Search_Focus(object sender, KeyboardFocusChangedEventArgs e)
     {
@@ -389,7 +504,10 @@ public partial class ExploreView : UserControl
         ? (_query.Length > 0 ? "A:Modifier la recherche|X:Effacer" : "A:Rechercher")
         : _selected is SearchHit { WishKey: not null } ? "A:Ouvrir|Y:Souhait|X:Nouvelle recherche"
         : _selected is SearchHit ? "A:Ouvrir|X:Nouvelle recherche"
-        : _selected is DiscoverGame ? "A:Ouvrir|Y:Souhait|X:Rechercher"
+        : Keyboard.FocusedElement == Spotlight && _featured.Count > 1
+            ? (_selected is DiscoverGame { HasSteam: true } ? "A:Ouvrir|←→:Défiler|Y:Souhait" : "A:Ouvrir|←→:Défiler")
+        : _selected is DiscoverGame { IsWished: true } ? "A:Ouvrir|Y:Retirer|X:Rechercher"
+        : _selected is DiscoverGame { HasSteam: true } ? "A:Ouvrir|Y:Souhait|X:Rechercher"
         : "A:Ouvrir|X:Rechercher";
 
     public event Action? HintsChanged;
@@ -400,6 +518,7 @@ public partial class ExploreView : UserControl
         Dispatcher.BeginInvoke(() =>
         {
             if (_lastFocused is { IsVisible: true } last && last.IsDescendantOf(this)) FocusNav.Focus(last);
+            else if (Spotlight.IsVisible) FocusNav.Focus(Spotlight);
             else FocusNav.Focus(SearchButton);
             HintsChanged?.Invoke();
         }, DispatcherPriority.Input);
@@ -438,61 +557,73 @@ public partial class ExploreView : UserControl
 
     private Button Nearest(List<Button> row, Button from) => row.MinBy(b => Math.Abs(CenterX(b) - CenterX(from)))!;
 
-    /// <summary>Sous une tuile : les offres Epic si elle est au-dessus d'elles, sinon la jaquette visible la plus proche.</summary>
-    private Button? BelowTile(Button tile, List<Button> covers, List<Button> free)
+    /// <summary>Jaquettes de chaque rangée des autres listes.</summary>
+    private List<List<Button>> RowLists() => Enumerable.Range(0, MoreRows.Items.Count)
+        .Select(i => MoreRows.ItemContainerGenerator.ContainerFromIndex(i) is DependencyObject c && FindChild<ItemsControl>(c) is { } list ? Buttons(list) : [])
+        .ToList();
+
+    private static T? FindChild<T>(DependencyObject o) where T : DependencyObject
     {
-        if (free.Count == 0) return covers.Count > 0 ? Nearest(covers, tile) : null;
-        var edge = FreeSection.TranslatePoint(new Point(0, 0), this).X;
-        var visible = covers.Where(c => CenterX(c) < edge).ToList();
-        return CenterX(tile) >= edge || visible.Count == 0 ? free[0] : Nearest(visible, tile);
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(o); i++)
+        {
+            var child = VisualTreeHelper.GetChild(o, i);
+            if (child is T found) return found;
+            if (FindChild<T>(child) is { } deeper) return deeper;
+        }
+        return null;
     }
+
+    /// <summary>Zones de la page, de haut en bas : à la une, recherche, jaquettes (ou résultats), autres rangées, offres Epic.</summary>
+    private List<List<Button>> Zones()
+    {
+        var zones = new List<List<Button>>();
+        if (Spotlight.IsVisible) zones.Add([Spotlight]);
+        zones.Add(ResetButton.IsEnabled ? [SearchButton, ResetButton] : [SearchButton]);
+        zones.Add(HitsScroll.Visibility == Visibility.Visible ? Buttons(Hits) : NewScroll.Visibility == Visibility.Visible ? Buttons(NewGames) : []);
+        if (MoreRows.IsVisible) zones.AddRange(RowLists());
+        if (FreeSection.IsVisible) zones.Add(Buttons(FreeGames));
+        zones.RemoveAll(z => z.Count == 0);
+        return zones;
+    }
+
+    /// <summary>Arrivée dans une zone : la barre de recherche (pas le bouton d'effacement) ; depuis un élément pleine largeur, le premier ; sinon le plus proche à l'horizontale.</summary>
+    private Button Enter(List<Button> zone, Button from)
+        => zone.Contains(SearchButton) ? SearchButton
+            : zone.Count == 1 || from.ActualWidth > ActualWidth * 0.5 ? zone[0]
+            : Nearest(zone, from);
 
     /// <summary>Vrai si la sélection a bougé (faux au bord : gauche va alors vers la barre de gauche).</summary>
     private bool MoveFocus(NavAction action)
     {
         var current = Keyboard.FocusedElement as Button;
-        List<Button> search = ResetButton.IsEnabled ? [SearchButton, ResetButton] : [SearchButton];
-        var tiles = Buttons(Tiles);
-        var covers = HitsScroll.Visibility == Visibility.Visible ? Buttons(Hits) : NewScroll.Visibility == Visibility.Visible ? Buttons(NewGames) : [];
-        var free = FreeSection.Visibility == Visibility.Visible ? Buttons(FreeGames) : [];
+        if (current is not null && current == Spotlight)
+            switch (action)
+            {
+                // Au premier jeu, gauche va vers la barre de gauche.
+                case NavAction.Left when _featuredIndex > 0:
+                    ShowFeatured(_featuredIndex - 1, -1);
+                    HintsChanged?.Invoke();
+                    return true;
+                case NavAction.Right when _featured.Count > 1:
+                    ShowFeatured(_featuredIndex + 1, 1);
+                    HintsChanged?.Invoke();
+                    return true;
+            }
+        var zones = Zones();
+        var z = zones.FindIndex(zone => current is not null && zone.Contains(current));
         Button? target;
-        if (current is not null && search.Contains(current))
+        if (z < 0) target = SearchButton;
+        else
+        {
+            var zone = zones[z];
             target = action switch
             {
-                NavAction.Left => Step(search, current, -1),
-                NavAction.Right => Step(search, current, 1),
-                NavAction.Down => tiles.FirstOrDefault(),
-                _ => null,
+                NavAction.Left => current == Spotlight ? null : Step(zone, current!, -1),
+                NavAction.Right => current == Spotlight ? null : Step(zone, current!, 1),
+                NavAction.Up => z > 0 ? Enter(zones[z - 1], current!) : null,
+                _ => z < zones.Count - 1 ? Enter(zones[z + 1], current!) : null,
             };
-        else if (current is not null && tiles.Contains(current))
-            target = action switch
-            {
-                NavAction.Left => Step(tiles, current, -1),
-                NavAction.Right => Step(tiles, current, 1),
-                NavAction.Up => SearchButton,
-                NavAction.Down => BelowTile(current, covers, free),
-                _ => null,
-            };
-        else if (current is not null && covers.Contains(current))
-            target = action switch
-            {
-                NavAction.Left => Step(covers, current, -1),
-                NavAction.Right => Step(covers, current, 1) ?? free.FirstOrDefault(),
-                NavAction.Up => Nearest(tiles, current),
-                NavAction.Down => free.FirstOrDefault(),
-                _ => null,
-            };
-        else if (current is not null && free.Contains(current))
-            target = action switch
-            {
-                NavAction.Left when free.IndexOf(current) % _freeColumns > 0 => Step(free, current, -1),
-                NavAction.Left => covers.Contains(_lastCover!) ? _lastCover : covers.FirstOrDefault(),
-                NavAction.Right when free.IndexOf(current) % _freeColumns < _freeColumns - 1 => Step(free, current, 1),
-                NavAction.Up => Step(free, current, -_freeColumns) ?? Nearest(tiles, current),
-                NavAction.Down => Step(free, current, _freeColumns),
-                _ => null,
-            };
-        else target = SearchButton;
+        }
         if (target is null) return false;
         FocusNav.Focus(target);
         HintsChanged?.Invoke();
@@ -510,7 +641,8 @@ public partial class ExploreView : UserControl
                 return true;
             case NavAction.Secondary:
                 if (_selected is SearchHit hit) WishHit?.Invoke(hit);
-                else if (_selected is DiscoverGame game && game.Owned is null) WishNewGame?.Invoke(game);
+                // Ajout : un jeu vendu sur Steam ; retrait : tout jeu déjà dans la liste (même d'une autre boutique).
+                else if (_selected is DiscoverGame game && game.Owned is null && (game.HasSteam || game.IsWished)) WishNewGame?.Invoke(game);
                 return true;
             case NavAction.Option:
                 // Sur la barre avec une recherche : X l'efface ; ailleurs, X relance une recherche.
@@ -523,25 +655,5 @@ public partial class ExploreView : UserControl
     }
 }
 
-/// <summary>Tuile de l'onglet Découverte menant à une liste des tendances Steam.</summary>
-public sealed class DiscoverTile(string key, string title, string subtitle, Color tint) : ObservableObject
-{
-    private DiscoverSection? _section;
-
-    public string Key { get; } = key;
-    public string Title { get; } = title;
-    public string Subtitle { get; } = subtitle;
-    public Brush Tint { get; } = Freeze(new SolidColorBrush(tint));
-
-    public DiscoverSection? Section
-    {
-        get => _section;
-        set { if (Set(ref _section, value)) OnPropertyChanged(nameof(Lead)); }
-    }
-
-    /// <summary>N° 1 de la liste : son visuel sert de fond.</summary>
-    public DiscoverGame? Lead => _section?.Games.FirstOrDefault();
-    public string? HeroPath => Lead is { } g ? g.HeroPath ?? g.CoverPath : null;
-
-    private static Brush Freeze(Brush b) { b.Freeze(); return b; }
-}
+/// <summary>Rangée d'une liste sous la rangée En tendance.</summary>
+public sealed record TrendRow(string Label, string Subtitle, List<DiscoverGame> Games);

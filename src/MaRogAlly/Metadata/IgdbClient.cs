@@ -11,7 +11,7 @@ namespace MaRogAlly.Metadata;
 /// IGDB (base de données de jeux de Twitch) : l'équivalent de TMDB pour le jeu vidéo.
 /// Identifiants gratuits sur https://dev.twitch.tv/console (application « Confidential »).
 /// </summary>
-public sealed class IgdbClient(HttpClient http, AppSettings settings)
+public sealed partial class IgdbClient(HttpClient http, AppSettings settings)
 {
     private string? _token;
     private DateTime _tokenExpiry;
