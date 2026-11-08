@@ -82,7 +82,7 @@
                         </LinearGradientBrush>
                     </ScrollViewer.OpacityMask>
                     <Grid x:Name="ListHost" Margin="0,0,0,60">
-                        <Border x:Name="ListHighlight" CornerRadius="12" Background="#24FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                        <Border x:Name="ListHighlight" CornerRadius="14" Background="Transparent" BorderBrush="#E6FFFFFF" BorderThickness="2"/>
                         <StackPanel x:Name="List"/>
                     </Grid>
                 </ScrollViewer>

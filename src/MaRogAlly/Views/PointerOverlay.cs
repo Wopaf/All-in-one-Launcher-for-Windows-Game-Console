@@ -42,9 +42,13 @@ public sealed class PointerOverlay : Window
     /// <summary>Vrai entre l'apparition et le début de la disparition (le curseur doit être là).</summary>
     private bool _shown;
 
+    /// <summary>Taille réelle de la flèche « normale », par rapport au dessin (un peu plus discrète que lui).</summary>
+    private const double BaseScale = 0.82;
+
     /// <param name="size">Taille de la flèche (1 : normale).</param>
     public PointerOverlay(double size)
     {
+        size *= BaseScale;
         _size = size;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;

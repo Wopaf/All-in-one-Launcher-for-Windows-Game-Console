@@ -206,9 +206,10 @@ public partial class StorageView : OverlayBase
         Grid.SetColumn(chevron, 2);
         grid.Children.Add(chevron);
 
-        var button = new Button { Content = grid, Style = Res<Style>("RowButton") };
+        var button = new Button { Content = grid, Style = Res<Style>("RowButton"), Margin = new Thickness(0, 4, 0, 4) };
         RowOptions.SetNoBar(button, true);
         RowOptions.SetFloating(button, true);
+        RowOptions.SetCard(button, true);
         button.GotKeyboardFocus += (_, _) =>
         {
             _highlight.Hide();
@@ -824,9 +825,10 @@ public partial class StorageView : OverlayBase
             grid.Children.Add(valueText);
         }
 
-        var button = new Button { Content = grid, Style = Res<Style>("RowButton"), Padding = new Thickness(14, 0, 14, 0), Margin = new Thickness(0, 1, 0, 1) };
+        var button = new Button { Content = grid, Style = Res<Style>("RowButton"), Padding = new Thickness(14, 0, 14, 0), Margin = new Thickness(0, 3, 0, 3) };
         RowOptions.SetNoBar(button, true);
         RowOptions.SetFloating(button, true);
+        RowOptions.SetCard(button, true);
         button.GotKeyboardFocus += (_, _) =>
         {
             _menuHighlight.Dim(0.5);

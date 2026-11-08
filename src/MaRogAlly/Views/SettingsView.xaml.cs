@@ -26,6 +26,7 @@ public partial class SettingsView : UserControl
     public event Action? HiddenGamesRequested, AccentRequested, UiScaleRequested, ThemeRequested, AppUpdateRequested, QuickPanelKeyRequested, QuickPanelPadRequested;
     /// <summary>Choix du mode souris : « size », « speed » ou « acceleration ».</summary>
     public event Action<string>? PointerOptionRequested;
+    public event Action? MouseTestRequested;
     private Border? _themeSwatch;
     private TextBlock? _themeName;
     private TextBlock? _uiScaleValue;
@@ -118,6 +119,8 @@ public partial class SettingsView : UserControl
         _pointerAccelerationValue = ValueRow("Accélération", "acceleration",
             "Comment la vitesse suit le stick. « Aucune » : elle augmente régulièrement. Plus forte : très précise près du centre, rapide au bout.");
         UpdatePointerOptions();
+        ActionRow("Tester la souris", "\uE962", () => MouseTestRequested?.Invoke(),
+            "Tester la souris", "Ouvre un panneau d'essai avec de faux boutons : la manette y pilote la souris comme sur une application de bureau. B le referme.");
 
         Category("Clés d'API", "\uE8D7", "IGDB, SteamGridDB et Steam",
             "Facultatives : elles enrichissent les fiches et les visuels, et donnent accès à toute ta bibliothèque Steam.");
@@ -194,9 +197,10 @@ public partial class SettingsView : UserControl
         Grid.SetColumn(chevron, 2);
         grid.Children.Add(chevron);
 
-        var button = new Button { Content = grid, Style = (Style)FindResource("RowButton") };
+        var button = new Button { Content = grid, Style = (Style)FindResource("RowButton"), Margin = new Thickness(0, 4, 0, 4) };
         RowOptions.SetNoBar(button, true);
         RowOptions.SetFloating(button, true);
+        RowOptions.SetCard(button, true);
         var panel = new StackPanel();
         var category = new SettingsCategory { Name = name, Summary = summary, Help = help, Panel = panel, MenuButton = button };
         var index = _categories.Count;
@@ -458,6 +462,8 @@ public partial class SettingsView : UserControl
         if (control.Style is null) control.Style = (Style)FindResource("RowButton");
         RowOptions.SetNoBar(control, true);
         RowOptions.SetFloating(control, true);
+        RowOptions.SetCard(control, true);
+        control.Margin = new Thickness(0, 4, 0, 4);
         var category = _buildingCategory!;
         control.GotKeyboardFocus += (_, _) =>
         {

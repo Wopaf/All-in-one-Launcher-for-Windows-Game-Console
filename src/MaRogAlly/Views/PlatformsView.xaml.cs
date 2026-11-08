@@ -186,6 +186,8 @@ public partial class PlatformsView : UserControl
         };
         RowOptions.SetNoBar(row, true);
         RowOptions.SetFloating(row, true);
+        RowOptions.SetCard(row, true);
+        row.Margin = new Thickness(0, 4, 0, 4);
         row.GotKeyboardFocus += (_, _) =>
         {
             _highlight ??= new SlideHighlight(ListHighlight, ListHost);

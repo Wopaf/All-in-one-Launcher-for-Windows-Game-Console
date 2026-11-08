@@ -236,6 +236,11 @@
                             <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
                             <Setter TargetName="Bd" Property="BorderBrush" Value="Transparent"/>
                         </Trigger>
+                        <!-- Ligne sur sa carte, comme dans le menu principal (placé après pour garder le fond de carte) -->
+                        <Trigger Property="ui:RowOptions.Card" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#0EFFFFFF"/>
+                            <Setter TargetName="Bd" Property="CornerRadius" Value="14"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

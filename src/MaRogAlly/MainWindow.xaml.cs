@@ -121,15 +121,21 @@ public partial class MainWindow : Window
         WireViews();
 
         // Volet ouvert : la manette le pilote, même si Windows lui a refusé le premier plan.
-        _pad.IsActive = () => _desktop.IsForeground || _quickPanel is not null;
+        // Pendant l'essai de la souris, la manette pilote la souris et non l'application.
+        _pad.IsActive = () => (_desktop.IsForeground || _quickPanel is not null) && _mouseTest is null;
         _pad.Action += OnNav;
-        _pad.MinimizeRequested += MinimizeForegroundApp;
+        _pad.MinimizeRequested += () =>
+        {
+            // B pendant l'essai de la souris : il se referme.
+            if (_mouseTest is { } test) test.Close();
+            else MinimizeForegroundApp();
+        };
         _pad.PanelChord = _settings.QuickPanelPadButtons;
         _padMouse.IsWanted = PadMouseWanted;
         _padMouse.Speed = _settings.PointerSpeed;
         _padMouse.Acceleration = _settings.PointerAcceleration;
         // Notre curseur, créé à la première utilisation : Windows cache le sien quand aucune souris n'est branchée.
-        _padMouse.ShowPointer = (x, y) => (_pointer ??= new PointerOverlay(_settings.PointerSize)).ShowAt(x, y);
+        _padMouse.ShowPointer = (x, y) => (_pointer ??= new PointerOverlay(PointerOptions.Nearest(PointerOptions.Sizes, _settings.PointerSize))).ShowAt(x, y);
         _padMouse.HidePointer = () => _pointer?.HidePointer();
         _padMouse.MovePointer = (x, y) => _pointer?.MoveAsync(x, y);
         _pad.BackgroundPoll += _padMouse.Update;
@@ -380,6 +386,8 @@ public partial class MainWindow : Window
                 else if (button == "background") ToggleDockPanel(BackgroundApps, OpenBackgroundApps);
             }
         }
+        // « --mouse-test » : panneau d'essai du mode souris, pour vérifier l'affichage.
+        if (args.Contains("--mouse-test")) OpenMouseTest();
         // « --settings Application » : réglages ouverts sur cette catégorie (« Au démarrage » par défaut), pour vérifier l'affichage.
         var settingsArg = Array.IndexOf(args, "--settings");
         if (settingsArg >= 0)
@@ -1395,6 +1403,7 @@ public partial class MainWindow : Window
         _settingsView.QuickPanelKeyRequested += OpenQuickPanelKeyPicker;
         _settingsView.QuickPanelPadRequested += OpenQuickPanelPadPicker;
         _settingsView.PointerOptionRequested += OpenPointerOptionPicker;
+        _settingsView.MouseTestRequested += OpenMouseTest;
     }
 
     private void OnSelectionChanged(Game? game)
@@ -2135,6 +2144,27 @@ public partial class MainWindow : Window
         OpenOverlay(panel);
     }
 
+    private MouseTestPanel? _mouseTest;
+
+    /// <summary>
+    /// Essai du mode souris : la manette pilote la souris sur un panneau de faux boutons. Le curseur de l'application
+    /// n'est plus masqué le temps de l'essai (une souris branchée doit rester visible).
+    /// </summary>
+    private void OpenMouseTest()
+    {
+        var test = new MouseTestPanel();
+        _mouseTest = test;
+        _padMouseChecked = DateTime.MinValue;
+        Mouse.OverrideCursor = null;
+        test.CloseRequested += _ =>
+        {
+            _mouseTest = null;
+            _padMouseChecked = DateTime.MinValue;
+            _padMouse.Release();
+        };
+        OpenOverlay(test);
+    }
+
     /// <summary>Mode souris : taille du curseur, vitesse ou accélération, appliquées tout de suite.</summary>
     private void OpenPointerOptionPicker(string key)
     {
@@ -2816,7 +2846,8 @@ public partial class MainWindow : Window
         if (now - _padMouseChecked < TimeSpan.FromMilliseconds(250)) return _padMouseWanted;
         _padMouseChecked = now;
         var mode = ReadControlMode();
-        _padMouseWanted = mode != ControlMode.Gamepad && !_desktop.IsForeground && _quickPanel is null
+        // Essai de la souris : elle marche sur l'application, quel que soit le mode.
+        _padMouseWanted = _mouseTest is not null || mode != ControlMode.Gamepad && !_desktop.IsForeground && _quickPanel is null
             // Bureau : la souris partout, jeux compris. Auto (ou mode laissé à Armoury Crate) : sur les applications de bureau seulement.
             && (mode == ControlMode.Desktop
                 || (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || !WindowsShell.IsFullscreen(app.Handle) && !IsGamepadWindow(app)));

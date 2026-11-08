@@ -87,6 +87,12 @@ public static class RowOptions
         "Floating", typeof(bool), typeof(RowOptions), new PropertyMetadata(false));
     public static bool GetFloating(DependencyObject o) => (bool)o.GetValue(FloatingProperty);
     public static void SetFloating(DependencyObject o, bool v) => o.SetValue(FloatingProperty, v);
+
+    /// <summary>Ligne posée sur une carte arrondie, comme dans le menu principal (sous un cadre de sélection blanc).</summary>
+    public static readonly DependencyProperty CardProperty = DependencyProperty.RegisterAttached(
+        "Card", typeof(bool), typeof(RowOptions), new PropertyMetadata(false));
+    public static bool GetCard(DependencyObject o) => (bool)o.GetValue(CardProperty);
+    public static void SetCard(DependencyObject o, bool v) => o.SetValue(CardProperty, v);
 }
 
 /// <summary>Rayon égal à la moitié de la hauteur : une pilule reste parfaitement arrondie quelle que soit sa taille.</summary>

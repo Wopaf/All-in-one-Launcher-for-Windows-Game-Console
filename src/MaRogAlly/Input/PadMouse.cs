@@ -10,12 +10,15 @@ public readonly record struct PadState(ushort Buttons, short LeftX, short LeftY,
 /// <summary>Choix du mode souris (réglages) : taille du curseur, vitesse et accélération.</summary>
 public static class PointerOptions
 {
-    public static readonly (double Value, string Label)[] Sizes = [(0.8, "Petite"), (1.0, "Normale"), (1.3, "Grande"), (1.6, "Très grande")];
+    public static readonly (double Value, string Label)[] Sizes = [(0.8, "Petite"), (1.0, "Normale"), (1.25, "Grande")];
     public static readonly (double Value, string Label)[] Speeds = [(0.6, "Lente"), (1.0, "Normale"), (1.5, "Rapide"), (2.2, "Très rapide")];
     /// <summary>Exposant de la courbe du stick : 1, la vitesse suit le stick ; plus haut, précis au centre et rapide au bout.</summary>
     public static readonly (double Value, string Label)[] Accelerations = [(1.0, "Aucune"), (1.5, "Faible"), (2.0, "Normale"), (2.8, "Forte")];
 
     public static string Label((double Value, string Label)[] options, double value) => options.MinBy(o => Math.Abs(o.Value - value)).Label;
+
+    /// <summary>Choix proposé le plus proche d'une valeur enregistrée (une taille qui n'est plus proposée devient la plus proche).</summary>
+    public static double Nearest((double Value, string Label)[] options, double value) => options.MinBy(o => Math.Abs(o.Value - value)).Value;
 }
 
 /// <summary>
@@ -85,9 +88,8 @@ public sealed class PadMouse
             StartMover();
         }
 
-        var scrollX = Curve(s.LeftX, 2);
-        var scrollY = Curve(s.LeftY, 2);
-        if (Curve(s.RightX, 1) != 0 || Curve(s.RightY, 1) != 0 || scrollX != 0 || scrollY != 0 || (s.Buttons & (LeftShoulder | RightShoulder)) != 0)
+        var (scrollX, scrollY) = Stick(s.LeftX, s.LeftY, 2);
+        if (Stick(s.RightX, s.RightY, 1) != (0, 0) || scrollX != 0 || scrollY != 0 || (s.Buttons & (LeftShoulder | RightShoulder)) != 0)
             _lastInput = now;
 
         // Stick gauche : molette, verticale et horizontale.
@@ -171,8 +173,9 @@ public sealed class PadMouse
             PadState s;
             lock (_gate) s = _state;
             var speed = MaxSpeed * Speed;
-            var targetX = Curve(s.RightX, Acceleration) * speed;
-            var targetY = -Curve(s.RightY, Acceleration) * speed;
+            var (stickX, stickY) = Stick(s.RightX, s.RightY, Acceleration);
+            var targetX = stickX * speed;
+            var targetY = -stickY * speed;
             // Lissage indépendant de la fréquence de l'écran : la vitesse rejoint celle du stick sans à-coups.
             var follow = 1 - Math.Exp(-dt / Smoothing);
             vx += (targetX - vx) * follow;
@@ -216,14 +219,20 @@ public sealed class PadMouse
         mouse_event(pressed ? down : up, 0, 0, 0, UIntPtr.Zero);
     }
 
-    /// <summary>Zone morte, puis courbe : avec un exposant au-dessus de 1, précis près du centre et rapide au bout.</summary>
-    private static double Curve(short value, double exponent)
+    /// <summary>
+    /// Stick lu comme une direction, pas comme deux axes séparés : zone morte ronde, puis courbe appliquée à la distance
+    /// au centre (avec un exposant au-dessus de 1, précis près du centre et rapide au bout). L'angle du stick est gardé tel
+    /// quel : les diagonales ne sont plus attirées vers l'horizontale ou la verticale.
+    /// </summary>
+    private static (double X, double Y) Stick(short rawX, short rawY, double exponent)
     {
-        var n = value / 32767.0;
-        var a = Math.Abs(n);
-        if (a < DeadZone) return 0;
-        var t = Math.Min(1, (a - DeadZone) / (1 - DeadZone));
-        return Math.Sign(n) * Math.Pow(t, exponent);
+        double x = rawX / 32767.0, y = rawY / 32767.0;
+        var length = Math.Sqrt(x * x + y * y);
+        if (length < DeadZone) return (0, 0);
+        // Un stick carré dépasse 1 en diagonale : la vitesse maximale est la même dans toutes les directions.
+        var t = Math.Min(1, (length - DeadZone) / (1 - DeadZone));
+        var scale = Math.Pow(t, exponent) / length;
+        return (x * scale, y * scale);
     }
 
     [StructLayout(LayoutKind.Sequential)]
