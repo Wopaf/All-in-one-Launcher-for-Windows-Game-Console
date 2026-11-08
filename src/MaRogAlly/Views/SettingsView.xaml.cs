@@ -24,6 +24,8 @@ public partial class SettingsView : UserControl
     public event Action<string, string, Action<string>>? EditRequested;
     public event Action? Changed, KeysChanged, RescanRequested, RefreshMetadataRequested, MissingMetadataRequested;
     public event Action? HiddenGamesRequested, AccentRequested, UiScaleRequested, ThemeRequested, AppUpdateRequested, QuickPanelKeyRequested, QuickPanelPadRequested;
+    /// <summary>Choix du mode souris : « size », « speed » ou « acceleration ».</summary>
+    public event Action<string>? PointerOptionRequested;
     private Border? _themeSwatch;
     private TextBlock? _themeName;
     private TextBlock? _uiScaleValue;
@@ -88,16 +90,10 @@ public partial class SettingsView : UserControl
             "Fermer Armoury Crate", "Au lancement de Ma ROG Ally, ferme Armoury Crate : son volet et sa fenêtre ne passent plus devant.\n\nLes réglages déjà enregistrés dans la manette (M1, M2) restent en place. Mais ce qu'Armoury Crate gère en direct ne marche plus tant qu'il est fermé : modes de performance, mode Auto de la manette, ses mises à jour.\n\nSes services Windows ne peuvent pas être arrêtés sans droits d'administrateur : ils peuvent en relancer une partie, par exemple avec son bouton.");
         Header("Lanceurs à ouvrir avec l'application");
 
-        Category("Comportement", "\uE713", "Sons, lancement d'un jeu et mises à jour",
-            "Sons de l'interface, comportement au lancement d'un jeu et mises à jour de l'application.");
+        Category("Comportement", "\uE713", "Sons, centre de contrôle et mises à jour",
+            "Sons de l'interface, centre de contrôle (touche, bouton de la manette, pause du jeu) et mises à jour de l'application.");
         Switch("Sons de l'interface", () => _settings.UiSounds, v => { _settings.UiSounds = v; Services.UiSounds.Enabled = v; },
             "Sons de l'interface", "Un son léger quand tu te déplaces, valides ou reviens en arrière, un autre à l'ouverture de l'application et quand une recherche aboutit.");
-        Switch("Réduire au lancement d'un jeu", () => _settings.MinimizeOnLaunch, v => _settings.MinimizeOnLaunch = v,
-            "Réduire au lancement", "Réduit l'application dans la barre des tâches dès qu'un jeu est lancé.");
-        Switch("Réduire les autres applications avec B", () => _settings.MinimizeWithB, v => _settings.MinimizeWithB = v,
-            "Réduire avec B", "Le bouton B de la manette réduit l'application au premier plan, si ce n'est pas Ma ROG Ally. Il reste sans effet dans un jeu de ta bibliothèque et dans toute fenêtre en plein écran.\n\nDésactive cette option si B réduit par erreur un jeu en fenêtre qui n'est pas dans ta bibliothèque.");
-        Switch("Souris à la manette", () => _settings.PadMouse, v => _settings.PadMouse = v,
-            "Souris à la manette", "Sur le bureau et les applications de bureau, la manette pilote la souris : stick droit pour le curseur, RB pour le clic gauche (maintenu pour glisser), LB pour le clic droit, stick gauche pour défiler. B réduit toujours l'application pour revenir ici.\n\nJamais dans Ma ROG Ally, dans un jeu de ta bibliothèque, en plein écran ou dans les paramètres de Windows.\n\nPlus besoin du mode bureau de la ROG Ally : la manette reste toujours en mode manette, et le bouton du centre de contrôle marche partout.\n\nModes du centre de contrôle : Auto met la souris sur les applications de bureau (ce réglage), Bureau la met partout, jeux compris, Manette jamais.");
         Switch("Masquer la barre des tâches de Windows", () => _settings.HideWindowsTaskbar, v => { _settings.HideWindowsTaskbar = v; WindowsTaskbar.Apply(_settings); },
             "Barre des tâches de Windows", "Active le masquage automatique de Windows tant que l'application tourne : la barre ne repasse plus devant les autres applications, qui gagnent aussi sa place à l'écran. Elle reste accessible en glissant depuis le bas de l'écran. Ton réglage d'origine revient quand tu quittes l'application.");
 
@@ -112,6 +108,16 @@ public partial class SettingsView : UserControl
             "Nouvelles versions", $"Version installée : {AppUpdater.CurrentText}.\n\nL'application regarde régulièrement sur GitHub si une nouvelle version existe, et l'annonce dans le menu principal. Rien ne s'installe sans que tu le valides.");
         ActionRow("Vérifier maintenant", "", () => AppUpdateRequested?.Invoke(),
             "Vérifier maintenant", $"Version installée : {AppUpdater.CurrentText}.\n\nSi une nouvelle version existe, tu pourras l'installer : l'application se télécharge puis redémarre toute seule.");
+
+        Category("Mode souris", "\uE962", "Taille, vitesse et accélération",
+            "La souris à la manette : stick droit pour le curseur, RB pour le clic gauche (maintenu pour glisser), LB pour le clic droit, stick gauche pour défiler.\n\nElle marche sur le bureau et les applications de bureau en mode Auto, partout en mode Bureau, jamais en mode Manette.");
+        _pointerSizeValue = ValueRow("Taille du curseur", "size",
+            "Taille de la flèche affichée par l'application (Windows cache la sienne quand aucune souris n'est branchée).");
+        _pointerSpeedValue = ValueRow("Vitesse", "speed",
+            "Vitesse du curseur quand le stick droit est poussé au bout.");
+        _pointerAccelerationValue = ValueRow("Accélération", "acceleration",
+            "Comment la vitesse suit le stick. « Aucune » : elle augmente régulièrement. Plus forte : très précise près du centre, rapide au bout.");
+        UpdatePointerOptions();
 
         Category("Clés d'API", "\uE8D7", "IGDB, SteamGridDB et Steam",
             "Facultatives : elles enrichissent les fiches et les visuels, et donnent accès à toute ta bibliothèque Steam.");
@@ -399,6 +405,27 @@ public partial class SettingsView : UserControl
             "Un bouton, ou une combinaison de boutons pressés ensemble, qui ouvre le centre de contrôle, en plus de la touche du clavier.\n\nChoisis « Assigner », puis appuie sur les boutons et relâche-les.\n\nSeuls les boutons d'une manette Xbox sont lus (A, B, X, Y, croix, gâchettes, sticks, Select, Start), en mode manette. M1 et M2 n'en font pas partie : pour les utiliser, relie-les dans Armoury Crate à un bouton de manette. Un bouton seul est aussi reçu par les jeux : une combinaison, comme L3 + R3, les gêne moins.");
         b.Click += (_, _) => QuickPanelPadRequested?.Invoke();
         UpdateQuickPanelPad();
+    }
+
+    private TextBlock? _pointerSizeValue, _pointerSpeedValue, _pointerAccelerationValue;
+
+    /// <summary>Ligne avec sa valeur à droite ; l'ouvrir propose les choix.</summary>
+    private TextBlock ValueRow(string label, string key, string help)
+    {
+        var value = new TextBlock { FontSize = 15, Foreground = (Brush)FindResource("TextSecondary"), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var grid = new Grid();
+        grid.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+        grid.Children.Add(value);
+        var b = Row(new Button { Content = grid }, label, help);
+        b.Click += (_, _) => PointerOptionRequested?.Invoke(key);
+        return value;
+    }
+
+    public void UpdatePointerOptions()
+    {
+        if (_pointerSizeValue is not null) _pointerSizeValue.Text = Input.PointerOptions.Label(Input.PointerOptions.Sizes, _settings.PointerSize);
+        if (_pointerSpeedValue is not null) _pointerSpeedValue.Text = Input.PointerOptions.Label(Input.PointerOptions.Speeds, _settings.PointerSpeed);
+        if (_pointerAccelerationValue is not null) _pointerAccelerationValue.Text = Input.PointerOptions.Label(Input.PointerOptions.Accelerations, _settings.PointerAcceleration);
     }
 
     public void UpdateQuickPanelPad()

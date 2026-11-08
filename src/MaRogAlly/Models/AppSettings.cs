@@ -24,16 +24,15 @@ public sealed class AppSettings
 
     /// <summary>Ferme Armoury Crate au lancement de l'application.</summary>
     public bool CloseArmouryCrate { get; set; } = true;
-    public bool MinimizeOnLaunch { get; set; } = false;
     /// <summary>Masque automatiquement la barre des tâches de Windows tant que l'application tourne.</summary>
     public bool HideWindowsTaskbar { get; set; } = true;
     /// <summary>Réglage de Windows à remettre en partant (conservé si l'application s'arrête brutalement).</summary>
     public bool? TaskbarAutoHideBefore { get; set; }
-    /// <summary>Le bouton B de la manette réduit l'application au premier plan (jamais un jeu).</summary>
-    public bool MinimizeWithB { get; set; } = true;
 
-    /// <summary>Souris à la manette sur les applications de bureau (la manette reste alors en mode manette en Auto).</summary>
-    public bool PadMouse { get; set; } = true;
+    /// <summary>Mode souris : taille du curseur, vitesse et accélération (voir PointerOptions).</summary>
+    public double PointerSize { get; set; } = 1.0;
+    public double PointerSpeed { get; set; } = 1.0;
+    public double PointerAcceleration { get; set; } = 2.0;
     /// <summary>Lanceurs ouverts avec l'application, s'ils sont installés.</summary>
     public HashSet<Platform> StartupLaunchers { get; set; } = [Platform.Steam, Platform.Epic];
     /// <summary>Cherche toute seule une nouvelle version sur GitHub (l'installation reste toujours à valider).</summary>

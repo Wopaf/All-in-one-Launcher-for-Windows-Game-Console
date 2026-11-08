@@ -126,9 +126,12 @@ public partial class MainWindow : Window
         _pad.MinimizeRequested += MinimizeForegroundApp;
         _pad.PanelChord = _settings.QuickPanelPadButtons;
         _padMouse.IsWanted = PadMouseWanted;
+        _padMouse.Speed = _settings.PointerSpeed;
+        _padMouse.Acceleration = _settings.PointerAcceleration;
         // Notre curseur, créé à la première utilisation : Windows cache le sien quand aucune souris n'est branchée.
-        _padMouse.ShowPointer = (x, y) => (_pointer ??= new PointerOverlay()).ShowAt(x, y);
+        _padMouse.ShowPointer = (x, y) => (_pointer ??= new PointerOverlay(_settings.PointerSize)).ShowAt(x, y);
         _padMouse.HidePointer = () => _pointer?.HidePointer();
+        _padMouse.MovePointer = (x, y) => _pointer?.MoveAsync(x, y);
         _pad.BackgroundPoll += _padMouse.Update;
         // Le curseur de la souris à la manette ne doit jamais rester affiché sur un jeu ou sur l'application.
         var pointerWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -1391,6 +1394,7 @@ public partial class MainWindow : Window
         _settingsView.HiddenGamesRequested += OpenHiddenGames;
         _settingsView.QuickPanelKeyRequested += OpenQuickPanelKeyPicker;
         _settingsView.QuickPanelPadRequested += OpenQuickPanelPadPicker;
+        _settingsView.PointerOptionRequested += OpenPointerOptionPicker;
     }
 
     private void OnSelectionChanged(Game? game)
@@ -2131,6 +2135,48 @@ public partial class MainWindow : Window
         OpenOverlay(panel);
     }
 
+    /// <summary>Mode souris : taille du curseur, vitesse ou accélération, appliquées tout de suite.</summary>
+    private void OpenPointerOptionPicker(string key)
+    {
+        var (title, options, current) = key switch
+        {
+            "size" => ("Taille du curseur", PointerOptions.Sizes, _settings.PointerSize),
+            "speed" => ("Vitesse", PointerOptions.Speeds, _settings.PointerSpeed),
+            _ => ("Accélération", PointerOptions.Accelerations, _settings.PointerAcceleration),
+        };
+        var panel = new SidePanel(title, "Mode souris");
+        var chosen = PointerOptions.Label(options, current);
+        foreach (var (value, label) in options)
+        {
+            var b = panel.AddChoice(label, label == chosen, () =>
+            {
+                switch (key)
+                {
+                    case "size":
+                        _settings.PointerSize = value;
+                        // Le curseur est refait à la nouvelle taille à sa prochaine apparition.
+                        _padMouse.Release();
+                        _pointer?.Close();
+                        _pointer = null;
+                        break;
+                    case "speed":
+                        _settings.PointerSpeed = value;
+                        _padMouse.Speed = value;
+                        break;
+                    default:
+                        _settings.PointerAcceleration = value;
+                        _padMouse.Acceleration = value;
+                        break;
+                }
+                _settings.Save();
+                _settingsView.UpdatePointerOptions();
+                panel.Close();
+            });
+            if (label == chosen) panel.InitialFocus = b;
+        }
+        OpenOverlay(panel);
+    }
+
     /// <summary>Choix de la couleur d'accent : aperçu en direct au survol, validé avec A, annulé avec B.</summary>
     private void OpenThemePicker()
     {
@@ -2773,7 +2819,7 @@ public partial class MainWindow : Window
         _padMouseWanted = mode != ControlMode.Gamepad && !_desktop.IsForeground && _quickPanel is null
             // Bureau : la souris partout, jeux compris. Auto (ou mode laissé à Armoury Crate) : sur les applications de bureau seulement.
             && (mode == ControlMode.Desktop
-                || _settings.PadMouse && (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || !WindowsShell.IsFullscreen(app.Handle) && !IsGamepadWindow(app)));
+                || (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || !WindowsShell.IsFullscreen(app.Handle) && !IsGamepadWindow(app)));
         return _padMouseWanted;
     }
 
@@ -2789,9 +2835,9 @@ public partial class MainWindow : Window
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         timer.Tick += (_, _) =>
         {
-            // Avec la souris à la manette, le mode bureau n'est plus utile : la manette reste lue partout.
-            if (_desktop.IsForeground || _quickPanel is not null || _settings.PadMouse) WriteControlMode(true);
-            else if (WindowsShell.ForegroundApp(_desktop.Handle) is { } app) WriteControlMode(WindowsShell.IsFullscreen(app.Handle) || IsGamepadWindow(app));
+            // La souris à la manette remplace le mode bureau : la manette reste toujours lue comme une manette
+            // (réécrit chaque seconde si Armoury Crate l'a changé ; rien n'est écrit tant qu'il n'a pas changé).
+            WriteControlMode(true);
         };
         return timer;
     }
@@ -3115,7 +3161,6 @@ public partial class MainWindow : Window
             new DoubleAnimation(-90, 260, Anim.Ms(1100)) { RepeatBehavior = RepeatBehavior.Forever, EasingFunction = Anim.InOut });
 
         await Task.Delay(3500);
-        if (_settings.MinimizeOnLaunch) WindowState = WindowState.Minimized;
         HideLaunchSplash();
     }
 
@@ -3224,7 +3269,6 @@ public partial class MainWindow : Window
     /// <summary>B depuis une autre application : elle se réduit, sauf si c'est un jeu (B y sert à jouer).</summary>
     private void MinimizeForegroundApp()
     {
-        if (!_settings.MinimizeWithB) return;
         if (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || WindowsShell.IsFullscreen(app.Handle) || IsGamepadWindow(app)) return;
         WindowsShell.Minimize(app.Handle);
         // Plus aucune fenêtre affichée : on revient sur l'application plutôt que sur le bureau.
