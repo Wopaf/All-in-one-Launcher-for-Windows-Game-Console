@@ -49,10 +49,10 @@
     <DrawingBrush x:Key="BackdropPattern" TileMode="Tile" Stretch="Fill"
                   Viewport="0,0,27.713,48" ViewportUnits="Absolute" Viewbox="0,0,27.713,48" ViewboxUnits="Absolute">
         <DrawingBrush.Drawing>
-            <GeometryDrawing Brush="#03FFFFFF"
+            <GeometryDrawing Brush="#02FFFFFF"
                              Geometry="M13.86,3.4 L24.77,9.7 L24.77,22.3 L13.86,28.6 L2.94,22.3 L2.94,9.7 Z M0,27.4 L10.91,33.7 L10.91,46.3 L0,52.6 L-10.91,46.3 L-10.91,33.7 Z M27.71,27.4 L38.62,33.7 L38.62,46.3 L27.71,52.6 L16.8,46.3 L16.8,33.7 Z M0,-20.6 L10.91,-14.3 L10.91,-1.7 L0,4.6 L-10.91,-1.7 L-10.91,-14.3 Z M27.71,-20.6 L38.62,-14.3 L38.62,-1.7 L27.71,4.6 L16.8,-1.7 L16.8,-14.3 Z">
                 <GeometryDrawing.Pen>
-                    <Pen Brush="#09FFFFFF" Thickness="0.8" LineJoin="Round"/>
+                    <Pen Brush="#05FFFFFF" Thickness="0.8" LineJoin="Round"/>
                 </GeometryDrawing.Pen>
             </GeometryDrawing>
         </DrawingBrush.Drawing>

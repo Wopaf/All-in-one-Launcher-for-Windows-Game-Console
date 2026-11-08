@@ -14,7 +14,7 @@ namespace MaRogAlly.Views;
 public sealed record MenuTile(string Icon, string Title, string Detail, Action OnClick, Color? Dot = null);
 
 /// <summary>
-/// Menu principal (Start ou Échap) : heure, date et batterie en en-tête, puis des tuiles par section
+/// Menu principal (Start ou Échap) : des tuiles par section
 /// (mises à jour, accès rapides, alimentation). Le cadre de sélection glisse comme dans les Réglages.
 /// </summary>
 public partial class MainMenu : OverlayBase
@@ -26,7 +26,6 @@ public partial class MainMenu : OverlayBase
     {
         InitializeComponent();
         _highlight = new SlideHighlight(Highlight, ItemsHost);
-        UpdateHeader();
     }
 
     protected override FrameworkElement FocusScope => Items;
@@ -34,7 +33,6 @@ public partial class MainMenu : OverlayBase
 
     public override void OnOpened()
     {
-        UpdateHeader();
         // Mise en page faite avant de lancer l'animation : son calcul ne lui vole aucune image.
         UpdateLayout();
         base.OnOpened();
@@ -48,23 +46,15 @@ public partial class MainMenu : OverlayBase
         else base.FocusOnOpen();
     }
 
-    private void UpdateHeader()
-    {
-        var now = DateTime.Now;
-        ClockText.Text = now.ToString("HH:mm");
-        var date = now.ToString("dddd d MMMM", Fr);
-        DateText.Text = char.ToUpper(date[0]) + date[1..];
-
-        var power = Power.Read();
-        BatteryPanel.Visibility = power.HasBattery ? Visibility.Visible : Visibility.Collapsed;
-        if (!power.HasBattery) return;
-        BatteryIcon.Text = Power.Glyph(power);
-        BatteryText.Text = $"{power.Percent} %";
-        var level = power.Percent < 15 ? Color.FromRgb(0xFF, 0x3B, 0x4E)
-                  : power.Percent < 30 ? Color.FromRgb(0xFF, 0x9F, 0x1C)
-                  : Color.FromRgb(0x4C, 0xD9, 0x64);
-        BatteryIcon.Foreground = BatteryText.Foreground = new SolidColorBrush(level);
-    }
+    /// <summary>Titre du menu, tout en haut.</summary>
+    public void AddTitle(string title)
+        => Items.Children.Add(new TextBlock
+        {
+            Text = title,
+            Style = (Style)FindResource("H2"),
+            FontSize = 28,
+            Margin = new Thickness(4, 0, 0, 18),
+        });
 
     public void AddSection(string title)
         => Items.Children.Add(new TextBlock

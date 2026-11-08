@@ -19,6 +19,8 @@ public partial class DockBar : UserControl
     public event Action<OpenWindow>? AppRequested, MinimizeRequested, CloseRequested;
 
     private readonly SlideHighlight _highlight;
+    /// <summary>Icônes d'applications fermées, le temps de leur disparition : plus sélectionnables, plus comptées.</summary>
+    private readonly HashSet<Button> _leaving = [];
 
     public DockBar()
     {
@@ -37,7 +39,7 @@ public partial class DockBar : UserControl
     public IReadOnlyList<BackgroundApp> BackgroundApps { get; private set; } = [];
 
     public string Hints => FocusedWindow is not null
-        ? "A:Afficher|X:Réduire|Y:Fermer|→:Revenir"
+        ? "A:Afficher|Y:Fermer|→:Revenir"
         : "A:Ouvrir|→:Revenir";
 
     private OpenWindow? FocusedWindow => (Keyboard.FocusedElement as FrameworkElement)?.Tag as OpenWindow;
@@ -50,7 +52,7 @@ public partial class DockBar : UserControl
     {
         BackgroundApps = background;
 
-        var buttons = Apps.Children.OfType<Button>().ToList();
+        var buttons = AppButtons();
         var known = buttons.Select(b => ((OpenWindow)b.Tag).Handle).ToList();
         var visible = windows.OrderBy(w => known.IndexOf(w.Handle) is var i and >= 0 ? i : int.MaxValue).ToList();
         if (known.SequenceEqual(visible.Select(w => w.Handle)))
@@ -65,17 +67,82 @@ public partial class DockBar : UserControl
             return;
         }
 
-        var focused = FocusedWindow?.Handle;
-        var hadFocus = Apps.IsKeyboardFocusWithin;
-        var index = hadFocus ? buttons.FindIndex(b => b.IsKeyboardFocused) : -1;
-        Apps.Children.Clear();
-        foreach (var w in visible) Apps.Children.Add(BuildApp(w, buttons.FirstOrDefault(b => ((OpenWindow)b.Tag).Handle == w.Handle)));
-        if (!hadFocus) return;
-        // La fenêtre sélectionnée a pu se fermer : la sélection passe à sa voisine.
-        var rebuilt = Apps.Children.OfType<Button>().ToList();
-        var target = rebuilt.FirstOrDefault(b => ((OpenWindow)b.Tag).Handle == focused)
-                     ?? rebuilt.ElementAtOrDefault(Math.Clamp(index, 0, Math.Max(0, rebuilt.Count - 1))) ?? BackgroundButton;
-        Dispatcher.BeginInvoke(() => FocusNav.Focus(target), System.Windows.Threading.DispatcherPriority.Loaded);
+        // Mise à jour sur place : les icônes restantes ne bougent pas, celles des fenêtres fermées s'en vont en
+        // zoom arrière (la place se referme ensuite), les nouvelles arrivent à la fin en zoom avant.
+        var handles = windows.Select(w => w.Handle).ToHashSet();
+        var index = buttons.FindIndex(b => b.IsKeyboardFocused);
+        var gone = buttons.Where(b => !handles.Contains(((OpenWindow)b.Tag).Handle)).ToList();
+        foreach (var b in buttons.Except(gone))
+        {
+            var w = windows.First(x => x.Handle == ((OpenWindow)b.Tag).Handle);
+            b.Tag = w;
+            b.ToolTip = w.Title;
+        }
+        foreach (var w in visible.Where(w => !known.Contains(w.Handle)))
+        {
+            var b = BuildApp(w, null);
+            Apps.Children.Add(b);
+            Arrive(b);
+        }
+        var selectedGone = index >= 0 && gone.Contains(buttons[index]);
+        foreach (var b in gone) Leave(b, selectedGone && b == buttons[index] ? index : null);
+        if (FocusedWindow is { } current2 && !selectedGone) ShowLabel(Keyboard.FocusedElement as Button, current2.Title);
+    }
+
+    /// <summary>Applications affichées (sans celles qui sont en train de disparaître).</summary>
+    private List<Button> AppButtons() => Apps.Children.OfType<Button>().Where(b => !_leaving.Contains(b)).ToList();
+
+    private const double LeaveMs = 260, CollapseMs = 220;
+
+    /// <summary>Nouvelle application : son icône grandit depuis le centre.</summary>
+    private static void Arrive(Button b)
+    {
+        var scale = new ScaleTransform(0.4, 0.4);
+        b.RenderTransformOrigin = new Point(0.5, 0.5);
+        b.RenderTransform = scale;
+        var grow = new DoubleAnimation(0.4, 1, Anim.Ms(320)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.4 } };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        b.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(220)) { EasingFunction = Anim.Out });
+    }
+
+    /// <summary>
+    /// Application fermée : son icône rétrécit vers son centre en s'effaçant, puis la place se referme en douceur (les
+    /// icônes du dessous remontent). Si elle était sélectionnée, la sélection passe ensuite à sa voisine.
+    /// </summary>
+    /// <param name="selectedIndex">Place de l'icône si elle était sélectionnée.</param>
+    private void Leave(Button b, int? selectedIndex)
+    {
+        _leaving.Add(b);
+        b.IsHitTestVisible = false;
+        if (selectedIndex is not null)
+        {
+            _highlight.Hide();
+            HideLabel();
+        }
+        var scale = new ScaleTransform(1, 1);
+        b.RenderTransformOrigin = new Point(0.5, 0.5);
+        b.RenderTransform = scale;
+        var shrink = new DoubleAnimation(1, 0.2, Anim.Ms(LeaveMs)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseIn, Amplitude = 0.3 } };
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, shrink);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, shrink);
+        b.BeginAnimation(OpacityProperty, new DoubleAnimation(0, Anim.Ms(LeaveMs)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } });
+
+        // La place se referme pendant la fin du zoom.
+        var begin = TimeSpan.FromMilliseconds(LeaveMs * 0.55);
+        var close = new DoubleAnimation(b.ActualHeight > 0 ? b.ActualHeight : 52, 0, Anim.Ms(CollapseMs)) { BeginTime = begin, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+        close.Completed += (_, _) =>
+        {
+            var hadFocus = b.IsKeyboardFocused;
+            Apps.Children.Remove(b);
+            _leaving.Remove(b);
+            if (selectedIndex is not { } index || !hadFocus) return;
+            var rest = AppButtons();
+            var target = rest.ElementAtOrDefault(Math.Clamp(index, 0, Math.Max(0, rest.Count - 1))) ?? BackgroundButton;
+            FocusNav.Focus(target);
+        };
+        b.BeginAnimation(HeightProperty, close);
+        b.BeginAnimation(MarginProperty, new ThicknessAnimation(new Thickness(0), Anim.Ms(CollapseMs)) { BeginTime = begin, EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } });
     }
 
     private Button BuildApp(OpenWindow w, Button? existing)
@@ -90,7 +157,7 @@ public partial class DockBar : UserControl
 
         var b = new Button { Style = (Style)FindResource("DockButton"), Content = grid, Tag = w, ToolTip = w.Title };
         Track(b);
-        b.Click += (_, _) => { if (b.Tag is OpenWindow window) AppRequested?.Invoke(window); };
+        b.Click += (_, _) => { if (b.Tag is OpenWindow window && !_leaving.Contains(b)) AppRequested?.Invoke(window); };
         return b;
     }
 
@@ -185,7 +252,7 @@ public partial class DockBar : UserControl
     private List<Button> NavButtons()
     {
         var list = new List<Button> { MenuButton };
-        list.AddRange(Apps.Children.OfType<Button>());
+        list.AddRange(AppButtons());
         list.Add(BackgroundButton);
         return list;
     }
@@ -198,6 +265,8 @@ public partial class DockBar : UserControl
         switch (action)
         {
             case NavAction.Up or NavAction.Down:
+                // Icône sélectionnée en train de disparaître : la sélection passe à sa voisine juste après.
+                if (Keyboard.FocusedElement is Button leaving && _leaving.Contains(leaving)) return true;
                 var buttons = NavButtons();
                 var i = buttons.IndexOf(Keyboard.FocusedElement as Button ?? MenuButton) + (action == NavAction.Up ? -1 : 1);
                 if (i >= 0 && i < buttons.Count) FocusNav.Focus(buttons[i]);

@@ -112,9 +112,25 @@ public partial class KeyboardPanel : OverlayBase
 
     public override void OnOpened()
     {
-        base.OnOpened();
-        // Le clavier monte depuis le bas de l'écran.
-        Anim.Enter(Panel, 0, 90, 380);
+        // Pas de fondu de tout le panneau (une couche transparente de plus à composer à chaque image) : seul le voile
+        // apparaît en fondu, et le clavier monte du bas de l'écran, photographié une fois pour toutes le temps du trajet.
+        Backdrop.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(220)) { EasingFunction = Anim.Out });
+        Sheet.CacheMode = new BitmapCache { RenderAtScale = VisualTreeHelper.GetDpi(this).DpiScaleX };
+        var rise = new DoubleAnimation(560, 0, Anim.Ms(340)) { EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut } };
+        rise.Completed += (_, _) => Sheet.CacheMode = null;
+        var move = new TranslateTransform();
+        Sheet.RenderTransform = move;
+        move.BeginAnimation(TranslateTransform.YProperty, rise);
+        Dispatcher.BeginInvoke(FocusOnOpen, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Construit un clavier une première fois en coulisse : la première ouverture n'a plus à tout préparer.</summary>
+    public static void Warm(Size size)
+    {
+        var keyboard = new KeyboardPanel("", "");
+        keyboard.Measure(size);
+        keyboard.Arrange(new Rect(size));
+        keyboard.UpdateLayout();
     }
     public override string Hints => "A:Taper|X:Effacer|Y:Espace|LB:Maj/min|RB:Symboles|≡:Entrer|B:Fermer";
 

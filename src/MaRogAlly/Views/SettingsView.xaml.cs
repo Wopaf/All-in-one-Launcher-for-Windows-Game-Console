@@ -147,18 +147,12 @@ public partial class SettingsView : UserControl
             $"Laisse vide pour utiliser le compte connecté sur cette machine{(SteamScanner.DetectSteamId() is { } id ? $" ({id})" : "")}.\n\n" +
             $"Pour un autre compte, retrouve son identifiant sur [steamid.io]({SteamIdFinder}).");
 
-        Category("Application", "\uE770", "Mises à jour, redémarrer ou fermer",
-            $"Version installée : {AppUpdater.CurrentText}.\n\nMises à jour de Ma ROG Ally, et de quoi la relancer ou la fermer.");
+        Category("Application", "\uE770", "Redémarrer ou fermer",
+            $"Version installée : {AppUpdater.CurrentText}.\n\nDe quoi relancer ou fermer Ma ROG Ally. Ses mises à jour sont dans le menu Options.");
         ActionRow("Redémarrer l'application", "\uE72C", () => App.Restart(),
             "Redémarrer l'application", "Ferme Ma ROG Ally puis la relance aussitôt. Utile si quelque chose ne répond plus comme prévu.\n\nUn jeu en pause est relancé avant.");
         ActionRow("Fermer l'application", "\uE711", () => Application.Current.Shutdown(),
             "Fermer l'application", "Ferme complètement Ma ROG Ally : la barre des tâches de Windows reprend son réglage, et le centre de contrôle ne s'ouvre plus jusqu'au prochain lancement.");
-
-        Header("Mises à jour de l'application");
-        Switch("Chercher les nouvelles versions", () => _settings.CheckAppUpdates, v => _settings.CheckAppUpdates = v,
-            "Nouvelles versions", $"Version installée : {AppUpdater.CurrentText}.\n\nL'application regarde régulièrement sur GitHub si une nouvelle version existe, et l'annonce dans le menu principal. Rien ne s'installe sans que tu le valides.");
-        ActionRow("Vérifier maintenant", "", () => AppUpdateRequested?.Invoke(),
-            "Vérifier maintenant", $"Version installée : {AppUpdater.CurrentText}.\n\nSi une nouvelle version existe, tu pourras l'installer : l'application se télécharge puis redémarre toute seule.");
 
         MenuSummary.Text = $"{_categories.Count} catégories";
         ShowCategory(Math.Clamp(_category, 0, _categories.Count - 1));

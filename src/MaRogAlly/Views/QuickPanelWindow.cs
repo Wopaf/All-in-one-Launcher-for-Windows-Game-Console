@@ -19,7 +19,7 @@ namespace MaRogAlly.Views;
 /// </summary>
 public sealed class QuickPanelWindow : Window
 {
-    private const double PanelWidth = 480, ScreenGap = 14;
+    private const double PanelWidth = 520, ScreenGap = 14;
     /// <summary>Place laissée autour du volet pour son ombre, et assombrissement du reste de l'écran.</summary>
     private const double ShadowSpace = 40, DimOpacity = 0.5;
     private const int GWL_EXSTYLE = -20;
@@ -295,15 +295,30 @@ public sealed class QuickPanelWindow : Window
         _glideX = from;
         new Thread(() =>
         {
+            // Temps du glissement : il n'avance que d'une image à la fois, et seulement quand la position demandée a
+            // vraiment été appliquée. Si l'interface est occupée un instant (le volet est déplacé par son propre fil),
+            // le volet marque une courte pause au lieu de sauter tout un morceau du trajet.
             var clock = Stopwatch.StartNew();
+            double elapsed = 0, last = 0;
+            int? posted = null;
+            var held = 0;
             while (Volatile.Read(ref _glideGeneration) == generation)
             {
                 // Attend la prochaine image de l'écran : une position par image, ni plus ni moins.
                 if (DwmFlush() != 0) Thread.Sleep(4);
-                var t = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
+                var now = clock.Elapsed.TotalMilliseconds;
+                var step = Math.Min(now - last, MaxGlideStep);
+                last = now;
+                var applied = posted is not { } wanted || !GetWindowRect(hwnd, out var rect) || rect.Left == wanted || ++held > 12;
+                if (!applied) continue;
+                held = 0;
+                if (posted is not null) elapsed += step;
+                var t = Math.Min(1, elapsed / ms);
                 var x = from + (to - from) * ease(t);
                 _glideX = x;
-                SetWindowPos(hwnd, IntPtr.Zero, (int)Math.Round(x * scaleX), y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+                var px = (int)Math.Round(x * scaleX);
+                posted = px;
+                SetWindowPos(hwnd, IntPtr.Zero, px, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
                 if (t >= 1) break;
             }
             if (Volatile.Read(ref _glideGeneration) != generation) return;
@@ -333,6 +348,12 @@ public sealed class QuickPanelWindow : Window
 
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("dwmapi.dll")] private static extern int DwmFlush();
+
+    /// <summary>Avance maximale du glissement d'une image à l'autre (ms) : au-delà, il ralentit au lieu de sauter.</summary>
+    private const double MaxGlideStep = 20;
+
+    [StructLayout(LayoutKind.Sequential)] private struct Rect32 { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out Rect32 rect);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);

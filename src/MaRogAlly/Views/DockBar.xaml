@@ -39,7 +39,7 @@
         <Border x:Name="Highlight" Grid.RowSpan="3" CornerRadius="14" Background="#24FFFFFF" BorderBrush="White" BorderThickness="2"/>
 
         <!-- Menu Windows maison : petite maison -->
-        <Button x:Name="MenuButton" Style="{StaticResource DockButton}" Margin="0,14,0,8" Click="Menu_Click" ToolTip="Menu Windows">
+        <Button x:Name="MenuButton" Style="{StaticResource DockButton}" Margin="0,14,0,8" Click="Menu_Click" ToolTip="Menu Démarrer">
             <TextBlock Text="&#xE80F;" FontFamily="{StaticResource Icons}" FontSize="22"/>
         </Button>
 

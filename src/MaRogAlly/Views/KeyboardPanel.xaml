@@ -3,7 +3,7 @@
                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                xmlns:v="clr-namespace:MaRogAlly.Views">
     <v:OverlayBase.Resources>
-        <!-- Touche : relief discret ; le cadre de sélection à la couleur d'accent glisse derrière les touches -->
+        <!-- Touche : relief discret ; le contour de sélection glisse par-dessus les touches -->
         <Style x:Key="Key" TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
@@ -45,7 +45,6 @@
                                     <Condition Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource Self}}" Value="True"/>
                                     <Condition Binding="{Binding PadSelection, RelativeSource={RelativeSource AncestorType=v:KeyboardPanel}}" Value="True"/>
                                 </MultiDataTrigger.Conditions>
-                                <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
                                 <Setter Property="Foreground" Value="White"/>
                             </MultiDataTrigger>
                         </ControlTemplate.Triggers>
@@ -68,7 +67,7 @@
 
     <Grid>
         <!-- Voile : léger en haut, plus dense vers le clavier. Il arrête les clics destinés à l'interface dessous et referme le clavier. -->
-        <Rectangle MouseLeftButtonUp="Backdrop_Click">
+        <Rectangle x:Name="Backdrop" MouseLeftButtonUp="Backdrop_Click">
             <Rectangle.Fill>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
                     <GradientStop Color="#66000000" Offset="0"/>
@@ -78,12 +77,16 @@
         </Rectangle>
 
         <!-- Clavier collé aux bords de l'écran (bas, gauche, droite), par-dessus la barre de gauche : les aides de la manette passent en haut -->
-        <Border x:Name="Panel" VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
-                CornerRadius="28,28,0,0" Background="{DynamicResource PanelBg}" BorderBrush="{StaticResource Stroke}" BorderThickness="0,1,0,0"
-                Padding="16,20,16,14" ClipToBounds="False">
+        <!-- L'ombre est portée par un fond à part : les touches ne repassent plus dans le flou à chaque image -->
+        <Grid x:Name="Sheet" VerticalAlignment="Bottom">
+        <Border CornerRadius="28,28,0,0" Background="{DynamicResource PanelBg}" IsHitTestVisible="False">
             <Border.Effect>
                 <DropShadowEffect BlurRadius="40" ShadowDepth="0" Opacity="0.6" Color="Black"/>
             </Border.Effect>
+        </Border>
+        <Border x:Name="Panel" HorizontalAlignment="Stretch"
+                CornerRadius="28,28,0,0" Background="Transparent" BorderBrush="{StaticResource Stroke}" BorderThickness="0,1,0,0"
+                Padding="16,20,16,14" ClipToBounds="False">
             <Grid>
                 <!-- Lueur d'accent derrière le champ de saisie -->
                 <Ellipse Height="160" Width="700" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,-110,0,0" IsHitTestVisible="False" Opacity="0.35">
@@ -95,11 +98,6 @@
                     </Ellipse.Fill>
                 </Ellipse>
                 <Grid x:Name="KeysHost">
-                    <Border x:Name="KeyHighlight" CornerRadius="14" Background="{DynamicResource Accent}">
-                        <Border.Effect>
-                            <DropShadowEffect Color="{DynamicResource AccentColor}" BlurRadius="20" ShadowDepth="0" Opacity="0.7"/>
-                        </Border.Effect>
-                    </Border>
                     <StackPanel>
                         <!-- Champ de saisie, avec à sa droite la remise à zéro -->
                         <Grid Margin="0,0,0,10">
@@ -189,8 +187,11 @@
                             <UniformGrid x:Name="Digits" Grid.Column="3" Rows="1"/>
                         </Grid>
                     </StackPanel>
+                    <!-- Sélection à la manette : un simple contour à la couleur d'accent, comme dans le reste de l'application, posé sur la touche -->
+                    <Border x:Name="KeyHighlight" CornerRadius="14" Background="Transparent" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                 </Grid>
             </Grid>
         </Border>
+        </Grid>
     </Grid>
 </v:OverlayBase>

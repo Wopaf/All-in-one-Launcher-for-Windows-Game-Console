@@ -3,6 +3,7 @@ using System.Windows.Data;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using MaRogAlly.Input;
 using MaRogAlly.Models;
 using MaRogAlly.UI;
@@ -492,7 +493,7 @@ public partial class GamesView : UserControl
                 if (_index / _cols < (_visible.Count - 1) / _cols) Select(Math.Min(_index + _cols, _visible.Count - 1));
                 return true;
             case NavAction.Accept:
-                if (Selected is { } g) OpenRequested?.Invoke(g);
+                if (Selected is { } g) Open(g);
                 return true;
             case NavAction.Option:
                 FilterRequested?.Invoke();
@@ -655,8 +656,60 @@ public partial class GamesView : UserControl
     private void Tile_Click(object sender, MouseButtonEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not Game game) return;
-        if (game == Selected) OpenRequested?.Invoke(game);
+        if (game == Selected) Open(game);
         else SelectGame(game);
+    }
+
+    private bool _opening;
+
+    /// <summary>
+    /// Appui sur le jeu sélectionné : sa jaquette s'enfonce légèrement puis revient avec un petit rebond ; sa page
+    /// s'ouvre juste après, le temps qu'on voie l'appui.
+    /// </summary>
+    private void Open(Game game)
+    {
+        if (_opening) return;
+        _opening = true;
+        PressTile();
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(130) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            _opening = false;
+            OpenRequested?.Invoke(game);
+        };
+        timer.Start();
+    }
+
+    private void PressTile()
+    {
+        if (_index < 0 || RowsList.ItemContainerGenerator.ContainerFromIndex(_index / _cols) is not DependencyObject row
+            || VisualTreeHelper.GetChildrenCount(row) == 0 || VisualTreeHelper.GetChild(row, 0) is not ItemsControl tilesOfRow
+            || tilesOfRow.ItemContainerGenerator.ContainerFromIndex(_index % _cols) is not DependencyObject tile
+            || FindNamed(tile, "Card") is not { } card) return;
+        if (card.RenderTransform is not ScaleTransform scale)
+        {
+            scale = new ScaleTransform();
+            card.RenderTransform = scale;
+            card.RenderTransformOrigin = new Point(0.5, 0.5);
+        }
+        static KeyTime At(double ms) => KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms));
+        var press = new DoubleAnimationUsingKeyFrames();
+        press.KeyFrames.Add(new EasingDoubleKeyFrame(0.94, At(100), new CubicEase { EasingMode = EasingMode.EaseOut }));
+        press.KeyFrames.Add(new EasingDoubleKeyFrame(1, At(380), new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.5 }));
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, press);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, press);
+    }
+
+    private static FrameworkElement? FindNamed(DependencyObject parent, string name)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is FrameworkElement { Name: var n } found && n == name) return found;
+            if (FindNamed(child, name) is { } deeper) return deeper;
+        }
+        return null;
     }
 }
 

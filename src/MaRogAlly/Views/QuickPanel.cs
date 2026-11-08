@@ -37,6 +37,8 @@ public sealed class QuickPanel : UserControl
     private bool _tabPillPlaced;
     private readonly TextBlock _title = new() { FontSize = 26 };
     private readonly StackPanel _items = new();
+    /// <summary>Petits boutons d'alimentation, en bas à droite : la dernière rangée de la navigation.</summary>
+    private readonly StackPanel _power = new();
     private readonly Border _box = new() { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(2), BorderBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)) };
     private readonly Grid _itemsHost = new() { Margin = new Thickness(0, 0, 0, 12) };
     private readonly TextBlock _status = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 8, 4, 0), Visibility = Visibility.Collapsed };
@@ -83,8 +85,8 @@ public sealed class QuickPanel : UserControl
     public void Warm()
     {
         ShowTab(_tab);
-        Measure(new Size(480, 1000));
-        Arrange(new Rect(0, 0, 480, 1000));
+        Measure(new Size(520, 1000));
+        Arrange(new Rect(0, 0, 520, 1000));
         Shutdown();
     }
 
@@ -105,7 +107,7 @@ public sealed class QuickPanel : UserControl
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.Margin = new Thickness(24, 22, 24, 18);
 
-        _root.Children.Add(BuildClock());
+        _root.Children.Add(BuildHeader());
 
         var bar = new Grid { Margin = new Thickness(0, 14, 0, 14) };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -168,8 +170,19 @@ public sealed class QuickPanel : UserControl
         Grid.SetRow(body, 2);
         _root.Children.Add(body);
 
-        Grid.SetRow(_hints, 3);
-        _root.Children.Add(_hints);
+        // Pied du volet : les aides à gauche, les petits boutons d'alimentation à droite.
+        var footer = new Grid();
+        footer.ColumnDefinitions.Add(new ColumnDefinition());
+        footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        footer.Children.Add(_hints);
+        _power.Orientation = Orientation.Horizontal;
+        _power.VerticalAlignment = VerticalAlignment.Bottom;
+        _power.Children.Add(PowerButton("\uE708", "Mettre en veille", Sleep));
+        _power.Children.Add(PowerButton("\uE7E8", "Éteindre", ConfirmShutdown));
+        Grid.SetColumn(_power, 1);
+        footer.Children.Add(_power);
+        Grid.SetRow(footer, 3);
+        _root.Children.Add(footer);
 
         // Le fond du volet est légèrement translucide : le fond opaque dessous empêche le jeu de transparaître.
         var round = new CornerRadius(22);
@@ -178,16 +191,9 @@ public sealed class QuickPanel : UserControl
         Content = new Grid { Children = { shaded, new Border { CornerRadius = round, Background = (Brush)FindResource("PanelBg") }, _root } };
     }
 
-    private FrameworkElement BuildClock()
+    private FrameworkElement BuildHeader()
     {
         var header = new Grid();
-        header.Children.Add(new TextBlock
-        {
-            Text = DateTime.Now.ToString("HH:mm"),
-            FontFamily = (FontFamily)FindResource("Display"),
-            FontWeight = FontWeights.SemiBold,
-            FontSize = 18,
-        });
         var power = Power.Read();
         if (power.HasBattery)
         {
@@ -288,9 +294,80 @@ public sealed class QuickPanel : UserControl
 
     // ================= Navigation =================
 
-    private List<List<Button>> NavRows() => _items.Children.OfType<FrameworkElement>()
-        .Select(e => e is Button b ? [b] : e is Grid g ? g.Children.OfType<Button>().ToList() : new List<Button>())
-        .Where(r => r.Count > 0).ToList();
+    private List<List<Button>> NavRows()
+    {
+        var rows = _items.Children.OfType<FrameworkElement>()
+            .Select(e => e is Button b ? [b] : e is Grid g ? g.Children.OfType<Button>().ToList() : new List<Button>())
+            .Where(r => r.Count > 0).ToList();
+        // Les boutons d'alimentation ferment la marche (en descendant sous le contenu de l'onglet).
+        if (rows.Count > 0) rows.Add(_power.Children.OfType<Button>().ToList());
+        return rows;
+    }
+
+    /// <summary>
+    /// Petit bouton rond d'alimentation. Il est hors de la liste (et du cadre de sélection qui y glisse) : sélectionné, il
+    /// porte lui-même le contour blanc.
+    /// </summary>
+    private Button PowerButton(string glyph, string tip, Action onClick)
+    {
+        var circle = new Border
+        {
+            Width = 38, Height = 38, CornerRadius = new CornerRadius(19),
+            Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = Brushes.Transparent, BorderThickness = new Thickness(2),
+            Child = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)FindResource("TextSecondary") },
+        };
+        var b = new Button
+        {
+            Style = (Style)FindResource("RowButton"), Padding = new Thickness(0), Margin = new Thickness(8, 0, 0, 0),
+            Width = 38, Height = 38, Content = circle, ToolTip = tip, Cursor = Cursors.Hand,
+        };
+        RowOptions.SetFloating(b, true);
+        b.GotKeyboardFocus += (_, _) =>
+        {
+            _highlight.Hide();
+            circle.BorderBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
+            SetStatus(tip);
+        };
+        b.LostKeyboardFocus += (_, _) =>
+        {
+            circle.BorderBrush = Brushes.Transparent;
+            if (_status.Text == tip) SetStatus("");
+        };
+        b.Click += (_, _) => onClick();
+        return b;
+    }
+
+    /// <summary>Veille : le volet se referme d'abord (le jeu reprend), puis l'appareil s'endort.</summary>
+    private void Sleep()
+    {
+        CloseRequested?.Invoke();
+        var later = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        later.Tick += (_, _) =>
+        {
+            later.Stop();
+            Power.Sleep();
+        };
+        later.Start();
+    }
+
+    private void ConfirmShutdown()
+    {
+        var screen = BeginScreen("Éteindre");
+        _back = BuildTab;
+        SetHints(("A", "Valider"), ("B", "Annuler"));
+        _items.Children.Add(new TextBlock { Text = "Éteindre l'appareil maintenant ?", FontSize = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 4, 8) });
+        AddNote("Ce qui n'a pas été enregistré dans le jeu en cours sera perdu.");
+        _items.Children.Add(new Border { Height = 16 });
+        AddTiles(56,
+            (null, "Annuler", () => BuildTab()),
+            (null, "Éteindre", () =>
+            {
+                if (!Power.Shutdown()) SetStatus("Impossible d'éteindre l'appareil.");
+            }));
+        FocusFirst();
+        _ = screen;
+    }
 
     public void Handle(NavAction action)
     {
@@ -867,24 +944,25 @@ public sealed class QuickPanel : UserControl
             return;
         }
         SetHints(("A", "Agrandir"), ("B", "Fermer"));
-        for (var i = 0; i < files.Count; i += 2)
+        // Trois vignettes par rangée, séparées de 8 points (chacune perd la même largeur).
+        const int columns = 3, gap = 8, height = 80;
+        for (var i = 0; i < files.Count; i += columns)
         {
-            var grid = new Grid { Margin = new Thickness(0, 0, 0, 8) };
-            for (var j = i; j < Math.Min(i + 2, files.Count); j++)
+            var grid = new Grid { Margin = new Thickness(0, 0, 0, gap) };
+            for (var c = 0; c < columns; c++) grid.ColumnDefinitions.Add(new ColumnDefinition());
+            for (var j = i; j < Math.Min(i + columns, files.Count); j++)
             {
-                grid.ColumnDefinitions.Add(new ColumnDefinition());
                 var index = j;
+                var column = j - i;
                 var image = new Image { Stretch = Stretch.UniformToFill };
-                var frame = new Border { Height = 112, CornerRadius = new CornerRadius(12), ClipToBounds = true, Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)), Child = image };
-                Rounded.SetRadius(frame, 12);
-                var button = RowButton(frame, 112, () => ImageRequested?.Invoke(files, index));
-                button.Margin = new Thickness(j == i ? 0 : 4, 0, j == i ? 4 : 0, 0);
-                Grid.SetColumn(button, j - i);
+                var frame = new Border { Height = height, CornerRadius = new CornerRadius(10), ClipToBounds = true, Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)), Child = image };
+                Rounded.SetRadius(frame, 10);
+                var button = RowButton(frame, height, () => ImageRequested?.Invoke(files, index));
+                button.Margin = new Thickness(column * gap / 3.0, 0, (columns - 1 - column) * gap / 3.0, 0);
+                Grid.SetColumn(button, column);
                 grid.Children.Add(button);
                 _ = LoadThumbnailAsync(image, files[j], screen);
             }
-            // Dernière rangée impaire : la vignette garde sa largeur.
-            if (grid.ColumnDefinitions.Count == 1) grid.ColumnDefinitions.Add(new ColumnDefinition());
             _items.Children.Add(grid);
         }
     }

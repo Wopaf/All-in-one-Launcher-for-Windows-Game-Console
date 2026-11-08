@@ -48,7 +48,6 @@ public partial class MainWindow : Window
     private readonly AppUpdater _appUpdater;
     private readonly WishlistService _wishlist = new();
     /// <summary>Luminosité de l'écran ; null si elle ne se règle pas depuis l'application (écran externe).</summary>
-    private int? _brightness;
     private CancellationTokenSource? _searchCts;
     private readonly PlatformsView _platforms = new();
     private readonly AchievementsView _achievementsView = new();
@@ -100,12 +99,8 @@ public partial class MainWindow : Window
         _search = new GameSearch(_http, _discover);
         _tags = new TagService(_http);
         _appUpdater = new AppUpdater(_http);
-        _network = new NetworkMenus(OpenOverlay, Toast, () => _ = RefreshRadioButtonsAsync());
-        _quickNetwork = new NetworkMenus(OpenOnQuickStage, ToastOnQuickStage, () =>
-        {
-            _ = RefreshRadioButtonsAsync();
-            _quickPanel?.Panel.RefreshRadios();
-        });
+        _network = new NetworkMenus(OpenOverlay, Toast, () => { });
+        _quickNetwork = new NetworkMenus(OpenOnQuickStage, ToastOnQuickStage, () => _quickPanel?.Panel.RefreshRadios());
         GameCategories.TagLabel = _tags.Label;
         _imageCache = new ImageCache(_http);
         _settingsView = new SettingsView(_settings);
@@ -144,6 +139,11 @@ public partial class MainWindow : Window
             if (down) UiSounds.PlayMouseClick();
         };
         _padMouse.RaisePointer = () => _pointer?.KeepOnTop();
+        _padMouse.ShapePointer = cursor =>
+        {
+            var shape = PointerOverlay.ShapeOf(cursor);
+            Dispatcher.BeginInvoke(() => _pointer?.SetShape(shape));
+        };
         _pad.BackgroundPoll += _padMouse.Update;
         // Le curseur de la souris à la manette ne doit jamais rester affiché sur un jeu ou sur l'application.
         var pointerWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -197,7 +197,6 @@ public partial class MainWindow : Window
     {
         UiSounds.Enabled = _settings.UiSounds && !Environment.GetCommandLineArgs().Contains("--render");
         UiSounds.PlayOpen();
-        _ = ScreenBrightness.ReadAsync().ContinueWith(read => _brightness = read.Result, TaskScheduler.FromCurrentSynchronizationContext());
         if (UpdateSnapshot.Load() is { } updates)
         {
             _windowsUpdates = updates.Windows;
@@ -221,6 +220,11 @@ public partial class MainWindow : Window
                 // Le volet aussi, cinq secondes plus tard : sa première ouverture est aussi fluide que les suivantes.
                 _quickPanelWarmed = true;
                 new QuickPanel(null, 0, interactive: false).Warm();
+            }
+            else if (!_keyboardWarmed)
+            {
+                _keyboardWarmed = true;
+                KeyboardPanel.Warm(RenderSize);
             }
             UpdateClock();
             _explore.RefreshCountdowns();
@@ -875,7 +879,7 @@ public partial class MainWindow : Window
             if (!_updatesFailed || _windowsUpdates is null) _windowsUpdates = status;
             new UpdateSnapshot(_windowsUpdates, _asusApp).Save();
             // Menu ouvert pendant la vérification : ses tuiles suivent.
-            if (_systemMenu is { } menu)
+            if (_updatesMenu is { } menu)
             {
                 var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
                 menu.UpdateTile("Windows", winText, winColor);
@@ -906,7 +910,7 @@ public partial class MainWindow : Window
         if (_appRelease is not { } release || release.Version == known) return;
         Toast("", $"Ma ROG Ally {release.Version.ToString(3)} est disponible : voir le menu");
         var (text, color) = AppUpdateStatus;
-        _systemMenu?.UpdateTile(AppTile, text, color);
+        _updatesMenu?.UpdateTile(AppTile, text, color);
     }
 
     private const string AppTile = "Ma ROG Ally";
@@ -1300,7 +1304,11 @@ public partial class MainWindow : Window
             WindowsShell.Activate(w.Handle);
         };
         Dock.MinimizeRequested += w => { WindowsShell.Minimize(w.Handle); _ = RefreshDockAsync(); };
-        Dock.CloseRequested += w => WindowsShell.Close(w.Handle);
+        Dock.CloseRequested += w =>
+        {
+            WindowsShell.Close(w.Handle);
+            _ = RefreshDockSoonAsync();
+        };
         Dock.WindowsMenuRequested += () => ToggleDockPanel(WindowsMenu, OpenWindowsMenu);
         Dock.BackgroundRequested += () => ToggleDockPanel(BackgroundApps, OpenBackgroundApps);
         Dock.HintsChanged += UpdateHints;
@@ -1547,6 +1555,12 @@ public partial class MainWindow : Window
         {
             // Start referme le menu système.
             if (action == NavAction.Menu && _overlays[^1] == _systemMenu) _systemMenu.Close();
+            else if (action == NavAction.Menu && _overlays[^1] is { } top && top == _updatesMenu)
+            {
+                // Start referme aussi le menu des mises à jour, sans revenir au menu principal.
+                _menuBehind = _systemMenu = null;
+                top.Close();
+            }
             else _overlays[^1].Handle(action);
             return;
         }
@@ -2340,7 +2354,7 @@ public partial class MainWindow : Window
 
     // ---- Barre de gauche ----
 
-    private const string WindowsMenu = "Windows", BackgroundApps = "Applications en arrière-plan";
+    private const string WindowsMenu = "Menu Démarrer", BackgroundApps = "Applications en arrière-plan";
     private SidePanel? _dockPanel;
     private string? _dockKind;
     private bool _refreshingDock;
@@ -2363,6 +2377,16 @@ public partial class MainWindow : Window
         {
             overlay.Close();
             if (instantly) RemoveFromHost(overlay);
+        }
+    }
+
+    /// <summary>Après une fermeture : la barre est relue plusieurs fois de suite, l'icône disparaît dès que la fenêtre se ferme.</summary>
+    private async Task RefreshDockSoonAsync()
+    {
+        foreach (var ms in new[] { 150, 250, 400, 700 })
+        {
+            await Task.Delay(ms);
+            await RefreshDockAsync();
         }
     }
 
@@ -2401,6 +2425,8 @@ public partial class MainWindow : Window
     {
         var panel = new SidePanel(title);
         panel.AnchorLeft(bottom);
+        // Flottant, comme le centre de contrôle, et dans le style du menu principal.
+        panel.Float();
         panel.SetHints("A:Ouvrir|B:Fermer");
         _dockPanel = panel;
         _dockKind = title;
@@ -2411,6 +2437,7 @@ public partial class MainWindow : Window
     private void OpenBackgroundApps()
     {
         var panel = DockPanelOf(BackgroundApps, bottom: true);
+        panel.UseMenuStyle();
         if (Dock.BackgroundApps.Count == 0) panel.AddHeader("Aucune application en arrière-plan");
         foreach (var app in Dock.BackgroundApps)
             panel.AddApp(app.Name, app.Path, () =>
@@ -2427,7 +2454,6 @@ public partial class MainWindow : Window
     private void OpenWindowsMenu()
     {
         var panel = DockPanelOf(WindowsMenu, bottom: false);
-        panel.HideTitle();
         // Plus large : les accès rapides y tiennent deux par ligne. Même style que le menu principal.
         panel.Widen(660);
         panel.UseMenuStyle();
@@ -2595,25 +2621,7 @@ public partial class MainWindow : Window
     private MainMenu? _systemMenu;
     private readonly NetworkMenus _network, _quickNetwork;
 
-    /// <summary>Boutons Wi-Fi et Bluetooth du menu principal : en bleu quand la fonction est activée.</summary>
-    private async Task RefreshRadioButtonsAsync()
-    {
-        if (_systemMenu is not { } menu) return;
-        var wifi = await Radios.IsOnAsync(Windows.Devices.Radios.RadioKind.WiFi);
-        var bluetooth = await Radios.IsOnAsync(Windows.Devices.Radios.RadioKind.Bluetooth);
-        menu.SetIconActive("Wi-Fi", wifi);
-        menu.SetIconActive("Bluetooth", bluetooth);
-    }
-
     /// <summary>Bouton Start (ou Échap) : menu principal à droite.</summary>
-    /// <summary>Niveau changé par les touches de la machine depuis le dernier relevé.</summary>
-    private async Task SyncBrightnessAsync(MainMenu menu)
-    {
-        if (await ScreenBrightness.ReadAsync() is not int level) return;
-        _brightness = level;
-        menu.ShowBrightness(level);
-    }
-
     private void OpenSystemMenu()
     {
         var menu = BuildSystemMenu();
@@ -2623,7 +2631,6 @@ public partial class MainWindow : Window
         };
         _systemMenu = menu;
         OpenOverlay(menu);
-        _ = RefreshRadioButtonsAsync();
     }
 
     /// <summary>Menu principal quitté pour une page (Réglages, Plateformes, Statistiques, Stockage) : B y revient, sur le même bouton.</summary>
@@ -2643,7 +2650,6 @@ public partial class MainWindow : Window
         RemoveFromHost(menu);
         menu.IsHitTestVisible = true;
         OpenOverlay(menu);
-        _ = RefreshRadioButtonsAsync();
     }
 
     // ---- Centre de contrôle, par-dessus toute application (bouton M1, relié à une touche dans Armoury Crate) ----
@@ -2893,7 +2899,7 @@ public partial class MainWindow : Window
         return timer;
     }
 
-    private bool _menuWarmed, _quickPanelWarmed;
+    private bool _menuWarmed, _quickPanelWarmed, _keyboardWarmed;
 
     /// <summary>Prépare le menu une première fois en coulisse : sa première ouverture ne paie plus le chargement de ses boutons.</summary>
     private void WarmSystemMenu()
@@ -2909,42 +2915,45 @@ public partial class MainWindow : Window
     {
         var menu = new MainMenu();
         // Mises à jour : le menu affiche le dernier résultat, tenu à jour en arrière-plan (voir RefreshDue).
-        var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
-        var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
-
+        menu.AddTitle("Options");
         menu.AddButton("\uE713", "Réglages", () => OpenFromMenu(menu, () =>
         {
             _settingsView.ResetSelection();
             OpenSubPage(_settingsView);
         }));
-        if (_brightness is int brightness)
-        {
-            menu.AddBrightness(brightness, level =>
-            {
-                _brightness = level;
-                ScreenBrightness.Set(level);
-            });
-            _ = SyncBrightnessAsync(menu);
-        }
-
-        menu.AddIconButtons(
-            ("\uE701", "Wi-Fi", () => _network.OpenWifi()),
-            ("\uE702", "Bluetooth", _network.OpenBluetooth),
-            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }),
-            ("\uE7F4", "Bureau", () => { menu.Close(); WindowsShell.ShowDesktop(); }));
-
+        // Luminosité, Wi-Fi, Bluetooth et bureau : dans le centre de contrôle.
         menu.AddButtons(
             ("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats)),
             ("", "Plateformes", () => OpenFromMenu(menu, () => OpenSubPage(_platforms))));
+        menu.AddButtons(
+            ("\uE895", "Mises à jour", () => OpenFromMenu(menu, OpenUpdatesMenu)),
+            ("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); }));
 
         menu.AddDrives();
         menu.AddButton("\uEDA2", "Gérer vos espaces de stockage", () => OpenFromMenu(menu, OpenStorage));
 
-        menu.AddSection("Mises à jour");
+        return menu;
+    }
+
+    private MainMenu? _updatesMenu;
+
+    /// <summary>
+    /// Bouton « Mises à jour » du menu principal : un menu du même style avec Windows, Armoury Crate et l'application.
+    /// B ramène au menu principal ; une tuile choisie ferme tout.
+    /// </summary>
+    private void OpenUpdatesMenu()
+    {
+        var menu = new MainMenu();
+        menu.AddTitle("Mises à jour");
+        var acted = false;
+        var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
+        var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
+        void Act() => acted = true;
         var updates = new List<MenuTile>
         {
             new("\uE895", "Windows", winText, () =>
             {
+                Act();
                 menu.Close();
                 _updatesDirty = true;
                 GameLauncher.Open("ms-settings:windowsupdate");
@@ -2954,6 +2963,7 @@ public partial class MainWindow : Window
         if (_asusApp is { } asus)
             updates.Add(new MenuTile("\uE7FC", "Armoury Crate", asusText, async () =>
             {
+                Act();
                 menu.Close();
                 _updatesDirty = true;
                 if (!await UpdateChecker.LaunchAsync(asus)) Toast("\uE783", "Impossible d'ouvrir Armoury Crate");
@@ -2962,31 +2972,20 @@ public partial class MainWindow : Window
         var (appText, appColor) = AppUpdateStatus;
         menu.AddTiles(new MenuTile("", AppTile, appText, () =>
         {
+            Act();
             menu.Close();
             _ = ManualAppUpdateAsync();
         }, appColor));
 
-        menu.AddSection("Alimentation");
-        menu.AddPowerButtons(
-            ("\uE708", "Mettre en veille", Color.FromRgb(0x5B, 0x5F, 0xE8), () =>
-            {
-                menu.Close();
-                if (!Power.Sleep()) Toast("\uE7BA", "Impossible de mettre l'appareil en veille");
-            }),
-            ("\uE7E8", "Éteindre", Color.FromRgb(0xE5, 0x39, 0x4B), () =>
-            {
-                menu.Close();
-                var confirm = new SidePanel("Éteindre ?", "L'appareil va s'arrêter maintenant");
-                confirm.SetHints("A:Valider|B:Annuler");
-                confirm.AddChoice("Oui, éteindre", false, () =>
-                {
-                    confirm.Close();
-                    if (!Power.Shutdown()) Toast("\uE7BA", "Impossible d'éteindre l'appareil");
-                });
-                confirm.AddChoice("Annuler", false, confirm.Close);
-                OpenOverlay(confirm);
-            }));
-        return menu;
+        menu.CloseRequested += _ =>
+        {
+            if (_updatesMenu == menu) _updatesMenu = null;
+            // Après la fermeture du menu des mises à jour : le menu principal reprend sa place.
+            if (!acted) Dispatcher.BeginInvoke(ReturnToMenu);
+            else _menuBehind = _systemMenu = null;
+        };
+        _updatesMenu = menu;
+        OpenOverlay(menu);
     }
 
     // ---- Recherche sur toutes les boutiques (onglet Découverte) ----
@@ -3388,15 +3387,38 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(PlaceHints, DispatcherPriority.Loaded);
     }
 
-    /// <summary>Clavier ouvert : la barre d'aides monte en haut de l'écran, centrée ; sinon elle reprend sa place.</summary>
+    private bool _hintsOnTop;
+
+    /// <summary>
+    /// Clavier ouvert : la barre d'aides passe en haut de l'écran, centrée ; sinon elle reprend sa place. Elle ne glisse
+    /// pas de l'une à l'autre : elle s'efface, change de place, puis réapparaît en fondu.
+    /// </summary>
     private void PlaceHints()
     {
         var top = _overlays.LastOrDefault() is KeyboardPanel;
-        var x = top ? (HintsBox.ActualWidth - RootGrid.ActualWidth) / 2 + HintsBox.Margin.Right : 0;
-        var y = top ? 14 - (RootGrid.ActualHeight - HintsBox.Margin.Bottom - HintsBox.ActualHeight) : 0;
         var move = (TranslateTransform)HintsBox.RenderTransform;
-        move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, Anim.Ms(300)) { EasingFunction = Anim.Out });
-        move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, Anim.Ms(300)) { EasingFunction = Anim.Out });
+        void Place()
+        {
+            move.BeginAnimation(TranslateTransform.XProperty, null);
+            move.BeginAnimation(TranslateTransform.YProperty, null);
+            move.X = top ? (HintsBox.ActualWidth - RootGrid.ActualWidth) / 2 + HintsBox.Margin.Right : 0;
+            move.Y = top ? 14 - (RootGrid.ActualHeight - HintsBox.Margin.Bottom - HintsBox.ActualHeight) : 0;
+        }
+        if (top == _hintsOnTop)
+        {
+            // Même place, autre contenu (largeur) : recentrée sans animation.
+            if (!HintsBox.HasAnimatedProperties || HintsBox.Opacity >= 1) Place();
+            return;
+        }
+        _hintsOnTop = top;
+        var fadeOut = new DoubleAnimation(0, Anim.Ms(110)) { EasingFunction = Anim.Out };
+        fadeOut.Completed += (_, _) =>
+        {
+            if (_hintsOnTop != top) return;
+            Place();
+            HintsBox.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, Anim.Ms(220)) { EasingFunction = Anim.Out });
+        };
+        HintsBox.BeginAnimation(OpacityProperty, fadeOut);
     }
 
     private void Toast(string icon, string text)

@@ -23,7 +23,39 @@ public partial class SidePanel : OverlayBase
     }
 
     private bool _left;
-    protected override FrameworkElement AnimatedPart => Panel;
+    protected override FrameworkElement AnimatedPart => (FrameworkElement?)_frame ?? Panel;
+
+    /// <summary>Cadre du panneau flottant (ombre et panneau), animé à sa place.</summary>
+    private Grid? _frame;
+
+    /// <summary>
+    /// Panneau flottant, comme le centre de contrôle : décollé des bords de l'écran, coins arrondis, ombre douce. L'ombre
+    /// est portée par un fond à part : le contenu ne repasse pas dans le flou à chaque image. À appeler après l'ancrage.
+    /// </summary>
+    public void Float(double gap = 14)
+    {
+        if (_frame is not null || Panel.Parent is not Grid parent) return;
+        var round = new CornerRadius(22);
+        parent.Children.Remove(Panel);
+        _frame = new Grid
+        {
+            HorizontalAlignment = Panel.HorizontalAlignment,
+            VerticalAlignment = Panel.VerticalAlignment,
+            Margin = new Thickness(gap),
+        };
+        Panel.HorizontalAlignment = HorizontalAlignment.Stretch;
+        Panel.VerticalAlignment = VerticalAlignment.Stretch;
+        Panel.CornerRadius = round;
+        _frame.Children.Add(new Border
+        {
+            CornerRadius = round,
+            Background = (Brush)FindResource("Bg"),
+            IsHitTestVisible = false,
+            Effect = new System.Windows.Media.Effects.DropShadowEffect { Color = Colors.Black, BlurRadius = 36, ShadowDepth = 0, Opacity = 0.55 },
+        });
+        _frame.Children.Add(Panel);
+        parent.Children.Add(_frame);
+    }
     protected override double EnterFromX => _centered ? 0 : _left ? -60 : 60;
 
     /// <summary>Ouvre le panneau contre la barre de gauche ; <paramref name="bottom"/> : posé en bas, à la hauteur de son contenu.</summary>

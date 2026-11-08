@@ -23,20 +23,6 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- ====== En-tête : heure, date, batterie ====== -->
-                <Grid Margin="4,0,4,8">
-                    <StackPanel>
-                        <TextBlock x:Name="ClockText" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="54"
-                                   Foreground="{StaticResource TextPrimary}" LineHeight="58" LineStackingStrategy="BlockLineHeight"/>
-                        <TextBlock x:Name="DateText" FontSize="16" Foreground="{StaticResource TextSecondary}" Margin="2,2,0,0"/>
-                    </StackPanel>
-                    <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,16,0,0">
-                        <TextBlock x:Name="BatteryIcon" FontFamily="{StaticResource Icons}" FontSize="18" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16"
-                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
-                    </StackPanel>
-                </Grid>
-
                 <!-- ====== Tuiles (le cadre de sélection glisse de l'une à l'autre) ====== -->
                 <ScrollViewer x:Name="Scroll" Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                     <Grid x:Name="ItemsHost" Margin="0,0,0,12">

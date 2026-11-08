@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using MaRogAlly.Input;
 using MaRogAlly.Models;
@@ -295,6 +297,18 @@ public partial class DetailView : OverlayBase
     private void Lightbox_Click(object sender, MouseButtonEventArgs e) => CloseShot();
 
     protected override FrameworkElement AnimatedPart => Body;
+
+    /// <summary>À l'ouverture, le contenu de la page grandit très légèrement jusqu'à sa taille, en même temps que son fondu.</summary>
+    public override void OnOpened()
+    {
+        var grow = new ScaleTransform(0.94, 0.94);
+        Body.RenderTransformOrigin = new Point(0.5, 0.5);
+        Body.RenderTransform = new TransformGroup { Children = { grow, new TranslateTransform() } };
+        base.OnOpened();
+        var zoom = new DoubleAnimation(0.94, 1, Anim.Ms(560)) { EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut } };
+        grow.BeginAnimation(ScaleTransform.ScaleXProperty, zoom);
+        grow.BeginAnimation(ScaleTransform.ScaleYProperty, zoom);
+    }
     protected override double EnterFromX => 0;
     protected override FrameworkElement FocusScope => Body;
 

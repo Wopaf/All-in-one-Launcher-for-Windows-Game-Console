@@ -108,7 +108,7 @@
                                 <Path Width="12" Height="10" Data="M0,1 H12 M0,5 H12 M0,9 H12" Stroke="{StaticResource TextPrimary}" StrokeThickness="2"
                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
-                            <TextBlock Text="Menu" FontSize="14" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
+                            <TextBlock Text="Options" FontSize="14" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                 </Grid>
