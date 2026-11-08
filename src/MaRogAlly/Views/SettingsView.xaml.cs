@@ -91,8 +91,8 @@ public partial class SettingsView : UserControl
             "Fermer Armoury Crate", "Au lancement de Ma ROG Ally, ferme Armoury Crate : son volet et sa fenêtre ne passent plus devant.\n\nLes réglages déjà enregistrés dans la manette (M1, M2) restent en place. Mais ce qu'Armoury Crate gère en direct ne marche plus tant qu'il est fermé : modes de performance, mode Auto de la manette, ses mises à jour.\n\nSes services Windows ne peuvent pas être arrêtés sans droits d'administrateur : ils peuvent en relancer une partie, par exemple avec son bouton.");
         Header("Lanceurs à ouvrir avec l'application");
 
-        Category("Comportement", "\uE713", "Sons, centre de contrôle et mises à jour",
-            "Sons de l'interface, centre de contrôle (touche, bouton de la manette, pause du jeu) et mises à jour de l'application.");
+        Category("Comportement", "\uE713", "Sons et centre de contrôle",
+            "Sons de l'interface, barre des tâches de Windows et centre de contrôle (touche, bouton de la manette, pause du jeu).");
         Switch("Sons de l'interface", () => _settings.UiSounds, v => { _settings.UiSounds = v; Services.UiSounds.Enabled = v; },
             "Sons de l'interface", "Un son léger quand tu te déplaces, valides ou reviens en arrière, un autre à l'ouverture de l'application et quand une recherche aboutit.");
         Switch("Masquer la barre des tâches de Windows", () => _settings.HideWindowsTaskbar, v => { _settings.HideWindowsTaskbar = v; WindowsTaskbar.Apply(_settings); },
@@ -104,14 +104,8 @@ public partial class SettingsView : UserControl
         Switch("Mettre le jeu en pause", () => _settings.PauseGameWithPanel, v => _settings.PauseGameWithPanel = v,
             "Jeu en pause", "Un jeu de ta bibliothèque s'arrête complètement tant que le centre de contrôle est ouvert, puis repart là où il en était à sa fermeture.\n\nÀ éviter avec un jeu en ligne : le serveur peut te déconnecter, et un anti-triche peut le signaler. Le son du jeu se coupe pendant la pause.");
 
-        Header("Mises à jour de l'application");
-        Switch("Chercher les nouvelles versions", () => _settings.CheckAppUpdates, v => _settings.CheckAppUpdates = v,
-            "Nouvelles versions", $"Version installée : {AppUpdater.CurrentText}.\n\nL'application regarde régulièrement sur GitHub si une nouvelle version existe, et l'annonce dans le menu principal. Rien ne s'installe sans que tu le valides.");
-        ActionRow("Vérifier maintenant", "", () => AppUpdateRequested?.Invoke(),
-            "Vérifier maintenant", $"Version installée : {AppUpdater.CurrentText}.\n\nSi une nouvelle version existe, tu pourras l'installer : l'application se télécharge puis redémarre toute seule.");
-
         Category("Mode souris", "\uE962", "Taille, vitesse et accélération",
-            "La souris à la manette : stick droit pour le curseur, RB pour le clic gauche (maintenu pour glisser), LB pour le clic droit, stick gauche pour défiler.\n\nElle marche sur le bureau et les applications de bureau en mode Auto, partout en mode Bureau, jamais en mode Manette.");
+            "La souris à la manette : stick droit pour le curseur, RB pour le clic gauche (maintenu pour glisser), LB pour le clic droit, stick gauche pour défiler.\n\nElle marche sur le bureau et les applications de bureau, jamais dans Ma ROG Ally, un jeu de ta bibliothèque ou une fenêtre en plein écran.");
         _pointerSizeValue = ValueRow("Taille du curseur", "size",
             "Taille de la flèche affichée par l'application (Windows cache la sienne quand aucune souris n'est branchée).");
         _pointerSpeedValue = ValueRow("Vitesse", "speed",
@@ -153,12 +147,18 @@ public partial class SettingsView : UserControl
             $"Laisse vide pour utiliser le compte connecté sur cette machine{(SteamScanner.DetectSteamId() is { } id ? $" ({id})" : "")}.\n\n" +
             $"Pour un autre compte, retrouve son identifiant sur [steamid.io]({SteamIdFinder}).");
 
-        Category("Application", "\uE770", "Redémarrer ou fermer",
-            "Relance ou ferme Ma ROG Ally.");
+        Category("Application", "\uE770", "Mises à jour, redémarrer ou fermer",
+            $"Version installée : {AppUpdater.CurrentText}.\n\nMises à jour de Ma ROG Ally, et de quoi la relancer ou la fermer.");
         ActionRow("Redémarrer l'application", "\uE72C", () => App.Restart(),
             "Redémarrer l'application", "Ferme Ma ROG Ally puis la relance aussitôt. Utile si quelque chose ne répond plus comme prévu.\n\nUn jeu en pause est relancé avant.");
         ActionRow("Fermer l'application", "\uE711", () => Application.Current.Shutdown(),
             "Fermer l'application", "Ferme complètement Ma ROG Ally : la barre des tâches de Windows reprend son réglage, et le centre de contrôle ne s'ouvre plus jusqu'au prochain lancement.");
+
+        Header("Mises à jour de l'application");
+        Switch("Chercher les nouvelles versions", () => _settings.CheckAppUpdates, v => _settings.CheckAppUpdates = v,
+            "Nouvelles versions", $"Version installée : {AppUpdater.CurrentText}.\n\nL'application regarde régulièrement sur GitHub si une nouvelle version existe, et l'annonce dans le menu principal. Rien ne s'installe sans que tu le valides.");
+        ActionRow("Vérifier maintenant", "", () => AppUpdateRequested?.Invoke(),
+            "Vérifier maintenant", $"Version installée : {AppUpdater.CurrentText}.\n\nSi une nouvelle version existe, tu pourras l'installer : l'application se télécharge puis redémarre toute seule.");
 
         MenuSummary.Text = $"{_categories.Count} catégories";
         ShowCategory(Math.Clamp(_category, 0, _categories.Count - 1));

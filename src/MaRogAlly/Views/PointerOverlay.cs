@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
 using MaRogAlly.UI;
+using Ellipse = System.Windows.Shapes.Ellipse;
 using Path = System.Windows.Shapes.Path;
 
 namespace MaRogAlly.Views;
@@ -16,23 +17,29 @@ namespace MaRogAlly.Views;
 /// </summary>
 public sealed class PointerOverlay : Window
 {
-    /// <summary>Marge autour de la flèche (place de son ombre) ; la pointe est le point visé.</summary>
-    private const double Gap = 6, Stroke = 1.7;
+    /// <summary>Marge autour de la flèche (place de son ombre et de l'onde du clic) ; la pointe est le point visé.</summary>
+    private const double Gap = 16, Stroke = 1.7;
+    /// <summary>Diamètre de l'onde qui part de la pointe au clic.</summary>
+    private const double RippleSize = 30;
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TRANSPARENT = 0x20, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;
-    private const uint SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10, SWP_ASYNCWINDOWPOS = 0x4000;
+    private const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10, SWP_ASYNCWINDOWPOS = 0x4000;
     private static readonly IntPtr HwndTopmost = new(-1);
 
     /// <summary>
-    /// Flèche inclinée vers le haut à gauche, pointe en (0, 0), coins arrondis (la pointe un peu moins, pour viser juste).
+    /// Flèche inclinée vers le haut à gauche, pointe en (0, 0), aux coins bien arrondis (la pointe un peu moins, pour viser juste).
     /// Calculée à partir des sommets (0,0), (22,12.5), (11.5,16) et (4,26).
     /// </summary>
     private static readonly Geometry Arrow = Geometry.Parse(
-        "M 1.91,1.09 L 18.87,10.72 Q 22,12.5 18.58,13.64 L 14.35,15.05 Q 11.5,16 9.7,18.4 L 6.16,23.12 Q 4,26 3.45,22.44 L 0.33,2.17 Q 0,0 1.91,1.09 Z");
+        "M 3.83,2.17 L 17.31,9.83 Q 22,12.5 16.88,14.21 L 16.62,14.29 Q 11.5,16 8.26,20.32 L 7.66,21.12 Q 4,26 3.07,19.97 L 0.67,4.35 Q 0,0 3.83,2.17 Z");
 
     /// <summary>État caché (petite et transparente) : la première apparition est animée comme les suivantes.</summary>
     private readonly ScaleTransform _scale = new(0.3, 0.3);
+    /// <summary>Enfoncement au clic, vers la pointe : la flèche « touche » le bouton.</summary>
+    private readonly ScaleTransform _press = new(1, 1);
+    private readonly ScaleTransform _rippleScale = new(0.2, 0.2);
     private readonly Path _arrow;
+    private readonly Ellipse _ripple;
     private readonly double _size;
     private static readonly IEasingFunction Pop = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.6 };
     private static readonly IEasingFunction Away = new CubicEase { EasingMode = EasingMode.EaseIn };
@@ -76,12 +83,27 @@ public sealed class PointerOverlay : Window
             Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 6 * size, ShadowDepth = 1.5 * size, Opacity = 0.45 },
             Opacity = 0,
             LayoutTransform = new ScaleTransform(size, size),
-            // Grandit et rétrécit depuis la pointe : le point visé ne bouge pas pendant l'animation.
-            RenderTransform = _scale,
+            // Grandit, rétrécit et s'enfonce depuis la pointe : le point visé ne bouge jamais.
+            RenderTransform = new TransformGroup { Children = { _scale, _press } },
         };
-        Canvas.SetLeft(_arrow, (Gap + Stroke / 2) * size);
-        Canvas.SetTop(_arrow, (Gap + Stroke / 2) * size);
-        Content = new Canvas { Children = { _arrow } };
+        var tip = (Gap + Stroke / 2) * size;
+        Canvas.SetLeft(_arrow, tip);
+        Canvas.SetTop(_arrow, tip);
+        // Onde du clic, centrée sur la pointe, sous la flèche.
+        _ripple = new Ellipse
+        {
+            Width = RippleSize * size,
+            Height = RippleSize * size,
+            Fill = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)),
+            Stroke = new SolidColorBrush(Color.FromArgb(0xD9, 0xFF, 0xFF, 0xFF)),
+            StrokeThickness = 1.6 * size,
+            Opacity = 0,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = _rippleScale,
+        };
+        Canvas.SetLeft(_ripple, tip - RippleSize * size / 2);
+        Canvas.SetTop(_ripple, tip - RippleSize * size / 2);
+        Content = new Canvas { Children = { _ripple, _arrow } };
 
         SourceInitialized += (_, _) =>
         {
@@ -102,8 +124,7 @@ public sealed class PointerOverlay : Window
         if (_shown) return;
         _shown = true;
         if (!IsVisible) Show();
-        // Apparition bien visible : la flèche jaillit de sa pointe en grossissant un peu trop, puis se pose.
-        Animate(1, 300, Pop, 1, 160, null);
+        Appear();
     }
 
     /// <summary>
@@ -114,6 +135,58 @@ public sealed class PointerOverlay : Window
     {
         if (_hwnd == IntPtr.Zero) return;
         SetWindowPos(_hwnd, IntPtr.Zero, x - _tipX, y - _tipY, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    }
+
+    /// <summary>
+    /// Apparition bien visible : la flèche jaillit de sa pointe, toute petite, grossit nettement trop, puis se pose ;
+    /// une onde part de la pointe en même temps.
+    /// </summary>
+    private void Appear()
+    {
+        static KeyTime At(double ms) => KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms));
+        var grow = new DoubleAnimationUsingKeyFrames();
+        grow.KeyFrames.Add(new DiscreteDoubleKeyFrame(Math.Min(_scale.ScaleX, 0.1), At(0)));
+        grow.KeyFrames.Add(new EasingDoubleKeyFrame(1.35, At(230), new CubicEase { EasingMode = EasingMode.EaseOut }));
+        grow.KeyFrames.Add(new EasingDoubleKeyFrame(1, At(480), new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.4 }));
+        _scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        _scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        _arrow.BeginAnimation(OpacityProperty, new DoubleAnimation(1, Anim.Ms(180)) { EasingFunction = Anim.Out });
+        Ripple(1.25, 560);
+    }
+
+    /// <summary>Onde qui part de la pointe et s'efface.</summary>
+    private void Ripple(double reach, double ms)
+    {
+        var spread = new DoubleAnimation(0.2, reach, Anim.Ms(ms)) { EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut } };
+        _rippleScale.BeginAnimation(ScaleTransform.ScaleXProperty, spread);
+        _rippleScale.BeginAnimation(ScaleTransform.ScaleYProperty, spread);
+        _ripple.BeginAnimation(OpacityProperty, new DoubleAnimation(0.9, 0, Anim.Ms(ms)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn } });
+    }
+
+    /// <summary>
+    /// Clic : la flèche s'enfonce vers sa pointe comme si elle touchait le bouton, et une onde part de la pointe.
+    /// Au relâchement, elle se relève avec un petit rebond.
+    /// </summary>
+    public void Press(bool down)
+    {
+        var to = down ? 0.82 : 1.0;
+        var sink = new DoubleAnimation(to, Anim.Ms(down ? 90 : 240))
+        {
+            EasingFunction = down ? new CubicEase { EasingMode = EasingMode.EaseOut } : new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.5 },
+        };
+        _press.BeginAnimation(ScaleTransform.ScaleXProperty, sink);
+        _press.BeginAnimation(ScaleTransform.ScaleYProperty, sink);
+        if (down) Ripple(1, 440);
+    }
+
+    /// <summary>
+    /// Repasse tout devant, sans attendre le fil de l'interface : un menu contextuel ou la barre des tâches, ouverts après
+    /// lui, passeraient sinon par-dessus le curseur.
+    /// </summary>
+    public void KeepOnTop()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        SetWindowPos(_hwnd, HwndTopmost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
     }
 
     /// <summary>Disparition : la flèche rétrécit vers sa pointe en s'effaçant, puis la fenêtre se cache.</summary>

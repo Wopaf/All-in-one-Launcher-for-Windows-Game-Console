@@ -13,7 +13,9 @@ namespace MaRogAlly.Services;
 /// - clic : valider ;
 /// - open : au démarrage de l'application ;
 /// - search : quand une recherche aboutit ;
-/// - OpenVolet / CloseVolet : ouverture et fermeture du centre de contrôle.
+/// - OpenVolet / CloseVolet : ouverture et fermeture du centre de contrôle ;
+/// - ScreenCapture : capture d'écran ;
+/// - MouseClic : clic de la souris à la manette.
 ///
 /// Les fichiers sont en WAV 32 bits flottants : au premier lancement (et à chaque nouvelle version),
 /// ils sont convertis en 16 bits, mis au même niveau de crête et gardés en cache, puis joués à un
@@ -45,7 +47,7 @@ public static class UiSounds
     private static bool _openPending;
 
     /// <summary>Sons longs : un seul lecteur, joués moins fort que leur crête normalisée.</summary>
-    private static readonly string[] Long = ["open", "search", "OpenVolet", "CloseVolet"];
+    private static readonly string[] Long = ["open", "search", "OpenVolet", "CloseVolet", "ScreenCapture"];
 
     public static bool Enabled { get; set; } = true;
 
@@ -103,6 +105,10 @@ public static class UiSounds
 
     public static void PlayPanelOpen() => Play("OpenVolet");
 
+    public static void PlayCapture() => Play("ScreenCapture");
+
+    public static void PlayMouseClick() => Play("MouseClic");
+
     /// <summary>Fermeture du volet : B joue déjà le son de retour juste avant, il laisse la place à celui-ci.</summary>
     public static void PlayPanelClose()
     {
@@ -135,7 +141,7 @@ public static class UiSounds
             try { File.Delete(old); } catch { /* fichier en cours de lecture */ }
 
         var assembly = typeof(UiSounds).Assembly;
-        foreach (var name in new[] { "switch", "keyboard", "clic", "open", "search", "OpenVolet", "CloseVolet" })
+        foreach (var name in new[] { "switch", "keyboard", "clic", "open", "search", "OpenVolet", "CloseVolet", "ScreenCapture", "MouseClic" })
         {
             try
             {

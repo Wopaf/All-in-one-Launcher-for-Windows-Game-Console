@@ -25,9 +25,7 @@ public sealed class QuickPanel : UserControl
     private static HashSet<RadioKind>? _beforeAirplane;
 
     private readonly OpenWindow? _target;
-    private readonly Func<ControlMode?> _readMode;
-    private readonly Action<ControlMode> _writeMode;
-    private readonly bool _hasController, _interactive;
+    private readonly bool _interactive;
 
     private readonly Grid _root = new();
     /// <summary>Titre et contenu de l'onglet : glissent ensemble au changement d'onglet.</summary>
@@ -55,18 +53,15 @@ public sealed class QuickPanel : UserControl
     private readonly object _statsLock = new();
     private bool _sampling, _closed;
 
-    public event Action? CloseRequested, HomeRequested, DesktopRequested, ScreenshotRequested, WifiRequested, BluetoothRequested;
+    public event Action? CloseRequested, HomeRequested, DesktopRequested, ScreenshotRequested, WifiRequested, BluetoothRequested, StartMenuRequested;
     /// <summary>Une image de la galerie est choisie : liste des images, et position de celle-ci.</summary>
     public event Action<List<string>, int>? ImageRequested;
 
     /// <param name="interactive">Faux pour une capture de vérification : aucun élément ne prend le focus, qui resterait sinon à l'utilisateur.</param>
-    public QuickPanel(OpenWindow? target, Func<ControlMode?> readMode, Action<ControlMode> writeMode, bool hasController, int tab, bool interactive = true)
+    public QuickPanel(OpenWindow? target, int tab, bool interactive = true)
     {
         _interactive = interactive;
         _target = target;
-        _readMode = readMode;
-        _writeMode = writeMode;
-        _hasController = hasController;
         _tab = tab;
         _highlight = new SlideHighlight(_box, _itemsHost);
         _ticker.Tick += (_, _) => { _ticks++; _onTick?.Invoke(); };
@@ -75,7 +70,23 @@ public sealed class QuickPanel : UserControl
     }
 
     /// <summary>Le contenu arrive un peu après la fenêtre qui glisse, et se pose en dernier.</summary>
-    public void PlayEntrance() => Anim.Enter(_root, dx: -48, dy: 0, ms: 360);
+    public void PlayEntrance()
+    {
+        // L'en-tête arrive avec le volet ; les lignes du contenu suivent l'une après l'autre.
+        Anim.Enter(_root, dx: -24, dy: 0, ms: 300);
+        var index = 0;
+        foreach (var row in _items.Children.OfType<FrameworkElement>().Take(12))
+            Anim.Enter(row, dx: -28, dy: 0, ms: 340, delay: 90 + index++ * 45);
+    }
+
+    /// <summary>Construit l'onglet d'accueil une première fois en coulisse : la première ouverture du volet n'a plus à tout charger.</summary>
+    public void Warm()
+    {
+        ShowTab(_tab);
+        Measure(new Size(480, 1000));
+        Arrange(new Rect(0, 0, 480, 1000));
+        Shutdown();
+    }
 
     /// <summary>Le contenu s'efface pendant que la fenêtre repart.</summary>
     public void PlayExit() => Anim.Exit(_root, dx: -32, ms: 170);
@@ -213,6 +224,9 @@ public sealed class QuickPanel : UserControl
         _status.Text = text;
         _status.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    /// <summary>Onglet Galerie (après une capture d'écran : elle y est en premier).</summary>
+    public void ShowGallery() => ShowTab(Array.IndexOf(Names, "Galerie"));
 
     private void ShowTab(int index)
     {
@@ -495,38 +509,20 @@ public sealed class QuickPanel : UserControl
     private void BuildHome()
     {
         var screen = _screen;
-        AddSection("Mode");
-        var modes = new[] { (ControlMode.Auto, "Auto"), (ControlMode.Gamepad, "Manette"), (ControlMode.Desktop, "Bureau") };
-        List<Border> modeCards = [];
-        void PaintModes()
-        {
-            for (var i = 0; i < modes.Length; i++) Paint(modeCards[i], _readMode() == modes[i].Item1);
-        }
-        modeCards = AddTiles(48, modes.Select(m => ((string?)null, m.Item2, (Action)(() =>
-        {
-            if (!_hasController)
-            {
-                SetStatus("Le mode de la manette n'existe que sur la ROG Ally.");
-                return;
-            }
-            _writeMode(m.Item1);
-            PaintModes();
-        }))).ToArray());
-        PaintModes();
-
         AddSection("Accès rapides");
         AddTileRow(84, QuickColumns,
         [
             ("", "Accueil", () => HomeRequested?.Invoke()),
             ("", "Fin de tâche", EndTask),
             ("", "Afficher le bureau", () => DesktopRequested?.Invoke()),
-            ("", "Capture d'écran", () => ScreenshotRequested?.Invoke()),
+            ("\uE71D", "Menu Démarrer", () => StartMenuRequested?.Invoke()),
         ]);
         var radios = AddTileRow(84, QuickColumns,
         [
             ("", "Wi-Fi", () => WifiRequested?.Invoke()),
             ("", "Bluetooth", () => BluetoothRequested?.Invoke()),
             ("", "Mode avion", () => _ = ToggleAirplaneAsync()),
+            ("", "Capture d'écran", () => ScreenshotRequested?.Invoke()),
         ]);
         _radioCards = radios;
         _ = PaintRadiosAsync(screen);

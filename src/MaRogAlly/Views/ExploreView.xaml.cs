@@ -270,12 +270,16 @@ public partial class ExploreView : UserControl
 
     // ---------------- Sélection ----------------
 
+    /// <summary>
+    /// Le jeu sélectionné (nom, prix, sortie, avis) n'est plus écrit sur la ligne d'information : sa jaquette et sa fiche
+    /// suffisent. La ligne garde le décompte des résultats, ou le titre de la rangée.
+    /// </summary>
     private void SetInfo(string title, string detail)
     {
-        HitTitle.Text = title;
-        HitDetail.Text = detail.Length > 0 ? $"  ·  {detail}" : "";
-        HitInfo.Visibility = title.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        ResultsCount.Visibility = title.Length > 0 ? Visibility.Collapsed : Visibility.Visible;
+        HitTitle.Text = "";
+        HitDetail.Text = "";
+        HitInfo.Visibility = Visibility.Collapsed;
+        ResultsCount.Visibility = Visibility.Visible;
     }
 
     private void ShowHit(SearchHit h)

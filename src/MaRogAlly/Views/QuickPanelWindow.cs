@@ -168,7 +168,7 @@ public sealed class QuickPanelWindow : Window
             return;
         }
         IsCapturing = true;
-        BeginAnimation(LeftProperty, null);
+        StopGlide();
         Left = -(Width + 10000);
         FadeDim(0, 1);
         // Le temps que l'écran soit redessiné sans le volet ni le voile.
@@ -193,7 +193,7 @@ public sealed class QuickPanelWindow : Window
         if (_slidIn || _closing) return;
         _slidIn = true;
         Log.Info($"Centre de contrôle : glissement lancé après {_opened.ElapsedMilliseconds} ms");
-        BeginAnimation(LeftProperty, new DoubleAnimation(-Width, Gap - Shadow, Anim.Ms(OpenMs)) { EasingFunction = OpenEase });
+        Glide(-Width, Gap - Shadow, OpenMs, t => 1 - Math.Pow(1 - t, 5), null);
         Panel.PlayEntrance();
         FadeDim(DimOpacity, OpenMs);
     }
@@ -269,13 +269,57 @@ public sealed class QuickPanelWindow : Window
             return;
         }
         IsHitTestVisible = false;
-        var slide = new DoubleAnimation(-Width, Anim.Ms(CloseMs)) { EasingFunction = CloseEase };
-        slide.Completed += (_, _) => Finish();
-        BeginAnimation(LeftProperty, slide);
+        Glide(_glideX, -Width, CloseMs, t => t * t * t, Finish);
         Panel.PlayExit();
         FadeDim(0, CloseMs);
         // Une animation peut ne jamais finir si le rendu s'arrête : le volet doit se fermer quand même.
         _ = Task.Delay(CloseMs + 300).ContinueWith(_ => Dispatcher.BeginInvoke(Finish));
+    }
+
+    private int _glideGeneration;
+    /// <summary>Position du volet pendant un glissement (points), pour en enchaîner un autre sans saut.</summary>
+    private double _glideX;
+
+    /// <summary>
+    /// Fait glisser le volet sur un fil à part, calé sur chaque image de l'écran (120 par seconde sur un écran à 120 Hz) :
+    /// le fil de l'interface peut être occupé (volume, Wi-Fi, mesures), le mouvement ne saute plus d'images.
+    /// </summary>
+    private void Glide(double from, double to, double ms, Func<double, double> ease, Action? done)
+    {
+        BeginAnimation(LeftProperty, null);
+        var generation = Interlocked.Increment(ref _glideGeneration);
+        var hwnd = Handle;
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var scaleX = dpi.DpiScaleX;
+        var y = (int)Math.Round(Top * dpi.DpiScaleY);
+        _glideX = from;
+        new Thread(() =>
+        {
+            var clock = Stopwatch.StartNew();
+            while (Volatile.Read(ref _glideGeneration) == generation)
+            {
+                // Attend la prochaine image de l'écran : une position par image, ni plus ni moins.
+                if (DwmFlush() != 0) Thread.Sleep(4);
+                var t = Math.Min(1, clock.Elapsed.TotalMilliseconds / ms);
+                var x = from + (to - from) * ease(t);
+                _glideX = x;
+                SetWindowPos(hwnd, IntPtr.Zero, (int)Math.Round(x * scaleX), y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+                if (t >= 1) break;
+            }
+            if (Volatile.Read(ref _glideGeneration) != generation) return;
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (Volatile.Read(ref _glideGeneration) != generation) return;
+                Left = to;
+                done?.Invoke();
+            });
+        }) { IsBackground = true, Priority = ThreadPriority.AboveNormal, Name = "Glissement du volet" }.Start();
+    }
+
+    private void StopGlide()
+    {
+        Interlocked.Increment(ref _glideGeneration);
+        BeginAnimation(LeftProperty, null);
     }
 
     private void Finish()
@@ -285,6 +329,10 @@ public sealed class QuickPanelWindow : Window
         Close();
     }
 
+    private const uint SWP_NOSIZE = 0x1, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10, SWP_ASYNCWINDOWPOS = 0x4000;
+
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("dwmapi.dll")] private static extern int DwmFlush();
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);

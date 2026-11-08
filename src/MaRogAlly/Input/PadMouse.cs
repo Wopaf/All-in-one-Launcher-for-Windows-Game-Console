@@ -65,6 +65,12 @@ public sealed class PadMouse
 
     public Action? HidePointer { get; set; }
 
+    /// <summary>Clic enfoncé (vrai) ou relâché (faux) : animation du curseur de l'application.</summary>
+    public Action<bool>? PressPointer { get; set; }
+
+    /// <summary>Remet le curseur de l'application tout devant, depuis le fil qui déplace la souris.</summary>
+    public Action? RaisePointer { get; set; }
+
     /// <summary>Déplace le curseur de l'application, depuis le fil qui déplace la souris.</summary>
     public Action<int, int>? MovePointer { get; set; }
 
@@ -162,12 +168,18 @@ public sealed class PadMouse
     {
         var clock = Stopwatch.StartNew();
         var last = 0.0;
-        double vx = 0, vy = 0, restX = 0, restY = 0;
+        double vx = 0, vy = 0, restX = 0, restY = 0, raised = 0;
         while (_moving)
         {
             // Attend la prochaine image de l'écran : un déplacement par image, ni plus ni moins.
             if (DwmFlush() != 0) Thread.Sleep(4);
             var now = clock.Elapsed.TotalSeconds;
+            // Un menu contextuel, la barre des tâches… s'ouvrent devant tout : le curseur y repasse dix fois par seconde.
+            if (_pointerShown && now - raised > 0.1)
+            {
+                raised = now;
+                RaisePointer?.Invoke();
+            }
             var dt = Math.Min(now - last, 0.05);
             last = now;
             PadState s;
@@ -212,11 +224,12 @@ public sealed class PadMouse
         _pointerShown = false;
     }
 
-    private static void SetButton(ref bool held, bool pressed, uint down, uint up)
+    private void SetButton(ref bool held, bool pressed, uint down, uint up)
     {
         if (held == pressed) return;
         held = pressed;
         mouse_event(pressed ? down : up, 0, 0, 0, UIntPtr.Zero);
+        PressPointer?.Invoke(pressed);
     }
 
     /// <summary>

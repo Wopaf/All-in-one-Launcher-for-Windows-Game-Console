@@ -26,8 +26,8 @@ public partial class GamesView : UserControl
 
     /// <summary>Onglet « Installés » : seuls les jeux installés sont proposés.</summary>
     /// <summary>
-    /// Vrai pour Mes jeux (jeux installés), faux pour la Bibliothèque. Sous le titre, Mes jeux ne montre pas les genres,
-    /// et la Bibliothèque pas le temps de jeu.
+    /// Vrai pour Mes jeux (jeux installés), faux pour la Bibliothèque. Sous le titre, Mes jeux ne montre que la plateforme
+    /// et le temps de jeu ; la Bibliothèque montre tout sauf le temps de jeu.
     /// </summary>
     public bool InstalledOnly
     {
@@ -35,11 +35,12 @@ public partial class GamesView : UserControl
         set
         {
             _installedOnly = value;
-            GenresBadge.ClearValue(VisibilityProperty);
-            PlaytimeBadge.ClearValue(VisibilityProperty);
-            GenresBadge.SetBinding(VisibilityProperty, new Binding(nameof(Game.GenresText)) { Converter = (IValueConverter)FindResource("VisibleIf") });
-            PlaytimeBadge.SetBinding(VisibilityProperty, new Binding(nameof(Game.PlaytimeText)) { Converter = (IValueConverter)FindResource("VisibleIf") });
-            (value ? GenresBadge : PlaytimeBadge).Visibility = Visibility.Collapsed;
+            // Chaque badge reprend sa règle (visible s'il a quelque chose à dire), puis ceux de trop sont masqués.
+            var converter = (IValueConverter)FindResource("VisibleIf");
+            foreach (var (badge, path) in new[] { (RatingBadge, nameof(Game.Rating)), (YearBadge, nameof(Game.ReleaseYear)), (GenresBadge, nameof(Game.GenresText)), (PlaytimeBadge, nameof(Game.PlaytimeText)) })
+                badge.SetBinding(VisibilityProperty, new Binding(path) { Converter = converter });
+            foreach (var hidden in value ? new[] { RatingBadge, YearBadge, GenresBadge } : [PlaytimeBadge])
+                hidden.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -294,8 +295,8 @@ public partial class GamesView : UserControl
         if (DateTime.UtcNow - _lastSelectionChange > TimeSpan.FromMilliseconds(140))
         {
             // Seul le logo glisse ; les informations en dessous apparaissent en simple fondu.
-            Anim.Enter(LogoBox, dx: 0, dy: 14, ms: 320);
-            MetaRow.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, Anim.Ms(320)) { EasingFunction = Anim.Out });
+            EnterLogo();
+            EnterBadges();
         }
         _lastSelectionChange = DateTime.UtcNow;
 
@@ -303,6 +304,60 @@ public partial class GamesView : UserControl
         UpdateCount();
         SelectionChanged?.Invoke(game);
     }
+
+    private static readonly System.Windows.Media.Animation.IEasingFunction Glide = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+    private static readonly System.Windows.Media.Animation.IEasingFunction SlowFade = new System.Windows.Media.Animation.SineEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut };
+
+    /// <summary>
+    /// Apparition du logo du jeu sélectionné : un fondu lent (0,9 s) et un glissement vers le haut qui ralentit
+    /// longuement en arrivant (0,65 s), pour un mouvement sans à-coup.
+    /// </summary>
+    private void EnterLogo()
+    {
+        if (LogoBox.RenderTransform is not TranslateTransform move) LogoBox.RenderTransform = move = new TranslateTransform();
+        LogoBox.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, Anim.Ms(900)) { EasingFunction = SlowFade });
+        move.BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(18, 0, Anim.Ms(650)) { EasingFunction = Glide });
+    }
+
+    /// <summary>Attente avant l'apparition des badges, puis durée de leur fondu et de leur déploiement.</summary>
+    private const double BadgesDelay = 300, BadgesFade = 800, BadgesReveal = 600;
+
+    /// <summary>
+    /// Badges sous le logo : cachés 0,3 s, puis la rangée entière apparaît en fondu lent en se déployant vers la droite.
+    /// Images clés plutôt qu'un départ différé : ils sont bien cachés pendant l'attente.
+    /// </summary>
+    private void EnterBadges()
+    {
+        var fade = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
+        fade.KeyFrames.Add(new System.Windows.Media.Animation.DiscreteDoubleKeyFrame(0, At(0)));
+        fade.KeyFrames.Add(new System.Windows.Media.Animation.DiscreteDoubleKeyFrame(0, At(BadgesDelay)));
+        fade.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(1, At(BadgesDelay + BadgesFade), SlowFade));
+        MetaRow.BeginAnimation(OpacityProperty, fade);
+        // Les badges du nouveau jeu doivent être mesurés avant de connaître leur largeur.
+        Dispatcher.BeginInvoke(RevealBadges, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>La rangée de badges se découvre de gauche à droite d'un seul tenant, jusqu'au bout du dernier badge.</summary>
+    private void RevealBadges()
+    {
+        var right = 0.0;
+        foreach (var badge in MetaRow.Children.OfType<FrameworkElement>())
+            if (badge.Visibility == Visibility.Visible && badge.ActualWidth > 0)
+                right = Math.Max(right, badge.TranslatePoint(new Point(badge.ActualWidth, 0), MetaRow).X);
+        if (right <= 0) return;
+        var height = MetaRow.ActualHeight;
+        var clip = new RectangleGeometry(new Rect(0, 0, 0, height));
+        MetaRow.Clip = clip;
+        var grow = new System.Windows.Media.Animation.RectAnimationUsingKeyFrames();
+        grow.KeyFrames.Add(new System.Windows.Media.Animation.DiscreteRectKeyFrame(new Rect(0, 0, 0, height), At(0)));
+        grow.KeyFrames.Add(new System.Windows.Media.Animation.DiscreteRectKeyFrame(new Rect(0, 0, 0, height), At(BadgesDelay)));
+        grow.KeyFrames.Add(new System.Windows.Media.Animation.EasingRectKeyFrame(new Rect(0, 0, right, height), At(BadgesDelay + BadgesReveal), Glide));
+        // Déployée : plus de découpe, la rangée reste entière même si son contenu change ensuite.
+        grow.Completed += (_, _) => { if (MetaRow.Clip == clip) MetaRow.Clip = null; };
+        clip.BeginAnimation(RectangleGeometry.RectProperty, grow);
+    }
+
+    private static System.Windows.Media.Animation.KeyTime At(double ms) => System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms));
 
     /// <summary>Deux rangées visibles au plus.</summary>
     private const int VisibleRows = 2;

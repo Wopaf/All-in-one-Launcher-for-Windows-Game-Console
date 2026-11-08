@@ -23,12 +23,16 @@ public static class ScreenCapture
     private static string FallbackFolder => Path.Combine(AppPaths.Root, "Captures");
 
     /// <summary>Chemin du fichier créé, ou null en cas d'échec. Un jeu en plein écran exclusif peut donner une image noire.</summary>
+    /// <summary>Dernière image capturée (pour l'animation de la capture).</summary>
+    public static BitmapSource? LastFrame { get; private set; }
+
     public static async Task<string?> SaveAsync()
     {
         try
         {
             var frame = Grab();
             frame.Freeze();
+            LastFrame = frame;
             return await Task.Run(() =>
             {
                 var name = $"Capture {DateTime.Now:yyyy-MM-dd HH-mm-ss}.png";

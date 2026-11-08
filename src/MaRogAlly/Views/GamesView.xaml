@@ -195,7 +195,7 @@
                         <TextBlock Text="{Binding PlatformInfo.Name}" Style="{StaticResource MetaText}"/>
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource MetaBadge}" Visibility="{Binding Rating, Converter={StaticResource VisibleIf}}">
+                <Border x:Name="RatingBadge" Style="{StaticResource MetaBadge}" Visibility="{Binding Rating, Converter={StaticResource VisibleIf}}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE735;" FontFamily="{StaticResource Icons}" FontSize="13" Foreground="{StaticResource Gold}"
                                    VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -203,7 +203,7 @@
                         <TextBlock Text="/100" FontSize="11" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="2,1,0,0"/>
                     </StackPanel>
                 </Border>
-                <Border Style="{StaticResource MetaBadge}" Visibility="{Binding ReleaseYear, Converter={StaticResource VisibleIf}}">
+                <Border x:Name="YearBadge" Style="{StaticResource MetaBadge}" Visibility="{Binding ReleaseYear, Converter={StaticResource VisibleIf}}">
                     <TextBlock Style="{StaticResource MetaText}" Text="{Binding ReleaseYear}"/>
                 </Border>
                 <Border x:Name="GenresBadge" Style="{StaticResource MetaBadge}" Visibility="{Binding GenresText, Converter={StaticResource VisibleIf}}">

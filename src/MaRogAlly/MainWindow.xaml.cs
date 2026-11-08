@@ -138,6 +138,12 @@ public partial class MainWindow : Window
         _padMouse.ShowPointer = (x, y) => (_pointer ??= new PointerOverlay(PointerOptions.Nearest(PointerOptions.Sizes, _settings.PointerSize))).ShowAt(x, y);
         _padMouse.HidePointer = () => _pointer?.HidePointer();
         _padMouse.MovePointer = (x, y) => _pointer?.MoveAsync(x, y);
+        _padMouse.PressPointer = down =>
+        {
+            _pointer?.Press(down);
+            if (down) UiSounds.PlayMouseClick();
+        };
+        _padMouse.RaisePointer = () => _pointer?.KeepOnTop();
         _pad.BackgroundPoll += _padMouse.Update;
         // Le curseur de la souris à la manette ne doit jamais rester affiché sur un jeu ou sur l'application.
         var pointerWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -210,6 +216,12 @@ public partial class MainWindow : Window
         pulse.Tick += (_, _) =>
         {
             if (!_menuWarmed) WarmSystemMenu();
+            else if (!_quickPanelWarmed)
+            {
+                // Le volet aussi, cinq secondes plus tard : sa première ouverture est aussi fluide que les suivantes.
+                _quickPanelWarmed = true;
+                new QuickPanel(null, 0, interactive: false).Warm();
+            }
             UpdateClock();
             _explore.RefreshCountdowns();
             RefreshDue();
@@ -2672,7 +2684,7 @@ public partial class MainWindow : Window
     {
         _padMouse.Release();
         var target = WindowsShell.ForegroundApp(_desktop.Handle);
-        var panel = new QuickPanel(target, ReadControlMode, ChooseControlMode, _hasController, tab, activate);
+        var panel = new QuickPanel(target, tab, activate);
         var window = new QuickPanelWindow(panel, EffectiveUiScale(_settings.UiScale), activate);
         // Un jeu de la bibliothèque s'arrête pendant que le volet est ouvert, et repart avant de reprendre le premier plan.
         if (activate && _settings.PauseGameWithPanel && target is { } game && IsGameWindow(game) && GamePause.Pause(game.Handle) is { } paused)
@@ -2690,6 +2702,14 @@ public partial class MainWindow : Window
         panel.ScreenshotRequested += () => _ = TakeScreenshotAsync(window);
         panel.WifiRequested += () => _quickNetwork.OpenWifi();
         panel.BluetoothRequested += _quickNetwork.OpenBluetooth;
+        panel.StartMenuRequested += () =>
+        {
+            // Le menu Windows de la barre de gauche, par-dessus tout : le volet se ferme et l'application passe devant.
+            window.RestorePrevious = false;
+            window.CloseOnce();
+            _desktop.BringToFront();
+            if (_dockPanel is null || _dockKind != WindowsMenu) ToggleDockPanel(WindowsMenu, OpenWindowsMenu);
+        };
         panel.ImageRequested += (files, index) => OpenOnQuickStage(new ImageViewer(files, index));
         CursorHider.Attach(window);
         window.StageCreated += stage =>
@@ -2744,9 +2764,16 @@ public partial class MainWindow : Window
     private async Task TakeScreenshotAsync(QuickPanelWindow window)
     {
         var saved = false;
-        await window.HideWhileAsync(async () => saved = await ScreenCapture.SaveAsync() is not null);
-        if (saved) UiSounds.PlaySearch();
-        window.Panel.Notify(saved ? "Capture enregistrée dans la galerie." : "Impossible d'enregistrer la capture.");
+        await window.HideWhileAsync(async () =>
+        {
+            saved = await ScreenCapture.SaveAsync() is not null;
+            if (!saved || ScreenCapture.LastFrame is not { } frame) return;
+            UiSounds.PlayCapture();
+            // La vignette plonge vers le centre du volet, qui revient ouvert sur la galerie (la capture y est en premier).
+            window.Panel.ShowGallery();
+            await new CaptureEffect(frame, 254 * EffectiveUiScale(_settings.UiScale)).PlayAsync();
+        });
+        window.Panel.Notify(saved ? "Capture enregistrée." : "Impossible d'enregistrer la capture.");
     }
 
     // ---- Mode de la manette : rien n'est écrit tant qu'aucun mode n'a été choisi ----
@@ -2759,22 +2786,15 @@ public partial class MainWindow : Window
 
     private async Task PrepareControllerAsync()
     {
+        // Un seul mode désormais : Auto (la manette reste en mode manette, la souris à la manette sur les applications de bureau).
+        // Un ancien choix (Manette, Bureau, ou aucun) est remplacé.
+        if (ReadControlMode() != ControlMode.Auto)
+        {
+            _settings.ControlMode = nameof(ControlMode.Auto);
+            _settings.Save();
+        }
         _hasController = await Task.Run(() => AllyController.IsAvailable);
-        if (_hasController && ReadControlMode() == ControlMode.Auto) StartAutoControl();
-        // Notre mode Bureau garde la manette en mode manette (une version précédente l'avait mise en mode bureau).
-        if (_hasController && ReadControlMode() == ControlMode.Desktop) WriteControlMode(true);
-    }
-
-    private void ChooseControlMode(ControlMode mode)
-    {
-        _settings.ControlMode = mode.ToString();
-        _settings.Save();
-        _autoControl?.Stop();
-        _writtenGamepad = null;
-        _padMouseChecked = DateTime.MinValue;
-        if (mode == ControlMode.Auto) StartAutoControl();
-        // Bureau : notre mode bureau. La manette reste lue comme une manette (B, volet, combinaison), notre souris fait le reste.
-        else WriteControlMode(true);
+        if (_hasController) StartAutoControl();
     }
 
     /// <summary>
@@ -2873,7 +2893,7 @@ public partial class MainWindow : Window
         return timer;
     }
 
-    private bool _menuWarmed;
+    private bool _menuWarmed, _quickPanelWarmed;
 
     /// <summary>Prépare le menu une première fois en coulisse : sa première ouverture ne paie plus le chargement de ses boutons.</summary>
     private void WarmSystemMenu()
