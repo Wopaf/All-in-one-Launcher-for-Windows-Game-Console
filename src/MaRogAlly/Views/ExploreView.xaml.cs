@@ -86,6 +86,9 @@ public partial class ExploreView : UserControl
         foreach (var list in new[] { Hits, NewGames, FreeGames }) list.RequestBringIntoView += (_, e) => e.Handled = true;
         // La page défile d'elle-même vers la sélection (sans le saut de WPF).
         PageContent.RequestBringIntoView += (_, e) => e.Handled = true;
+        // Fondu en haut et en bas de la page, seulement du côté où il reste du contenu caché.
+        PageScroll.ScrollChanged += (_, _) => UpdateScrollFade();
+        PageScroll.SizeChanged += (_, _) => UpdateScrollFade();
         PreviewGotKeyboardFocus += (_, e) =>
         {
             if (e.NewFocus is FrameworkElement f) Dispatcher.BeginInvoke(() => ScrollPage(f), DispatcherPriority.Loaded);
@@ -100,7 +103,7 @@ public partial class ExploreView : UserControl
 
     private void UpdateSpotlightTimer()
     {
-        if (IsVisible && _featured.Count > 1 && !Spotlight.IsKeyboardFocused) _spotlightTimer.Start();
+        if (IsVisible && Spotlight.Visibility == Visibility.Visible && _featured.Count > 1 && !Spotlight.IsKeyboardFocused) _spotlightTimer.Start();
         else _spotlightTimer.Stop();
     }
 
@@ -174,8 +177,9 @@ public partial class ExploreView : UserControl
         Spotlight.Height = compact ? 290 : Math.Clamp(Math.Floor(ActualHeight * 0.44), 320, 560);
         SpotlightTitle.FontSize = compact ? 34 : 46;
         SpotlightText.Margin = compact ? new Thickness(30, 0, 30, 0) : new Thickness(44, 0, 44, 0);
-        SearchRow.Margin = new Thickness(64, spot ? gap : 0, 64, 0);
-        MainArea.Margin = new Thickness(0, gap + 10, 0, 0);
+        Spotlight.Margin = new Thickness(64, gap, 64, 0);
+        FreeSection.Margin = new Thickness(0, gap + 10, 0, 0);
+        MainArea.Margin = new Thickness(0, spot || FreeSection.Visibility == Visibility.Visible ? gap + 10 : gap, 0, 0);
         // Un peu plus de cinq jaquettes visibles par rangée (la suivante, coupée, annonce la suite).
         CoverWidth = Math.Clamp(Math.Floor((ActualWidth - 128 + 18) / 5.5 - 18), 120, 260);
         CoverHeight = Math.Floor(CoverWidth * 1.5);
@@ -203,13 +207,50 @@ public partial class ExploreView : UserControl
         if (Math.Abs(target - PageScroll.VerticalOffset) > 1) Anim.ScrollTo(PageScroll, target);
     }
 
+    private const double FadeHeight = 56;
+
+    /// <summary>
+    /// Masque en dégradé : les éléments coupés par le bord s'effacent au lieu d'être tranchés net.
+    /// Chaque bord ne s'estompe qu'à mesure qu'il reste du contenu de ce côté (rien en haut de page).
+    /// </summary>
+    private void UpdateScrollFade()
+    {
+        var h = PageScroll.ActualHeight;
+        if (h <= 0) return;
+        var top = Math.Clamp(PageScroll.VerticalOffset / FadeHeight, 0, 1);
+        var bottom = Math.Clamp((PageScroll.ScrollableHeight - PageScroll.VerticalOffset) / FadeHeight, 0, 1);
+        if (top == 0 && bottom == 0)
+        {
+            PageScroll.OpacityMask = null;
+            return;
+        }
+        var f = Math.Min(FadeHeight / h, 0.3);
+        static Color A(double hidden) => Color.FromArgb((byte)Math.Round(255 * (1 - hidden)), 0, 0, 0);
+        // En coordonnées absolues : en relatif, WPF cale le dégradé sur tout le contenu (la page entière), pas sur la partie visible.
+        PageScroll.OpacityMask = new LinearGradientBrush(new GradientStopCollection
+        {
+            new(A(top), 0),
+            new(Colors.Black, f),
+            new(Colors.Black, 1 - f),
+            new(A(bottom), 1),
+        }, new Point(0, 0), new Point(0, h)) { MappingMode = BrushMappingMode.Absolute };
+    }
+
     private void Row_RequestBringIntoView(object sender, RequestBringIntoViewEventArgs e) => e.Handled = true;
 
-    /// <summary>Pendant une recherche, seuls les résultats restent sous les tuiles.</summary>
+    /// <summary>Pendant une recherche, seuls les résultats restent sous la barre (sans à la une, offres ni listes).</summary>
     private void UpdateFreeSection()
     {
-        FreeSection.Visibility = _free.Count > 0 && _query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        MoreRows.Visibility = _query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var idle = _query.Length == 0;
+        FreeSection.Visibility = _free.Count > 0 && idle ? Visibility.Visible : Visibility.Collapsed;
+        MoreRows.Visibility = idle ? Visibility.Visible : Visibility.Collapsed;
+        var spot = _featured.Count > 0 && idle ? Visibility.Visible : Visibility.Collapsed;
+        if (Spotlight.Visibility != spot)
+        {
+            Spotlight.Visibility = spot;
+            UpdateSpotlightTimer();
+        }
+        Relayout();
     }
 
     // ---------------- Données ----------------
@@ -223,7 +264,7 @@ public partial class ExploreView : UserControl
 
         var spotWasVisible = Spotlight.Visibility == Visibility.Visible;
         _featured = sections.FirstOrDefault(s => s.Key == DiscoverService.FeaturedKey)?.Games ?? [];
-        Spotlight.Visibility = _featured.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        Spotlight.Visibility = _featured.Count > 0 && _query.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (spotWasVisible && _featured.Count == 0 && Spotlight.IsKeyboardFocused) FocusNav.Focus(SearchButton);
         SpotlightBody.DataContext = null;
         ShowFeatured(0, 0);
@@ -286,6 +327,8 @@ public partial class ExploreView : UserControl
         if (_selected is FreeGame) Select(null);
         _free = games;
         FreeGames.ItemsSource = games;
+        // Places vides : toujours au moins 4 cartes dans la rangée.
+        FreeShadows.ItemsSource = Enumerable.Range(0, Math.Max(0, 4 - games.Count)).ToList();
         UpdateFreeSection();
         if (hadFocus && games.Count > 0) FocusIn(FreeGames, 0);
     }
@@ -573,15 +616,15 @@ public partial class ExploreView : UserControl
         return null;
     }
 
-    /// <summary>Zones de la page, de haut en bas : à la une, recherche, jaquettes (ou résultats), autres rangées, offres Epic.</summary>
+    /// <summary>Zones de la page, de haut en bas : recherche, à la une, offres Epic, jaquettes (ou résultats), autres rangées.</summary>
     private List<List<Button>> Zones()
     {
         var zones = new List<List<Button>>();
-        if (Spotlight.IsVisible) zones.Add([Spotlight]);
         zones.Add(ResetButton.IsEnabled ? [SearchButton, ResetButton] : [SearchButton]);
+        if (Spotlight.IsVisible) zones.Add([Spotlight]);
+        if (FreeSection.IsVisible) zones.Add(Buttons(FreeGames));
         zones.Add(HitsScroll.Visibility == Visibility.Visible ? Buttons(Hits) : NewScroll.Visibility == Visibility.Visible ? Buttons(NewGames) : []);
         if (MoreRows.IsVisible) zones.AddRange(RowLists());
-        if (FreeSection.IsVisible) zones.Add(Buttons(FreeGames));
         zones.RemoveAll(z => z.Count == 0);
         return zones;
     }

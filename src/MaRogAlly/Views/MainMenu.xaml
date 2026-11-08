@@ -4,20 +4,16 @@
                xmlns:v="clr-namespace:MaRogAlly.Views">
     <Grid>
         <Rectangle Fill="#99000000" MouseLeftButtonUp="Backdrop_Click"/>
-        <Grid x:Name="Panel" Width="540" HorizontalAlignment="Right">
-            <!-- Ombre en dégradé plutôt qu'en effet de flou, recalculé à chaque image de l'ouverture -->
-            <Border Width="70" Margin="-70,0,0,0" HorizontalAlignment="Left" IsHitTestVisible="False">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#00000000" Offset="0"/>
-                        <GradientStop Color="#8C000000" Offset="1"/>
-                    </LinearGradientBrush>
-                </Border.Background>
+        <!-- Panneau flottant, comme le centre de contrôle et le menu Démarrer : coins arrondis, marge, contour léger -->
+        <Grid x:Name="Panel" Width="470" HorizontalAlignment="Right" Margin="14">
+            <!-- Fond opaque (couleur du thème) portant l'ombre : elle n'est pas recalculée quand le contenu s'anime -->
+            <Border CornerRadius="22" Background="{DynamicResource Bg}" IsHitTestVisible="False">
+                <Border.Effect>
+                    <DropShadowEffect Color="Black" BlurRadius="36" ShadowDepth="0" Opacity="0.55"/>
+                </Border.Effect>
             </Border>
-            <!-- Fond opaque : la couleur du thème sous la teinte (translucide) des panneaux -->
-            <Border Background="{DynamicResource Bg}"/>
-            <Border Background="{DynamicResource PanelBg}">
-            <Grid Margin="36,40,36,24">
+            <Border CornerRadius="22" Background="{DynamicResource PanelBg}" BorderBrush="{StaticResource PanelStroke}" BorderThickness="1">
+            <Grid Margin="28,30,28,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
@@ -26,7 +22,7 @@
                 <!-- ====== Tuiles (le cadre de sélection glisse de l'une à l'autre) ====== -->
                 <ScrollViewer x:Name="Scroll" Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                     <Grid x:Name="ItemsHost" Margin="0,0,0,12">
-                        <Border x:Name="Highlight" CornerRadius="14" Background="Transparent" BorderBrush="#E6FFFFFF" BorderThickness="2"/>
+                        <Border x:Name="Highlight" CornerRadius="14" Background="Transparent" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                         <StackPanel x:Name="Items" KeyboardNavigation.DirectionalNavigation="Contained"/>
                     </Grid>
                 </ScrollViewer>

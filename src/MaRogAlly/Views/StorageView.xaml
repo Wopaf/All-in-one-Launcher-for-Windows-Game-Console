@@ -49,7 +49,7 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <Grid x:Name="MenuHost">
-                    <Border x:Name="MenuHighlight" CornerRadius="14" Background="Transparent" BorderBrush="#E6FFFFFF" BorderThickness="2"/>
+                    <Border x:Name="MenuHighlight" CornerRadius="14" Background="Transparent" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                     <StackPanel x:Name="Menu"/>
                 </Grid>
                 <Border Grid.Row="1" VerticalAlignment="Bottom" CornerRadius="16" Padding="18,14,18,16" Margin="0,14,0,0"
@@ -74,7 +74,7 @@
             <!-- ====== Contenu de la section ====== -->
             <ScrollViewer x:Name="Scroll" Grid.Row="1" Grid.Column="2" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                 <Grid x:Name="ItemsHost" Margin="0,0,0,12">
-                    <Border x:Name="Highlight" CornerRadius="14" Background="Transparent" BorderBrush="#E6FFFFFF" BorderThickness="2"/>
+                    <Border x:Name="Highlight" CornerRadius="14" Background="Transparent" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                     <StackPanel x:Name="Items"/>
                 </Grid>
             </ScrollViewer>

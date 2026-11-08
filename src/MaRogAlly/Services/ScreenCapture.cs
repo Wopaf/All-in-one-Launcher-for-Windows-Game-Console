@@ -65,6 +65,44 @@ public static class ScreenCapture
         return path;
     }
 
+    /// <summary>Envoie la capture à la Corbeille (récupérable) ; faux si elle n'a pas pu être supprimée.</summary>
+    public static bool Delete(string path)
+    {
+        try
+        {
+            var op = new ShFileOp
+            {
+                Func = 3, // FO_DELETE
+                From = path + "\0\0",
+                Flags = 0x0040 | 0x0010 | 0x0004 | 0x0400, // ALLOWUNDO | NOCONFIRMATION | SILENT | NOERRORUI
+            };
+            var ok = SHFileOperation(ref op) == 0 && !op.Aborted && !File.Exists(path);
+            if (!ok) Log.Error($"Capture non supprimée ({path})");
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Capture non supprimée ({path})", ex);
+            return false;
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ShFileOp
+    {
+        public IntPtr Hwnd;
+        public uint Func;
+        public string From;
+        public string? To;
+        public ushort Flags;
+        [MarshalAs(UnmanagedType.Bool)] public bool Aborted;
+        public IntPtr NameMappings;
+        public string? ProgressTitle;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHFileOperationW")]
+    private static extern int SHFileOperation(ref ShFileOp op);
+
     /// <summary>Captures les plus récentes d'abord.</summary>
     public static List<string> List(int limit)
     {

@@ -365,6 +365,14 @@ public partial class MainWindow : Window
             row.Tick += (_, _) => { row.Stop(); _explore.PreviewRow(rowAt); };
             row.Start();
         }
+        // « --select 8 » : sélectionne ce jeu de Mes Jeux une fois chargé, pour vérifier le défilement de la liste.
+        var selectArg = Array.IndexOf(args, "--select");
+        if (selectArg >= 0 && int.TryParse(args.ElementAtOrDefault(selectArg + 1), out var selectAt))
+        {
+            var select = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+            select.Tick += (_, _) => { select.Stop(); _installed.PreviewSelect(selectAt); };
+            select.Start();
+        }
         // « --replay » : rejoue l'apparition des jaquettes juste avant la capture (« --render »), pour la voir en cours.
         if (args.Contains("--replay"))
         {
@@ -414,6 +422,9 @@ public partial class MainWindow : Window
             _settingsView.PreviewCategory(category);
             OpenSubPage(_settingsView);
         }
+        // « --scroll 400 » : page Découverte défilée, pour vérifier le fondu des bords.
+        if (args.ElementAtOrDefault(Array.IndexOf(args, "--scroll") + 1) is { } scroll && Array.IndexOf(args, "--scroll") >= 0 && double.TryParse(scroll, out var offset))
+            _ = Dispatcher.BeginInvoke(() => _explore.PageScroll.ScrollToVerticalOffset(offset), DispatcherPriority.ApplicationIdle);
         _ = CheckUpdatesAsync();
         _ = AppUpdater.CleanUpAsync();
         if (args.Contains(AppUpdater.UpdatedArg)) Toast("", $"Ma ROG Ally est à jour (version {AppUpdater.CurrentText})");
@@ -421,6 +432,7 @@ public partial class MainWindow : Window
         // « --apply-update » : installe sans rien demander, pour vérifier le remplacement de l'exe sur une copie de test.
         if (args.Contains("--apply-update")) _ = ApplyUpdateForTestAsync();
         _ready = true;
+        _ = CheckKeysAsync(show: false);
 
         // 2. Scan complet de toutes les plateformes, puis enrichissement en ligne.
         await ScanAsync(initial: true);
@@ -1422,7 +1434,9 @@ public partial class MainWindow : Window
             Toast("", "Clé enregistrée, mise à jour de la bibliothèque…");
             _lastScan = DateTime.MinValue;
             _ = ScanAsync(initial: false);
+            _ = CheckKeysAsync(show: true);
         };
+        _settingsView.CheckKeysRequested += () => _ = CheckKeysAsync(show: true);
         _settingsView.RescanRequested += () => _ = ScanAsync(initial: false);
         _settingsView.RefreshMetadataRequested += () =>
         {
@@ -1439,6 +1453,7 @@ public partial class MainWindow : Window
         };
         _settingsView.AppUpdateRequested += () => _ = ManualAppUpdateAsync();
         _settingsView.AccentRequested += OpenAccentPicker;
+        _settingsView.FontRequested += OpenFontPicker;
         _settingsView.ThemeRequested += OpenThemePicker;
         _settingsView.UiScaleRequested += OpenUiScalePicker;
         _settingsView.HiddenGamesRequested += OpenHiddenGames;
@@ -2273,6 +2288,28 @@ public partial class MainWindow : Window
         OpenOverlay(panel);
     }
 
+    /// <summary>Police de l'interface : chaque choix est écrit dans sa police ; valider redémarre l'application.</summary>
+    private void OpenFontPicker()
+    {
+        var panel = new SidePanel("Police d'écriture", "L'application redémarre pour l'appliquer");
+        var current = AppFont.Find(_settings.Font);
+        foreach (var font in AppFont.Choices)
+        {
+            var b = panel.AddChoice(font.Name, font.Id == current.Id, () =>
+            {
+                panel.Close();
+                if (font.Id == current.Id) return;
+                _settings.Font = font.Id;
+                _settings.Save();
+                _settingsView.UpdateFont();
+                App.Restart();
+            }, detail: font.Detail);
+            b.FontFamily = new FontFamily(font.Body);
+            if (font.Id == current.Id) panel.InitialFocus = b;
+        }
+        OpenOverlay(panel);
+    }
+
     private void OpenAccentPicker()
     {
         var panel = new SidePanel("Couleur d'accent", "Aperçu en direct · A pour valider");
@@ -2734,7 +2771,15 @@ public partial class MainWindow : Window
             _desktop.BringToFront();
             if (_dockPanel is null || _dockKind != WindowsMenu) ToggleDockPanel(WindowsMenu, OpenWindowsMenu);
         };
-        panel.ImageRequested += (files, index) => OpenOnQuickStage(new ImageViewer(files, index));
+        panel.ImageRequested += (files, index) =>
+        {
+            var viewer = new ImageViewer(files, index);
+            // Capture supprimée dans la visionneuse : la galerie du volet se met à jour à sa fermeture.
+            var deleted = false;
+            viewer.Deleted += _ => deleted = true;
+            viewer.CloseRequested += _ => { if (deleted) panel.RefreshGallery(index); };
+            OpenOnQuickStage(viewer);
+        };
         CursorHider.Attach(window);
         window.StageCreated += stage =>
         {
@@ -2929,6 +2974,29 @@ public partial class MainWindow : Window
         _ = Radios.IsOnAsync(Windows.Devices.Radios.RadioKind.WiFi);
     }
 
+    private bool _checkingKeys;
+
+    /// <summary>
+    /// Vérifie les clés d'API (au démarrage, après une modification, ou avec le bouton des Réglages) et met à jour
+    /// les pastilles. show : le résultat s'affiche sous le bouton « Vérifier les clés ».
+    /// </summary>
+    private async Task CheckKeysAsync(bool show)
+    {
+        if (_checkingKeys) return;
+        _checkingKeys = true;
+        try
+        {
+            if (show) _settingsView.ShowKeyCheck(null);
+            var results = await ApiKeyCheck.RunAsync(_http, _settings);
+            if (show || _settingsView.IsVisible) _settingsView.ShowKeyCheck(results);
+            _settingsView.SetKeyAlert(ApiKeyCheck.NeedsAttention);
+        }
+        finally
+        {
+            _checkingKeys = false;
+        }
+    }
+
     private MainMenu BuildSystemMenu()
     {
         var menu = new MainMenu();
@@ -2938,7 +3006,7 @@ public partial class MainWindow : Window
         {
             _settingsView.ResetSelection();
             OpenSubPage(_settingsView);
-        }));
+        }), alert: ApiKeyCheck.NeedsAttention);
         // Luminosité, Wi-Fi, Bluetooth et bureau : dans le centre de contrôle.
         menu.AddButton("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats));
         menu.AddButton("", "Plateformes", () => OpenFromMenu(menu, () => OpenSubPage(_platforms)));
@@ -3344,9 +3412,7 @@ public partial class MainWindow : Window
         if (!power.HasBattery) return;
         BatteryIcon.Text = Power.Glyph(power);
         BatteryText.Text = $"{power.Percent} %";
-        var level = power.Percent < 15 ? Color.FromRgb(0xFF, 0x3B, 0x4E)
-                  : power.Percent < 30 ? Color.FromRgb(0xFF, 0x9F, 0x1C)
-                  : Color.FromRgb(0x4C, 0xD9, 0x64);
+        var level = Power.LevelColor(power.Percent);
         BatteryIcon.Foreground = BatteryText.Foreground = new SolidColorBrush(level);
     }
 

@@ -22,7 +22,7 @@
                                     <Image Source="{Binding}" Stretch="UniformToFill"/>
                                 </Grid>
                             </Border>
-                            <Border x:Name="Frame" CornerRadius="10" BorderThickness="3" BorderBrush="White" Opacity="0" Margin="-1"/>
+                            <Border x:Name="Frame" CornerRadius="10" BorderThickness="3" BorderBrush="{DynamicResource Accent}" Opacity="0" Margin="-1"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <EventTrigger RoutedEvent="FrameworkElement.Loaded" SourceName="Pulse">
@@ -73,7 +73,7 @@
                 <ControlTemplate TargetType="Button">
                     <Grid Background="Transparent">
                         <Border x:Name="Fill" CornerRadius="16" Background="Transparent"/>
-                        <Border x:Name="Frame" CornerRadius="16" BorderBrush="#E6FFFFFF" BorderThickness="2" Opacity="0"/>
+                        <Border x:Name="Frame" CornerRadius="16" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Opacity="0"/>
                         <ContentPresenter Margin="{TemplateBinding Padding}"/>
                     </Grid>
                     <ControlTemplate.Triggers>
@@ -145,24 +145,24 @@
                     <StackPanel Orientation="Horizontal">
                         <Path Data="{Binding PlatformInfo.Logo}" Fill="White" Stretch="Uniform" Width="15" Height="15"
                               Margin="0,0,8,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding PlatformInfo.Name}" FontFamily="{StaticResource Display}" FontWeight="SemiBold"
+                        <TextBlock Text="{Binding PlatformInfo.Name}" FontFamily="{DynamicResource Display}" FontWeight="SemiBold"
                                    FontSize="14" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
                 <StackPanel Orientation="Horizontal" Margin="0,0,16,0" Visibility="{Binding Rating, Converter={StaticResource VisibleIf}}">
                     <TextBlock Text="&#xE735;" FontFamily="{StaticResource Icons}" FontSize="15" Foreground="{StaticResource Gold}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <TextBlock Text="{Binding RatingText}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="17" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding RatingText}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="17" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     <TextBlock Text="/100" FontSize="12" Foreground="{StaticResource TextMuted}" VerticalAlignment="Center" Margin="2,2,0,0"/>
                 </StackPanel>
                 <!-- Temps de jeu (Steam, GOG Galaxy ou API Steam) -->
                 <StackPanel Orientation="Horizontal" Margin="0,0,16,0" Visibility="{Binding PlaytimeText, Converter={StaticResource VisibleIf}}">
                     <TextBlock Text="&#xE916;" FontFamily="{StaticResource Icons}" FontSize="15" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                    <TextBlock Text="{Binding PlaytimeText}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding PlaytimeText}" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="16" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <!-- Taille : place prise sur le disque, ou espace demandé par Steam (rempli après coup) -->
                 <StackPanel x:Name="SizePanel" Orientation="Horizontal" Margin="0,0,16,0" Visibility="Collapsed">
                     <TextBlock Text="&#xEDA2;" FontFamily="{StaticResource Icons}" FontSize="15" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                    <TextBlock x:Name="SizeText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="SizeText" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="16" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Text="{Binding GenresText}" FontSize="15" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
             </WrapPanel>
@@ -174,7 +174,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="&#xE7FC;" FontFamily="{StaticResource Icons}" FontSize="17" Foreground="{DynamicResource Accent}"
                                    VerticalAlignment="Center" Margin="0,0,12,0"/>
-                        <TextBlock x:Name="OnlyOnText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16"
+                        <TextBlock x:Name="OnlyOnText" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="16"
                                    Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
@@ -261,7 +261,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="SUCCÈS" Style="{StaticResource Label}" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                        <TextBlock x:Name="AchievementCount" Grid.Column="1" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="14"
+                        <TextBlock x:Name="AchievementCount" Grid.Column="1" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="14"
                                    Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,14,0"/>
                         <Grid x:Name="AchievementBar" Grid.Column="2" Width="170" Height="5" HorizontalAlignment="Left" VerticalAlignment="Center">
                             <Border CornerRadius="2.5" Background="#1FFFFFFF"/>
@@ -310,7 +310,7 @@
                 <Grid Margin="6">
                     <StackPanel x:Name="Strip" Orientation="Horizontal"/>
                     <!-- Cadre de sélection : glisse d'une vignette à l'autre -->
-                    <Border x:Name="StripFrame" HorizontalAlignment="Left" CornerRadius="10" BorderThickness="2" BorderBrush="White" IsHitTestVisible="False">
+                    <Border x:Name="StripFrame" HorizontalAlignment="Left" CornerRadius="10" BorderThickness="2" BorderBrush="{DynamicResource Accent}" IsHitTestVisible="False">
                         <Border.RenderTransform><TranslateTransform x:Name="StripFrameMove"/></Border.RenderTransform>
                     </Border>
                 </Grid>

@@ -21,18 +21,29 @@ public sealed class ImageViewer : OverlayBase
     private readonly List<string> _files;
     private readonly Image _a = Layer(), _b = Layer();
     private readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal };
-    private readonly Border _stripFrame = new() { Width = StripWidth, Height = StripHeight, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2), BorderBrush = Brushes.White, IsHitTestVisible = false };
+    private readonly Border _stripFrame = new() { Width = StripWidth, Height = StripHeight, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(2), IsHitTestVisible = false };
     private readonly TranslateTransform _stripFrameMove = new();
     private readonly ScrollViewer _stripScroll;
     private readonly IEasingFunction _ease = new CubicEase { EasingMode = EasingMode.EaseOut };
     private int _index, _loading;
     private bool _onA = true, _shown;
+    /// <summary>Premier appui sur Y : la suppression attend une confirmation (deuxième appui).</summary>
+    private bool _confirmDelete;
+    private readonly TextBlock _notice = new()
+    {
+        FontSize = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
+        Margin = new Thickness(0, 14, 0, 0), Opacity = 0, IsHitTestVisible = false,
+    };
+
+    /// <summary>Une capture a été envoyée à la Corbeille (la galerie se met à jour).</summary>
+    public event Action<string>? Deleted;
 
     public ImageViewer(List<string> files, int index)
     {
         _files = files;
         _index = index;
         _stripFrame.RenderTransform = _stripFrameMove;
+        _stripFrame.SetResourceReference(Border.BorderBrushProperty, "Accent");
         _b.Opacity = 0;
 
         var root = new Grid { Background = new SolidColorBrush(Color.FromArgb(0xF2, 0x05, 0x06, 0x08)) };
@@ -53,6 +64,11 @@ public sealed class ImageViewer : OverlayBase
         };
         Grid.SetRow(_stripScroll, 1);
         root.Children.Add(_stripScroll);
+        _notice.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+        _notice.FontFamily = (FontFamily)FindResource("Display");
+        _notice.FontWeight = FontWeights.SemiBold;
+        Panel.SetZIndex(_notice, 2);
+        root.Children.Add(_notice);
         Content = root;
 
         BuildStrip();
@@ -72,23 +88,81 @@ public sealed class ImageViewer : OverlayBase
         return image;
     }
 
-    public override string Hints => _files.Count > 1 ? "←→:Image|B:Fermer" : "B:Fermer";
+    public override string Hints => _confirmDelete ? "Y:Confirmer la suppression|B:Annuler"
+        : _files.Count > 1 ? "←→:Image|Y:Supprimer|B:Fermer" : "Y:Supprimer|B:Fermer";
 
     /// <summary>Aucun bouton ici : le focus reste à la fenêtre, pour que le clavier continue de répondre.</summary>
     protected override void FocusOnOpen() => Window.GetWindow(this)?.Focus();
 
     public override bool Handle(NavAction action)
     {
+        if (_confirmDelete && action != NavAction.Secondary)
+        {
+            // Tout autre bouton annule la suppression demandée.
+            SetConfirm(false);
+            if (action == NavAction.Back) return true;
+        }
         switch (action)
         {
             case NavAction.Left or NavAction.Right:
                 if (_files.Count > 1) Select(_index + (action == NavAction.Left ? -1 : 1));
+                return true;
+            case NavAction.Secondary:
+                if (!_confirmDelete) SetConfirm(true);
+                else DeleteCurrent();
                 return true;
             case NavAction.Accept or NavAction.Back:
                 Close();
                 return true;
         }
         return false;
+    }
+
+    private void SetConfirm(bool on, string? message = null)
+    {
+        _confirmDelete = on;
+        _notice.Text = message ?? "Supprimer cette capture ? Appuie de nouveau sur Y";
+        Anim.Fade(_notice, on || message is not null ? 1 : 0, 180);
+        RaiseHintsChanged();
+    }
+
+    /// <summary>La capture part à la Corbeille ; la suivante s'affiche (la visionneuse se ferme s'il n'en reste plus).</summary>
+    private void DeleteCurrent()
+    {
+        var path = _files[_index];
+        if (!ScreenCapture.Delete(path))
+        {
+            SetConfirm(false, "Impossible de supprimer cette capture");
+            return;
+        }
+        Deleted?.Invoke(path);
+        _files.RemoveAt(_index);
+        _strip.Children.RemoveAt(_index);
+        if (_files.Count == 0)
+        {
+            _confirmDelete = false;
+            Close();
+            return;
+        }
+        SetConfirm(false, "Capture envoyée à la Corbeille");
+        var shown = _notice.Text;
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.8) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (!_confirmDelete && _notice.Text == shown) Anim.Fade(_notice, 0, 220);
+        };
+        timer.Start();
+        // Les miniatures gardent leur clic sur leur nouvelle position.
+        RebindStrip();
+        _index = Math.Min(_index, _files.Count - 1);
+        UpdateStrip(animate: true);
+        _ = ShowCurrentAsync();
+    }
+
+    private void RebindStrip()
+    {
+        for (var i = 0; i < _strip.Children.Count; i++) ((Border)_strip.Children[i]).Tag = i;
     }
 
     private void Select(int index)
@@ -117,10 +191,11 @@ public sealed class ImageViewer : OverlayBase
                 RenderTransform = new ScaleTransform(1, 1),
                 Child = image,
             };
+            frame.Tag = index;
             frame.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true;
-                Select(index);
+                Select((int)frame.Tag);
             };
             _strip.Children.Add(frame);
             _ = LoadThumbnailAsync(image, _files[i]);

@@ -16,7 +16,7 @@
                 </StackPanel>
                 <ScrollViewer x:Name="Scroll" Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly">
                     <Grid x:Name="ItemsHost">
-                        <Border x:Name="Highlight" CornerRadius="12" Background="#24FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                        <Border x:Name="Highlight" CornerRadius="12" Background="#14FFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                         <StackPanel x:Name="Items" KeyboardNavigation.DirectionalNavigation="Contained"/>
                     </Grid>
                 </ScrollViewer>

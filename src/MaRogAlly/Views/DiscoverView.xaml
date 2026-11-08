@@ -17,12 +17,12 @@
                     <!-- Classement (les plus joués) -->
                     <Border CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
                             Background="#E60A0C11" Visibility="{Binding RankText, Converter={StaticResource VisibleIf}}">
-                        <TextBlock Text="{Binding Rank}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="13" Foreground="White"/>
+                        <TextBlock Text="{Binding Rank}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="13" Foreground="White"/>
                     </Border>
                     <!-- Prix (vert en promotion ou gratuit), ou « Possédé » (bleu) -->
                     <Border x:Name="PriceBadge" CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Bottom"
                             Background="#E60A0C11" Visibility="{Binding CardBadge, Converter={StaticResource VisibleIf}}">
-                        <TextBlock Text="{Binding CardBadge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
+                        <TextBlock Text="{Binding CardBadge}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
                     </Border>
                 </Grid>
             </Button>

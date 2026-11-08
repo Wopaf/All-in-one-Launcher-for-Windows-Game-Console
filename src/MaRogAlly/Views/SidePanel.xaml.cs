@@ -57,6 +57,10 @@ public partial class SidePanel : OverlayBase
         parent.Children.Add(_frame);
     }
     protected override double EnterFromX => _centered ? 0 : _left ? -60 : 60;
+    // Menus (Démarrer, réseau) : un peu plus vifs, comme le menu Options.
+    protected override double FadeInMs => _menuStyle ? 170 : base.FadeInMs;
+    protected override double EnterMs => _menuStyle ? 270 : base.EnterMs;
+    public override double ExitMs => _menuStyle ? 140 : base.ExitMs;
 
     /// <summary>Ouvre le panneau contre la barre de gauche ; <paramref name="bottom"/> : posé en bas, à la hauteur de son contenu.</summary>
     public void AnchorLeft(bool bottom)
@@ -198,8 +202,11 @@ public partial class SidePanel : OverlayBase
         var a = over.A / 255.0;
         byte Mix(byte top, byte bottom) => (byte)Math.Round(top * a + bottom * (1 - a));
         Panel.Background = new SolidColorBrush(Color.FromRgb(Mix(over.R, under.R), Mix(over.G, under.G), Mix(over.B, under.B)));
+        // Contour très léger autour du panneau.
+        Panel.BorderBrush = (Brush)FindResource("PanelStroke");
+        Panel.BorderThickness = new Thickness(1);
         Highlight.Background = Brushes.Transparent;
-        Highlight.BorderBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
+        Highlight.SetResourceReference(Border.BorderBrushProperty, "Accent");
         Highlight.BorderThickness = new Thickness(2);
         Highlight.CornerRadius = new CornerRadius(14);
     }

@@ -95,8 +95,13 @@ public partial class MainMenu : OverlayBase
         // Mise en page faite avant de lancer l'animation : son calcul ne lui vole aucune image.
         UpdateLayout();
         base.OnOpened();
-        Anim.Slide(Panel, EnterFromX, 360);
+        Anim.Slide(Panel, EnterFromX, EnterMs);
     }
+
+    // Un peu plus vif que les autres panneaux.
+    protected override double FadeInMs => 170;
+    protected override double EnterMs => 270;
+    public override double ExitMs => 140;
 
     /// <summary>Retour depuis une page ouverte par le menu : la sélection reprend sur son bouton.</summary>
     protected override void FocusOnOpen()
@@ -139,9 +144,10 @@ public partial class MainMenu : OverlayBase
     }
 
     /// <summary>Bouton simple en pleine largeur : icône, libellé, chevron.</summary>
-    public void AddButton(string icon, string title, Action onClick)
+    /// <param name="alert">Pastille orange avant le chevron (ex. une clé d'API à revoir dans les Réglages).</param>
+    public void AddButton(string icon, string title, Action onClick, bool alert = false)
     {
-        var b = MenuButton(icon, title, onClick);
+        var b = MenuButton(icon, title, onClick, alert);
         b.Margin = new Thickness(0, 0, 0, 8);
         Items.Children.Add(b);
     }
@@ -161,7 +167,7 @@ public partial class MainMenu : OverlayBase
         Items.Children.Add(row);
     }
 
-    private Button MenuButton(string icon, string title, Action onClick)
+    private Button MenuButton(string icon, string title, Action onClick, bool alert = false)
     {
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
@@ -172,8 +178,16 @@ public partial class MainMenu : OverlayBase
         Grid.SetColumn(label, 1);
         grid.Children.Add(label);
         var chevron = new TextBlock { Text = "\uE76C", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 12, Foreground = (Brush)FindResource("TextMuted"), VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(chevron, 2);
-        grid.Children.Add(chevron);
+        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        if (alert)
+        {
+            var dot = SettingsView.AlertDot();
+            dot.Visibility = Visibility.Visible;
+            right.Children.Add(dot);
+        }
+        right.Children.Add(chevron);
+        Grid.SetColumn(right, 2);
+        grid.Children.Add(right);
 
         var b = new Button
         {

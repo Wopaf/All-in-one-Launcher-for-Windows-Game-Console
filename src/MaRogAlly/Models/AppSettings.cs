@@ -57,6 +57,8 @@ public sealed class AppSettings
 
     /// <summary>Couleur d'accent de l'interface (« #RRGGBB »).</summary>
     public string AccentColor { get; set; } = "#FF2E4D";
+    /// <summary>Police de l'interface (voir AppFont), appliquée au démarrage.</summary>
+    public string Font { get; set; } = UI.AppFont.Default;
 
     /// <summary>Catégories affichées en boutons au-dessus de la Bibliothèque.</summary>
     public List<string> LibraryCategories { get; set; } = [.. GameCategories.Defaults];

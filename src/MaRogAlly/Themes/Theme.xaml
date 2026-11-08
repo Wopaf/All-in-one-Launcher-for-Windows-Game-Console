@@ -23,6 +23,8 @@
     <SolidColorBrush x:Key="SurfaceClear" Color="#12FFFFFF"/>
     <SolidColorBrush x:Key="StrokeClear" Color="#14FFFFFF"/>
     <SolidColorBrush x:Key="Stroke" Color="#22FFFFFF"/>
+    <!-- Contour très léger des panneaux flottants (menus, centre de contrôle) -->
+    <SolidColorBrush x:Key="PanelStroke" Color="#1CFFFFFF"/>
     <!-- Remplacées au démarrage et à chaque changement de couleur d'accent (AccentTheme.Apply) -->
     <SolidColorBrush x:Key="Accent" Color="#FF2E4D"/>
     <SolidColorBrush x:Key="AccentSoft" Color="#55FF2E4D"/>
@@ -64,26 +66,26 @@
 
     <!-- ====== Typographie ====== -->
     <Style x:Key="H1" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="FontSize" Value="44"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
         <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
     </Style>
     <Style x:Key="H2" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="FontSize" Value="24"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
     </Style>
     <Style x:Key="Label" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource Body}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Body}"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextMuted}"/>
     </Style>
     <Style x:Key="BodyText" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource Body}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Body}"/>
         <Setter Property="FontSize" Value="16"/>
         <Setter Property="LineHeight" Value="24"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
@@ -100,7 +102,7 @@
         <Setter Property="Margin" Value="0,0,8,0"/>
     </Style>
     <Style x:Key="PadGlyphText" TargetType="TextBlock">
-        <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
@@ -122,7 +124,7 @@
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
         <Setter Property="Background" Value="#1FFFFFFF"/>
-        <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="FontSize" Value="17"/>
         <Setter Property="Padding" Value="26,12"/>
@@ -207,7 +209,7 @@
     <Style x:Key="RowButton" TargetType="ButtonBase">
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-        <Setter Property="FontFamily" Value="{StaticResource Body}"/>
+        <Setter Property="FontFamily" Value="{DynamicResource Body}"/>
         <Setter Property="FontSize" Value="17"/>
         <Setter Property="Padding" Value="18,13"/>
         <Setter Property="Margin" Value="0,2"/>
@@ -228,8 +230,9 @@
                             <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="#24FFFFFF"/>
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="#30FFFFFF"/>
+                            <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF"/>
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                            <Setter TargetName="Bd" Property="BorderThickness" Value="2"/>
                         </Trigger>
                         <!-- Sélection glissante : le fond de la ligne reste transparent (déclencheur placé en dernier pour l'emporter) -->
                         <Trigger Property="ui:RowOptions.Floating" Value="True">

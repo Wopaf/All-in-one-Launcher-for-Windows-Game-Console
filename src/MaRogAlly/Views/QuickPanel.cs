@@ -39,6 +39,12 @@ public sealed class QuickPanel : UserControl
     private readonly StackPanel _items = new();
     /// <summary>Petits boutons d'alimentation, en bas à droite : la dernière rangée de la navigation.</summary>
     private readonly StackPanel _power = new();
+    /// <summary>Cadre de sélection des boutons d'alimentation : il glisse de l'un à l'autre.</summary>
+    private readonly Border _powerRing = new() { Width = 38, Height = 38, CornerRadius = new CornerRadius(19), BorderThickness = new Thickness(2), HorizontalAlignment = HorizontalAlignment.Left, Opacity = 0, IsHitTestVisible = false };
+    private readonly TranslateTransform _powerRingMove = new();
+    private bool _powerRingShown;
+    /// <summary>Nom du bouton d'alimentation sélectionné, à côté des boutons, en couleur d'accent.</summary>
+    private readonly TextBlock _powerTip = new() { FontSize = 14, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), Opacity = 0, IsHitTestVisible = false };
     private readonly Border _box = new() { CornerRadius = new CornerRadius(14), BorderThickness = new Thickness(2), BorderBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)) };
     private readonly Grid _itemsHost = new() { Margin = new Thickness(0, 0, 0, 12) };
     private readonly TextBlock _status = new() { FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 8, 4, 0), Visibility = Visibility.Collapsed };
@@ -65,6 +71,7 @@ public sealed class QuickPanel : UserControl
         _interactive = interactive;
         _target = target;
         _tab = tab;
+        _box.SetResourceReference(Border.BorderBrushProperty, "Accent");
         _highlight = new SlideHighlight(_box, _itemsHost);
         _ticker.Tick += (_, _) => { _ticks++; _onTick?.Invoke(); };
         BuildLayout();
@@ -75,10 +82,10 @@ public sealed class QuickPanel : UserControl
     public void PlayEntrance()
     {
         // L'en-tête arrive avec le volet ; les lignes du contenu suivent l'une après l'autre.
-        Anim.Enter(_root, dx: -24, dy: 0, ms: 300);
+        Anim.Enter(_root, dx: -24, dy: 0, ms: 240);
         var index = 0;
         foreach (var row in _items.Children.OfType<FrameworkElement>().Take(12))
-            Anim.Enter(row, dx: -28, dy: 0, ms: 340, delay: 90 + index++ * 45);
+            Anim.Enter(row, dx: -28, dy: 0, ms: 270, delay: 70 + index++ * 35);
     }
 
     /// <summary>Construit l'onglet d'accueil une première fois en coulisse : la première ouverture du volet n'a plus à tout charger.</summary>
@@ -91,7 +98,7 @@ public sealed class QuickPanel : UserControl
     }
 
     /// <summary>Le contenu s'efface pendant que la fenêtre repart.</summary>
-    public void PlayExit() => Anim.Exit(_root, dx: -32, ms: 170);
+    public void PlayExit() => Anim.Exit(_root, dx: -32, ms: 140);
 
     // ================= Structure =================
 
@@ -107,9 +114,7 @@ public sealed class QuickPanel : UserControl
         _root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         _root.Margin = new Thickness(24, 22, 24, 18);
 
-        _root.Children.Add(BuildHeader());
-
-        var bar = new Grid { Margin = new Thickness(0, 14, 0, 14) };
+        var bar = new Grid { Margin = new Thickness(0, 2, 0, 14) };
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         bar.ColumnDefinitions.Add(new ColumnDefinition());
         bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -169,18 +174,30 @@ public sealed class QuickPanel : UserControl
         body.Children.Add(_status);
         Grid.SetRow(body, 2);
         _root.Children.Add(body);
+        // Batterie : à droite, sur la ligne du titre de l'onglet (elle ne glisse pas avec lui).
+        if (BuildBattery() is { } battery)
+        {
+            Grid.SetRow(battery, 2);
+            _root.Children.Add(battery);
+        }
 
         // Pied du volet : les aides à gauche, les petits boutons d'alimentation à droite.
         var footer = new Grid();
         footer.ColumnDefinitions.Add(new ColumnDefinition());
         footer.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         footer.Children.Add(_hints);
+        _powerTip.SetResourceReference(TextBlock.ForegroundProperty, "Accent");
+        _powerTip.FontFamily = (FontFamily)FindResource("Display");
+        _powerTip.FontWeight = FontWeights.SemiBold;
+        footer.Children.Add(_powerTip);
         _power.Orientation = Orientation.Horizontal;
-        _power.VerticalAlignment = VerticalAlignment.Bottom;
         _power.Children.Add(PowerButton("\uE708", "Mettre en veille", Sleep));
         _power.Children.Add(PowerButton("\uE7E8", "Éteindre", ConfirmShutdown));
-        Grid.SetColumn(_power, 1);
-        footer.Children.Add(_power);
+        _powerRing.SetResourceReference(Border.BorderBrushProperty, "Accent");
+        _powerRing.RenderTransform = _powerRingMove;
+        var power = new Grid { VerticalAlignment = VerticalAlignment.Bottom, Children = { _power, _powerRing } };
+        Grid.SetColumn(power, 1);
+        footer.Children.Add(power);
         Grid.SetRow(footer, 3);
         _root.Children.Add(footer);
 
@@ -188,21 +205,20 @@ public sealed class QuickPanel : UserControl
         var round = new CornerRadius(22);
         // L'ombre est portée par ce fond immobile : elle n'est pas recalculée quand le contenu s'anime.
         var shaded = new Border { CornerRadius = round, Background = (Brush)FindResource("Bg"), Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 36, ShadowDepth = 0, Opacity = 0.55 } };
-        Content = new Grid { Children = { shaded, new Border { CornerRadius = round, Background = (Brush)FindResource("PanelBg") }, _root } };
+        Content = new Grid { Children = { shaded, new Border { CornerRadius = round, Background = (Brush)FindResource("PanelBg"), BorderBrush = (Brush)FindResource("PanelStroke"), BorderThickness = new Thickness(1) }, _root } };
     }
 
-    private FrameworkElement BuildHeader()
+    /// <summary>Niveau de batterie (rien sans batterie), calé sur la hauteur du titre de l'onglet.</summary>
+    private FrameworkElement? BuildBattery()
     {
-        var header = new Grid();
         var power = Power.Read();
-        if (power.HasBattery)
-        {
-            var battery = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            battery.Children.Add(new TextBlock { Text = Power.Glyph(power), FontFamily = (FontFamily)FindResource("Icons"), FontSize = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
-            battery.Children.Add(new TextBlock { Text = $"{power.Percent} %", FontSize = 15, VerticalAlignment = VerticalAlignment.Center });
-            header.Children.Add(battery);
-        }
-        return header;
+        if (!power.HasBattery) return null;
+        // Même dessin que la batterie en haut à droite de l'application : grande icône et pourcentage, couleur selon le niveau.
+        var color = new SolidColorBrush(Power.LevelColor(power.Percent));
+        var battery = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 4, 0) };
+        battery.Children.Add(new TextBlock { Text = Power.Glyph(power), FontFamily = (FontFamily)FindResource("Icons"), FontSize = 26, Foreground = color, VerticalAlignment = VerticalAlignment.Center });
+        battery.Children.Add(new TextBlock { Text = $"{power.Percent} %", FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 18, Foreground = color, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) });
+        return battery;
     }
 
     private Border PadGlyph(string text) => new()
@@ -314,7 +330,6 @@ public sealed class QuickPanel : UserControl
         {
             Width = 38, Height = 38, CornerRadius = new CornerRadius(19),
             Background = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF)),
-            BorderBrush = Brushes.Transparent, BorderThickness = new Thickness(2),
             Child = new TextBlock { Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 15, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)FindResource("TextSecondary") },
         };
         var b = new Button
@@ -326,16 +341,60 @@ public sealed class QuickPanel : UserControl
         b.GotKeyboardFocus += (_, _) =>
         {
             _highlight.Hide();
-            circle.BorderBrush = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
-            SetStatus(tip);
+            MovePowerRing(b);
+            ShowPowerTip(tip);
         };
-        b.LostKeyboardFocus += (_, _) =>
+        // Vers l'autre bouton d'alimentation : le cadre et le texte y passent ; ailleurs, ils s'effacent.
+        b.LostKeyboardFocus += (_, _) => Dispatcher.BeginInvoke(() =>
         {
-            circle.BorderBrush = Brushes.Transparent;
-            if (_status.Text == tip) SetStatus("");
-        };
+            if (_power.IsKeyboardFocusWithin) return;
+            _powerRingShown = false;
+            Anim.Fade(_powerRing, 0, 140);
+            ShowPowerTip(null);
+        }, DispatcherPriority.Input);
         b.Click += (_, _) => onClick();
         return b;
+    }
+
+    private void MovePowerRing(Button b)
+    {
+        var x = b.TranslatePoint(new Point(0, 0), _power).X;
+        if (_powerRingShown)
+            _powerRingMove.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(x, Anim.Ms(230)) { EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.2 } });
+        else
+        {
+            _powerRingMove.BeginAnimation(TranslateTransform.XProperty, null);
+            _powerRingMove.X = x;
+        }
+        _powerRingShown = true;
+        Anim.Fade(_powerRing, 1, 150);
+    }
+
+    private int _tipVersion;
+
+    /// <summary>Nom du bouton d'alimentation : l'ancien s'efface, puis le nouveau apparaît en fondu (null : il s'efface).</summary>
+    private void ShowPowerTip(string? text)
+    {
+        var version = ++_tipVersion;
+        if (text is null)
+        {
+            Anim.Fade(_powerTip, 0, 160);
+            return;
+        }
+        if (_powerTip.Opacity < 0.05 || _powerTip.Text == text)
+        {
+            _powerTip.BeginAnimation(OpacityProperty, null);
+            _powerTip.Opacity = Math.Min(_powerTip.Opacity, 1);
+            _powerTip.Text = text;
+            Anim.Fade(_powerTip, 1, 220);
+            return;
+        }
+        Anim.Fade(_powerTip, 0, 110, () =>
+        {
+            if (version != _tipVersion) return;
+            _powerTip.Text = text;
+            Anim.Fade(_powerTip, 1, 220);
+        });
     }
 
     /// <summary>Veille : le volet se referme d'abord (le jeu reprend), puis l'appareil s'endort.</summary>
@@ -946,7 +1005,35 @@ public sealed class QuickPanel : UserControl
             AddNote("Aucune capture pour le moment. Elles apparaîtront ici après un appui sur « Capture d'écran » dans l'accueil.");
             return;
         }
-        SetHints(("A", "Agrandir"), ("B", "Fermer"));
+        SetHints(("A", "Agrandir"), ("Y", "Supprimer"), ("B", "Fermer"));
+        var buttons = new Dictionary<Button, string>();
+        string? pending = null;
+        // Y : supprimer la capture sélectionnée (un deuxième appui confirme) ; tout autre bouton annule.
+        _screenKeys = action =>
+        {
+            if (action != NavAction.Secondary)
+            {
+                if (pending is not null) { pending = null; SetStatus(""); }
+                return false;
+            }
+            if (Keyboard.FocusedElement is not Button focused || !buttons.TryGetValue(focused, out var path)) return true;
+            if (pending != path)
+            {
+                pending = path;
+                SetStatus("Supprimer cette capture ? Appuie de nouveau sur Y.");
+                return true;
+            }
+            var position = files.IndexOf(path);
+            if (!ScreenCapture.Delete(path))
+            {
+                pending = null;
+                SetStatus("Impossible de supprimer cette capture.");
+                return true;
+            }
+            RefreshGallery(position);
+            SetStatus("Capture envoyée à la Corbeille.");
+            return true;
+        };
         // Trois vignettes par rangée, séparées de 8 points (chacune perd la même largeur).
         const int columns = 3, gap = 8, height = 80;
         for (var i = 0; i < files.Count; i += columns)
@@ -961,6 +1048,7 @@ public sealed class QuickPanel : UserControl
                 var frame = new Border { Height = height, CornerRadius = new CornerRadius(10), ClipToBounds = true, Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)), Child = image };
                 Rounded.SetRadius(frame, 10);
                 var button = RowButton(frame, height, () => ImageRequested?.Invoke(files, index));
+                buttons[button] = files[j];
                 button.Margin = new Thickness(column * gap / 3.0, 0, (columns - 1 - column) * gap / 3.0, 0);
                 Grid.SetColumn(button, column);
                 grid.Children.Add(button);
@@ -968,6 +1056,24 @@ public sealed class QuickPanel : UserControl
             }
             _items.Children.Add(grid);
         }
+    }
+
+    /// <summary>Galerie reconstruite (capture supprimée) ; la sélection reste à la même place.</summary>
+    public void RefreshGallery(int focusIndex = 0)
+    {
+        if (Names[_tab] != "Galerie") return;
+        BeginScreen(Names[_tab]);
+        SetHints(("A", "Valider"), ("B", "Fermer"));
+        BuildGallery();
+        var thumbs = NavRows().Take(Math.Max(0, NavRows().Count - 1)).SelectMany(r => r).ToList();
+        if (thumbs.Count == 0)
+        {
+            FocusFirst();
+            return;
+        }
+        var target = thumbs[Math.Clamp(focusIndex, 0, thumbs.Count - 1)];
+        _box.Visibility = Visibility.Visible;
+        if (_interactive) Dispatcher.BeginInvoke(() => FocusNav.Focus(target), DispatcherPriority.Loaded);
     }
 
     private async Task LoadThumbnailAsync(Image image, string path, int screen)

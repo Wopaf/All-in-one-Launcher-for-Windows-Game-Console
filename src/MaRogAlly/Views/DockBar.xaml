@@ -36,7 +36,7 @@
         <Border Grid.RowSpan="3" Background="{DynamicResource Bg}"/>
         <Border Grid.RowSpan="3" Background="{DynamicResource PanelBg}" BorderBrush="{StaticResource Stroke}" BorderThickness="0,0,1,0"/>
         <!-- Cadre de sélection : glisse d'un bouton à l'autre -->
-        <Border x:Name="Highlight" Grid.RowSpan="3" CornerRadius="14" Background="#24FFFFFF" BorderBrush="White" BorderThickness="2"/>
+        <Border x:Name="Highlight" Grid.RowSpan="3" CornerRadius="14" Background="#24FFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
 
         <!-- Menu Windows maison : petite maison -->
         <Button x:Name="MenuButton" Style="{StaticResource DockButton}" Margin="0,14,0,8" Click="Menu_Click" ToolTip="Menu Démarrer">

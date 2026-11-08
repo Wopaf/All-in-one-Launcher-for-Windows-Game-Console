@@ -5,16 +5,16 @@
     <UserControl.Resources>
         <!-- Commande pilotée par un bouton de la manette : pastille du bouton + libellé (cliquable à la souris) -->
         <Style x:Key="ControlPill" TargetType="Border">
-            <Setter Property="CornerRadius" Value="16"/>
-            <Setter Property="Padding" Value="5,4,14,4"/>
+            <!-- Comme les boutons de catégorie de la Bibliothèque : pilule de 34, fond sombre presque opaque -->
+            <Setter Property="CornerRadius" Value="17"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="6,0,16,0"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
-            <Setter Property="Background" Value="#14FFFFFF"/>
-            <Setter Property="BorderBrush" Value="#1AFFFFFF"/>
-            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="#E61C2029"/>
             <Setter Property="Cursor" Value="Hand"/>
         </Style>
         <Style x:Key="PillText" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
@@ -82,7 +82,7 @@
             <ScrollViewer x:Name="ListScroll" Grid.Row="1" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly"
                           OpacityMask="{StaticResource FadeBottom}">
                 <Grid x:Name="ListHost" Margin="0,0,0,60">
-                    <Border x:Name="ListHighlight" CornerRadius="12" Background="#24FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                    <Border x:Name="ListHighlight" CornerRadius="14" Background="Transparent" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                     <StackPanel x:Name="List"/>
                 </Grid>
             </ScrollViewer>
@@ -102,7 +102,7 @@
                     <Border x:Name="PlatinumBadge" CornerRadius="6" Padding="8,2" Background="#33FFC83D" VerticalAlignment="Center" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE735;" FontFamily="{StaticResource Icons}" FontSize="11" Foreground="{StaticResource Gold}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="PLATINE" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource Gold}" VerticalAlignment="Center"/>
+                            <TextBlock Text="PLATINE" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="11" Foreground="{StaticResource Gold}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                 </StackPanel>
@@ -115,13 +115,13 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="PercentText" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="30"
+                    <TextBlock x:Name="PercentText" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="30"
                                Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,18,0"/>
                     <Grid x:Name="ProgressBar" Grid.Column="1" Height="8" VerticalAlignment="Center">
                         <Border CornerRadius="4" Background="#1FFFFFFF"/>
                         <Border x:Name="ProgressFill" CornerRadius="4" HorizontalAlignment="Left" Width="0" Background="#E6FFFFFF"/>
                     </Grid>
-                    <TextBlock x:Name="CountText" Grid.Column="2" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15"
+                    <TextBlock x:Name="CountText" Grid.Column="2" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="15"
                                Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="18,0,0,0"/>
                 </Grid>
             </StackPanel>
@@ -136,9 +136,11 @@
                     <Border Style="{StaticResource PadGlyph}" Margin="0,0,8,0" VerticalAlignment="Center">
                         <TextBlock Text="LT" Style="{StaticResource PadGlyphText}"/>
                     </Border>
-                    <Border CornerRadius="17" Background="#12FFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1" Padding="3">
+                    <!-- Comme les catégories de la Bibliothèque : le fond blanc glisse jusqu'au choix actif -->
+                    <Grid x:Name="SegmentHost">
+                        <Border x:Name="SegmentPill" CornerRadius="17" Background="#F3F5F9"/>
                         <StackPanel x:Name="Segments" Orientation="Horizontal"/>
-                    </Border>
+                    </Grid>
                     <Border Style="{StaticResource PadGlyph}" Margin="8,0,0,0" VerticalAlignment="Center">
                         <TextBlock Text="RT" Style="{StaticResource PadGlyphText}"/>
                     </Border>
@@ -156,7 +158,7 @@
             <ScrollViewer x:Name="ItemsScroll" Grid.Row="2" Focusable="False" VerticalScrollBarVisibility="Hidden" PanningMode="VerticalOnly"
                           OpacityMask="{StaticResource FadeBottom}">
                 <Grid x:Name="ItemsHost" Margin="0,0,0,60">
-                    <Border x:Name="ItemsHighlight" CornerRadius="12" Background="#24FFFFFF" BorderBrush="#30FFFFFF" BorderThickness="1"/>
+                    <Border x:Name="ItemsHighlight" CornerRadius="14" Background="Transparent" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                     <StackPanel x:Name="Items"/>
                 </Grid>
             </ScrollViewer>

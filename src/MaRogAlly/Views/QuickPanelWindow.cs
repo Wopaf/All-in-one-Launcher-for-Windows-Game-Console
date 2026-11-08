@@ -27,7 +27,7 @@ public sealed class QuickPanelWindow : Window
     /// <summary>Durée pendant laquelle on redemande le premier plan, puis nombre de relevés (100 ms) sans lui avant de fermer.</summary>
     private const int Insist = 1500, LostTicks = 3;
     /// <summary>Le volet arrive vite puis se pose, et repart plus vite encore : le jeu ne doit pas attendre.</summary>
-    private const int OpenMs = 280, CloseMs = 190;
+    private const int OpenMs = 220, CloseMs = 150;
     private static readonly IEasingFunction OpenEase = new QuinticEase { EasingMode = EasingMode.EaseOut };
     private static readonly IEasingFunction CloseEase = new CubicEase { EasingMode = EasingMode.EaseIn };
 

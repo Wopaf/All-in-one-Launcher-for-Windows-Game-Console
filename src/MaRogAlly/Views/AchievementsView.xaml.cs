@@ -57,6 +57,7 @@ public partial class AchievementsView : UserControl
         InitializeComponent();
         _listHighlight = new SlideHighlight(ListHighlight, ListHost);
         _itemsHighlight = new SlideHighlight(ItemsHighlight, ItemsHost);
+        _segmentPill = new SlideHighlight(SegmentPill, SegmentHost);
         _showTimer.Tick += (_, _) => { _showTimer.Stop(); BuildItems(); };
         SizeChanged += (_, _) => ApplyCompact(ActualHeight < 760);
         ItemsScroll.ScrollChanged += (_, _) => LoadVisibleIcons();
@@ -214,8 +215,9 @@ public partial class AchievementsView : UserControl
         Grid.SetColumn(right, 2);
         grid.Children.Add(right);
 
-        var row = new Button { Content = grid, Tag = g, Style = (Style)FindResource("RowButton"), Padding = new Thickness(12, 8, 16, 8) };
+        var row = new Button { Content = grid, Tag = g, Style = (Style)FindResource("RowButton"), Padding = new Thickness(12, 8, 16, 8), Margin = new Thickness(0, 4, 0, 4) };
         RowOptions.SetFloating(row, true);
+        RowOptions.SetCard(row, true);
         row.GotKeyboardFocus += (_, _) =>
         {
             _lastGameRow = row;
@@ -347,7 +349,9 @@ public partial class AchievementsView : UserControl
         }
     }
 
-    /// <summary>Choix des succès affichés, avec leur nombre : le segment actif est plein.</summary>
+    private readonly SlideHighlight _segmentPill;
+
+    /// <summary>Choix des succès affichés, avec leur nombre : le fond blanc glisse jusqu'au choix actif.</summary>
     private void BuildSegments(AchievementGame g)
     {
         Segments.Children.Clear();
@@ -369,12 +373,15 @@ public partial class AchievementsView : UserControl
             });
             var seg = new Border
             {
-                CornerRadius = new CornerRadius(14), Padding = new Thickness(13, 5, 13, 5), Cursor = Cursors.Hand, Child = content,
-                Background = active ? new SolidColorBrush(Color.FromRgb(0xF3, 0xF5, 0xF9)) : Brushes.Transparent,
+                Height = 34, CornerRadius = new CornerRadius(17), Padding = new Thickness(16, 0, 16, 0), Cursor = Cursors.Hand, Child = content,
+                Margin = new Thickness(0, 0, i == SegmentLabels.Length - 1 ? 0 : 8, 0),
+                Background = active ? Brushes.Transparent : GamesView.ChipBackground(),
             };
             seg.MouseLeftButtonUp += (_, _) => SetSegment((Segment)index);
             Segments.Children.Add(seg);
         }
+        var target = (FrameworkElement)Segments.Children[(int)_segment];
+        Dispatcher.BeginInvoke(() => _segmentPill.MoveTo(target), System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
     private Button BuildItemRow(Achievement a)
@@ -450,7 +457,8 @@ public partial class AchievementsView : UserControl
         Grid.SetColumn(right, 2);
         grid.Children.Add(right);
 
-        var row = new Button { Content = grid, Style = (Style)FindResource("RowButton"), Padding = new Thickness(14, 10, 18, 10) };
+        var row = new Button { Content = grid, Style = (Style)FindResource("RowButton"), Padding = new Thickness(14, 10, 18, 10), Margin = new Thickness(0, 4, 0, 4) };
+        RowOptions.SetCard(row, true);
         _pendingIcons.Add((row, () => LoadIcon(icon, a.Unlocked ? a.Icon : a.IconLocked ?? a.Icon, a.Icon)));
         RowOptions.SetFloating(row, true);
         row.GotKeyboardFocus += (_, _) =>

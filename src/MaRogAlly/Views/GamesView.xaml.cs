@@ -48,6 +48,12 @@ public partial class GamesView : UserControl
     private bool _installedOnly;
     public GameFilter Filter { get; } = new();
 
+    /// <summary>
+    /// Mes Jeux : une seule rangée qui défile à l'horizontale, comme les listes de Découverte (mêmes jaquettes, même écart).
+    /// La Bibliothèque garde sa grille de deux rangées.
+    /// </summary>
+    private bool ListMode => _installedOnly;
+
     public Game? Selected => _index >= 0 && _index < _visible.Count ? _visible[_index] : null;
     public IReadOnlyList<Game> Source => _source;
 
@@ -81,10 +87,10 @@ public partial class GamesView : UserControl
         RowsList.Loaded += (_, _) => _scroller ??= RowsList.Template.FindName("Scroller", RowsList) as ScrollViewer;
         // Première ouverture de l'onglet : les jaquettes apparaissent à ce moment-là.
         IsVisibleChanged += (_, _) => RevealTiles();
-        // Molette : rangée précédente / suivante (une seule rangée est visible).
+        // Molette : rangée précédente / suivante ; en liste, jeu précédent / suivant.
         RowsList.PreviewMouseWheel += (_, e) =>
         {
-            Handle(e.Delta > 0 ? NavAction.Up : NavAction.Down);
+            Handle(ListMode ? (e.Delta > 0 ? NavAction.Left : NavAction.Right) : e.Delta > 0 ? NavAction.Up : NavAction.Down);
             e.Handled = true;
         };
     }
@@ -142,8 +148,7 @@ public partial class GamesView : UserControl
         var tiles = new List<UIElement>();
         for (var r = _firstRow; r < _firstRow + VisibleRows; r++)
         {
-            if (RowsList.ItemContainerGenerator.ContainerFromIndex(r) is not DependencyObject row
-                || VisualTreeHelper.GetChildrenCount(row) == 0 || VisualTreeHelper.GetChild(row, 0) is not ItemsControl tilesOfRow) continue;
+            if (TilesOf(RowsList.ItemContainerGenerator.ContainerFromIndex(r)) is not { } tilesOfRow) continue;
             for (var c = 0; c < tilesOfRow.Items.Count; c++)
                 if (tilesOfRow.ItemContainerGenerator.ContainerFromIndex(c) is UIElement tile) tiles.Add(tile);
         }
@@ -214,6 +219,12 @@ public partial class GamesView : UserControl
         var compact = ActualHeight < 760;
         ApplyCompact(compact);
 
+        if (ListMode)
+        {
+            LayoutList(width);
+            return;
+        }
+
         // Deux rangées sous la fiche : la hauteur restante fixe la taille des vignettes, la largeur le nombre de colonnes.
         var bar = CategoryHost.Visibility == Visibility.Visible ? 34 : 0;
         var rowTarget = Math.Min(ActualHeight * 0.3, (ActualHeight - DetailPanel.Height - DetailPanel.Margin.Bottom - 40 - bar) / VisibleRows);
@@ -245,6 +256,63 @@ public partial class GamesView : UserControl
         Dispatcher.BeginInvoke(() => ScrollToSelection(false));
     }
 
+    /// <summary>Mes Jeux : jaquettes de la taille de celles de Découverte, un peu plus de cinq visibles.</summary>
+    private void LayoutList(double width)
+    {
+        var tileW = Math.Clamp(Math.Floor((width - SidePadding * 2 + Gap) / 5.5 - Gap), 120, 260);
+        var tileH = Math.Floor(tileW * 1.5);
+        TileWidth = tileW;
+        TileHeight = tileH;
+        TileMargin = new Thickness(0, 0, Gap, 0);
+        var overflow = Math.Ceiling((tileH * 0.045 + 26) / 2);
+        RowHeight = tileH + overflow * 2;
+        RowPadding = new Thickness(SidePadding, 0, 0, 0);
+        RowsList.Height = RowHeight;
+        RowsList.Padding = new Thickness(0);
+        RowsList.Margin = new Thickness(0);
+        // Places vides jusqu'au bord de l'écran quand il y a peu de jeux.
+        var slots = Math.Max(1, (int)Math.Ceiling((width - SidePadding + Gap) / (tileW + Gap)));
+        if (slots != _slots)
+        {
+            _slots = slots;
+            BuildRows();
+        }
+        Dispatcher.BeginInvoke(() => ScrollToSelection(false));
+    }
+
+    private int _slots;
+    /// <summary>Défilement horizontal de la liste (Mes Jeux).</summary>
+    private double _listOffset;
+
+    /// <summary>Vignettes d'une rangée : directement l'ItemsControl (grille), ou dans sa zone de défilement (liste).</summary>
+    private static ItemsControl? TilesOf(DependencyObject? row)
+    {
+        if (row is null || VisualTreeHelper.GetChildrenCount(row) == 0) return null;
+        return VisualTreeHelper.GetChild(row, 0) switch
+        {
+            ItemsControl tiles => tiles,
+            ScrollViewer { Content: ItemsControl tiles } => tiles,
+            _ => null,
+        };
+    }
+
+    /// <summary>Liste : la jaquette choisie reste à l'écart des bords (comme dans Découverte), la rangée glisse sinon.</summary>
+    private void ScrollList(bool animate)
+    {
+        if (RowsList.ItemContainerGenerator.ContainerFromIndex(0) is not DependencyObject row
+            || VisualTreeHelper.GetChildrenCount(row) == 0 || VisualTreeHelper.GetChild(row, 0) is not ScrollViewer scroll) return;
+        var width = scroll.ViewportWidth;
+        if (width <= 0) return;
+        var step = TileWidth + Gap;
+        var x = _index * step;
+        var view = width - SidePadding * 2;
+        if (x < _listOffset) _listOffset = x;
+        else if (x + TileWidth > _listOffset + view) _listOffset = x + TileWidth - view;
+        _listOffset = Math.Clamp(_listOffset, 0, Math.Max(0, scroll.ScrollableWidth));
+        if (animate) Anim.ScrollToH(scroll, _listOffset);
+        else scroll.ScrollToHorizontalOffset(_listOffset);
+    }
+
     /// <summary>Fiche du jeu plus ramassée sur petit écran : logo et titre réduits.</summary>
     private void ApplyCompact(bool compact)
     {
@@ -260,6 +328,19 @@ public partial class GamesView : UserControl
 
     private void BuildRows()
     {
+        if (ListMode)
+        {
+            // Une seule rangée : tous les jeux, puis des places vides jusqu'au bord de l'écran s'il en manque.
+            _cols = Math.Max(1, _visible.Count);
+            var list = _visible.Cast<object>().ToList();
+            while (_visible.Count > 0 && list.Count < _slots) list.Add(ShadowTile.Instance);
+            RowsList.ItemTemplate = (DataTemplate)FindResource("ListRowTemplate");
+            RowsList.ItemsSource = _visible.Count == 0 ? new List<List<object>>() : [list];
+            // Rangée recréée : son décalage est réappliqué une fois générée.
+            Dispatcher.BeginInvoke(() => ScrollToSelection(false), System.Windows.Threading.DispatcherPriority.Loaded);
+            return;
+        }
+        RowsList.ItemTemplate = (DataTemplate)FindResource("RowTemplate");
         var rows = new List<List<object>>();
         for (var i = 0; i < _visible.Count; i += _cols)
         {
@@ -361,13 +442,19 @@ public partial class GamesView : UserControl
 
     private static System.Windows.Media.Animation.KeyTime At(double ms) => System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms));
 
-    /// <summary>Deux rangées visibles au plus.</summary>
-    private const int VisibleRows = 2;
+    /// <summary>Deux rangées visibles au plus (une seule en liste).</summary>
+    private int VisibleRows => ListMode ? 1 : 2;
     private int _firstRow;
 
     /// <summary>On ne défile que si la sélection sort des deux rangées visibles.</summary>
     private void ScrollToSelection(bool animate)
     {
+        if (ListMode)
+        {
+            if (_index >= 0) ScrollList(animate);
+            Dots.Visibility = Visibility.Collapsed;
+            return;
+        }
         _scroller ??= RowsList.Template.FindName("Scroller", RowsList) as ScrollViewer;
         if (_scroller is null || _index < 0) return;
         var row = _index / _cols;
@@ -448,6 +535,9 @@ public partial class GamesView : UserControl
     }
 
     private bool _active = true;
+
+    /// <summary>Sélection d'un jeu par sa position (« --select », pour vérifier l'affichage).</summary>
+    public void PreviewSelect(int index) => Select(index);
 
     public void SelectGame(Game game)
     {
@@ -587,13 +677,21 @@ public partial class GamesView : UserControl
         foreach (var chip in CategoryBar.Children.OfType<Button>())
         {
             var active = chip.Tag is string key && key == ActiveChip;
-            chip.Background = active ? Brushes.Transparent : new SolidColorBrush(Color.FromArgb(0x16, 0xFF, 0xFF, 0xFF));
+            chip.Background = active ? Brushes.Transparent : ChipBackground();
             // Le texte change de couleur pendant que le fond arrive.
             var text = new SolidColorBrush(chip.Foreground is SolidColorBrush current ? current.Color : inactive);
             chip.Foreground = text;
             text.BeginAnimation(SolidColorBrush.ColorProperty, new System.Windows.Media.Animation.ColorAnimation(active ? Color.FromRgb(0x0A, 0x0C, 0x11) : inactive, Anim.Ms(170)));
         }
         Dispatcher.BeginInvoke(MoveCategoryPill, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Fond des catégories inactives : la couleur du thème presque opaque, éclaircie, lisible même sur un visuel clair.</summary>
+    public static Brush ChipBackground()
+    {
+        var bg = ((SolidColorBrush)Application.Current.FindResource("Bg")).Color;
+        static byte Lift(byte c) => (byte)Math.Min(255, c + 22);
+        return new SolidColorBrush(Color.FromArgb(0xE6, Lift(bg.R), Lift(bg.G), Lift(bg.B)));
     }
 
     private void MoveCategoryPill()
@@ -684,8 +782,7 @@ public partial class GamesView : UserControl
 
     private void PressTile()
     {
-        if (_index < 0 || RowsList.ItemContainerGenerator.ContainerFromIndex(_index / _cols) is not DependencyObject row
-            || VisualTreeHelper.GetChildrenCount(row) == 0 || VisualTreeHelper.GetChild(row, 0) is not ItemsControl tilesOfRow
+        if (_index < 0 || TilesOf(RowsList.ItemContainerGenerator.ContainerFromIndex(_index / _cols)) is not { } tilesOfRow
             || tilesOfRow.ItemContainerGenerator.ContainerFromIndex(_index % _cols) is not DependencyObject tile
             || FindNamed(tile, "Card") is not { } card) return;
         if (card.RenderTransform is not ScaleTransform scale)

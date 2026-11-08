@@ -7,7 +7,7 @@
         <Style x:Key="Key" TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
             <Setter Property="FontSize" Value="24"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Height" Value="82"/>
@@ -108,7 +108,7 @@
                             <Border Margin="3,0" CornerRadius="28" Background="#1AFFFFFF" BorderBrush="{DynamicResource Accent}" BorderThickness="2" Padding="26,0" Height="56">
                                 <Grid VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock x:Name="ValueText" FontFamily="{StaticResource Display}" FontSize="26" Foreground="{StaticResource TextPrimary}"
+                                        <TextBlock x:Name="ValueText" FontFamily="{DynamicResource Display}" FontSize="26" Foreground="{StaticResource TextPrimary}"
                                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                         <!-- Curseur qui clignote -->
                                         <Border x:Name="Caret" Width="2" Height="28" Margin="3,0,0,0" Background="{DynamicResource Accent}" VerticalAlignment="Center">

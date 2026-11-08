@@ -23,7 +23,7 @@
                             <Grid ui:Rounded.Radius="14" Background="#1A1F2A">
                                 <ContentPresenter/>
                             </Grid>
-                            <Border x:Name="Frame" CornerRadius="14" BorderThickness="3" BorderBrush="White" Opacity="0" Margin="-1"/>
+                            <Border x:Name="Frame" CornerRadius="14" BorderThickness="3" BorderBrush="{DynamicResource Accent}" Opacity="0" Margin="-1"/>
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsKeyboardFocused" Value="True">
@@ -63,7 +63,7 @@
                     <ControlTemplate TargetType="Button">
                         <Grid x:Name="Root">
                             <Border x:Name="Bd" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Background="#1AFFFFFF" BorderBrush="#2EFFFFFF" BorderThickness="1"/>
-                            <Border x:Name="Frame" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" BorderBrush="White" BorderThickness="3" Opacity="0" Margin="-1"/>
+                            <Border x:Name="Frame" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" BorderBrush="{DynamicResource Accent}" BorderThickness="3" Opacity="0" Margin="-1"/>
                             <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
                                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
                         </Grid>
@@ -105,7 +105,7 @@
                     <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
                     <Border x:Name="PriceBadge" CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
                             Background="#E60A0C11" Visibility="{Binding Badge, Converter={StaticResource VisibleIf}}">
-                        <TextBlock Text="{Binding Badge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
+                        <TextBlock Text="{Binding Badge}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
                     </Border>
                     <!-- Dans la liste de souhaits -->
                     <Border CornerRadius="11" Width="22" Height="22" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#E60A0C11"
@@ -121,7 +121,7 @@
                         </Border.Background>
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{Binding Platform.Logo}" Fill="White" Stretch="Uniform" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding Platform.Name}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="12"
+                            <TextBlock Text="{Binding Platform.Name}" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="12"
                                        Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
                     </Border>
@@ -154,14 +154,14 @@
                             </LinearGradientBrush>
                         </Border.Background>
                         <StackPanel>
-                            <TextBlock Text="{Binding Title}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="14"
+                            <TextBlock Text="{Binding Title}" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="14"
                                        Foreground="{StaticResource TextPrimary}" TextWrapping="Wrap" MaxHeight="38" TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{Binding Countdown}" FontSize="12" Foreground="{StaticResource TextSecondary}" Margin="0,1,0,0"/>
                         </StackPanel>
                     </Border>
                     <Border x:Name="Badge" CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
                             Background="{StaticResource FreeGreen}">
-                        <TextBlock Text="{Binding Badge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="11" Foreground="White"/>
+                        <TextBlock Text="{Binding Badge}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="11" Foreground="White"/>
                     </Border>
                 </Grid>
             </Button>
@@ -183,7 +183,11 @@
                 <Grid>
                     <TextBlock Text="{Binding Name}" Margin="10" TextWrapping="Wrap" VerticalAlignment="Center" TextAlignment="Center"
                                FontSize="14" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
-                    <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
+                    <!-- Sans jaquette verticale : l'image horizontale entière, sur un fond flouté tiré d'elle-même -->
+                    <Image x:Name="CoverBlur" ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill" Opacity="0.5" Visibility="Collapsed">
+                        <Image.Effect><BlurEffect Radius="22" KernelType="Gaussian"/></Image.Effect>
+                    </Image>
+                    <Image x:Name="Cover" ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
                     <!-- Dans la liste de souhaits -->
                     <Border CornerRadius="11" Width="22" Height="22" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#E60A0C11"
                             Visibility="{Binding IsWished, Converter={StaticResource VisibleIf}}">
@@ -191,11 +195,15 @@
                     </Border>
                     <Border x:Name="PriceBadge" CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Bottom"
                             Background="#E60A0C11" Visibility="{Binding CardBadge, Converter={StaticResource VisibleIf}}">
-                        <TextBlock Text="{Binding CardBadge}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
+                        <TextBlock Text="{Binding CardBadge}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
                     </Border>
                 </Grid>
             </Button>
             <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding CoverWide}" Value="True">
+                    <Setter TargetName="CoverBlur" Property="Visibility" Value="Visible"/>
+                    <Setter TargetName="Cover" Property="Stretch" Value="Uniform"/>
+                </DataTrigger>
                 <DataTrigger Binding="{Binding IsDiscounted}" Value="True">
                     <Setter TargetName="PriceBadge" Property="Background" Value="{StaticResource FreeGreen}"/>
                 </DataTrigger>
@@ -226,53 +234,12 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <!-- Page qui défile : à la une, recherche, la rangée En tendance (ou les résultats d'une recherche),
-         une rangée par liste (liste de souhaits comprise), puis les jeux offerts par Epic. La page suit la sélection (voir ScrollPage). -->
+    <!-- Page qui défile : recherche, à la une, les jeux offerts par Epic, la rangée En tendance (ou les résultats d'une recherche),
+         puis une rangée par liste (liste de souhaits comprise). La page suit la sélection (voir ScrollPage). -->
     <ScrollViewer x:Name="PageScroll" Focusable="False" VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly">
         <StackPanel x:Name="PageContent" Margin="0,14,0,48">
-        <!-- ====== À la une : les jeux du moment, l'un après l'autre (←→ quand il est sélectionné) ====== -->
-        <Button x:Name="Spotlight" Style="{StaticResource BannerCard}" Margin="64,0,64,0" Height="220" Visibility="Collapsed"
-                Click="Spotlight_Click" GotKeyboardFocus="Spotlight_Focus" LostKeyboardFocus="Spotlight_Blur">
-            <Grid>
-                <Grid x:Name="SpotlightBody">
-                    <Image ui:ImageLoader.Source="{Binding HeroPath}" ui:ImageLoader.DecodeWidth="1600" Stretch="UniformToFill"
-                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <Rectangle>
-                        <Rectangle.Fill>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#F20A0C11" Offset="0"/>
-                                <GradientStop Color="#A60A0C11" Offset="0.5"/>
-                                <GradientStop Color="#1A0A0C11" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Rectangle.Fill>
-                    </Rectangle>
-                    <StackPanel x:Name="SpotlightText" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="36,0,36,0" MaxWidth="820">
-                        <TextBlock Text="À LA UNE" Style="{StaticResource Label}" Foreground="{DynamicResource Accent}"/>
-                        <TextBlock x:Name="SpotlightTitle" Text="{Binding Name}" FontFamily="{StaticResource Display}" FontWeight="Bold" FontSize="36"
-                                   Foreground="White" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
-                        <TextBlock Text="{Binding Spotlight}" FontSize="15" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
-                        <ItemsControl ItemsSource="{Binding Platforms}" Focusable="False" Margin="0,14,0,0">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border CornerRadius="6" Padding="9,3" Margin="0,0,6,0" Background="#33FFFFFF">
-                                        <TextBlock Text="{Binding}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="12" Foreground="White"/>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Grid>
-                <StackPanel x:Name="SpotlightDots" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,18"/>
-            </Grid>
-        </Button>
-
         <!-- ====== Recherche ====== -->
-        <Grid x:Name="SearchRow" Grid.Row="1" Margin="64,0,64,0">
+        <Grid x:Name="SearchRow" Margin="64,0,64,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -302,6 +269,82 @@
                 <TextBlock Text="&#xE711;" FontFamily="{StaticResource Icons}" FontSize="17" Foreground="{StaticResource TextPrimary}"/>
             </Button>
         </Grid>
+
+        <!-- ====== À la une : les jeux du moment, l'un après l'autre (←→ quand il est sélectionné) ====== -->
+        <Button x:Name="Spotlight" Style="{StaticResource BannerCard}" Margin="64,0,64,0" Height="220" Visibility="Collapsed"
+                Click="Spotlight_Click" GotKeyboardFocus="Spotlight_Focus" LostKeyboardFocus="Spotlight_Blur">
+            <Grid>
+                <Grid x:Name="SpotlightBody">
+                    <Image ui:ImageLoader.Source="{Binding HeroPath}" ui:ImageLoader.DecodeWidth="1600" Stretch="UniformToFill"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <Rectangle>
+                        <Rectangle.Fill>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#F20A0C11" Offset="0"/>
+                                <GradientStop Color="#A60A0C11" Offset="0.5"/>
+                                <GradientStop Color="#1A0A0C11" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Rectangle.Fill>
+                    </Rectangle>
+                    <StackPanel x:Name="SpotlightText" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="36,0,36,0" MaxWidth="820">
+                        <TextBlock Text="À LA UNE" Style="{StaticResource Label}" Foreground="{DynamicResource Accent}"/>
+                        <TextBlock x:Name="SpotlightTitle" Text="{Binding Name}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="36"
+                                   Foreground="White" TextTrimming="CharacterEllipsis" Margin="0,6,0,0"/>
+                        <TextBlock Text="{Binding Spotlight}" FontSize="15" Foreground="{StaticResource TextSecondary}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                        <ItemsControl ItemsSource="{Binding Platforms}" Focusable="False" Margin="0,14,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="6" Padding="9,3" Margin="0,0,6,0" Background="#33FFFFFF">
+                                        <TextBlock Text="{Binding}" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="12" Foreground="White"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Grid>
+                <StackPanel x:Name="SpotlightDots" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,18"/>
+            </Grid>
+        </Button>
+
+        <!-- ====== Jeux offerts par Epic (masqués pendant une recherche) ====== -->
+        <StackPanel x:Name="FreeSection" Margin="0,28,0,0" Visibility="Collapsed">
+            <TextBlock Text="OFFERTS PAR EPIC GAMES" Style="{StaticResource Label}" Margin="64,0,0,14"/>
+            <ScrollViewer Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26" ui:EdgeFade.Size="64">
+                <StackPanel Orientation="Horizontal" Margin="64,26,26,26">
+                    <ItemsControl x:Name="FreeGames" ItemTemplate="{StaticResource FreeCard}" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                    <!-- Places vides jusqu'à 4 cartes : la rangée garde sa forme même avec une ou deux offres -->
+                    <ItemsControl x:Name="FreeShadows" Focusable="False" IsHitTestVisible="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="10" Margin="0,0,18,0" Background="#0DFFFFFF" BorderBrush="#14FFFFFF" BorderThickness="1"
+                                        Width="{Binding FreeCardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        Height="{Binding FreeHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                                    <TextBlock Text="&#xE7B8;" FontFamily="{StaticResource Icons}" FontSize="26" Foreground="#26FFFFFF"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
+        </StackPanel>
+
 
 
         <StackPanel x:Name="MainArea" Margin="0,24,0,0">
@@ -351,7 +394,7 @@
                                Foreground="{StaticResource TextMuted}" TextTrimming="CharacterEllipsis"/>
                     <TextBlock x:Name="HitInfo" VerticalAlignment="Center" FontSize="13"
                                TextTrimming="CharacterEllipsis" Visibility="Collapsed">
-                        <Run x:Name="HitTitle" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextPrimary}"/><Run x:Name="HitDetail" Foreground="{StaticResource TextSecondary}"/>
+                        <Run x:Name="HitTitle" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="15" Foreground="{StaticResource TextPrimary}"/><Run x:Name="HitDetail" Foreground="{StaticResource TextSecondary}"/>
                     </TextBlock>
                 </Grid>
             </Grid>
@@ -359,19 +402,6 @@
             <!-- ====== Les autres listes, une rangée chacune (masquées pendant une recherche) ====== -->
             <ItemsControl x:Name="MoreRows" ItemTemplate="{StaticResource TrendRowTemplate}" Focusable="False"/>
 
-            <!-- ====== Jeux offerts par Epic (masqués pendant une recherche) ====== -->
-            <StackPanel x:Name="FreeSection" Margin="0,28,0,0" Visibility="Collapsed">
-                <TextBlock Text="OFFERTS PAR EPIC GAMES" Style="{StaticResource Label}" Margin="64,0,0,14"/>
-                <ScrollViewer Style="{StaticResource RowScroll}" Margin="0,-26,-24,-26" ui:EdgeFade.Size="64">
-                    <ItemsControl x:Name="FreeGames" ItemTemplate="{StaticResource FreeCard}" Focusable="False" Margin="64,26,26,26">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </ScrollViewer>
-            </StackPanel>
         </StackPanel>
         </StackPanel>
     </ScrollViewer>

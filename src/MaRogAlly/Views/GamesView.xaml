@@ -36,7 +36,7 @@
                             </LinearGradientBrush>
                         </Grid.Background>
                         <TextBlock Text="{Binding DisplayTitle}" Margin="14" TextWrapping="Wrap" TextAlignment="Center"
-                                   VerticalAlignment="Center" FontFamily="{StaticResource Display}" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" FontFamily="{DynamicResource Display}" FontWeight="SemiBold"
                                    FontSize="17" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
                     </Grid>
 
@@ -55,7 +55,7 @@
                         <StackPanel Orientation="Horizontal">
                             <Path Data="{Binding PlatformInfo.Logo}" Fill="White" Stretch="Uniform" Width="18" Height="18"
                                   Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="{Binding PlatformInfo.Name}" FontFamily="{StaticResource Display}" FontWeight="SemiBold"
+                            <TextBlock Text="{Binding PlatformInfo.Name}" FontFamily="{DynamicResource Display}" FontWeight="SemiBold"
                                        FontSize="12" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
@@ -112,9 +112,9 @@
         <Style x:Key="CategoryChip" TargetType="Button">
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Background" Value="#16FFFFFF"/>
+            <Setter Property="Background" Value="#E61C2029"/>
             <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
-            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Margin" Value="0,0,8,0"/>
@@ -142,6 +142,21 @@
             </ItemsControl>
         </DataTemplate>
 
+        <!-- Mes Jeux : une seule rangée qui défile à l'horizontale, bords estompés (comme les listes de Découverte) -->
+        <DataTemplate x:Key="ListRowTemplate">
+            <ScrollViewer Style="{StaticResource RowScroll}" Margin="0" ui:EdgeFade.Size="64"
+                          Height="{Binding RowHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                <ItemsControl ItemsSource="{Binding}" ItemTemplateSelector="{StaticResource TileSelector}" Focusable="False"
+                              Margin="64,0,64,0" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+            </ScrollViewer>
+        </DataTemplate>
+
         <!-- Badge d'information (note, année, genres, studio, temps de jeu) -->
         <Style x:Key="MetaBadge" TargetType="Border">
             <Setter Property="CornerRadius" Value="6"/>
@@ -153,7 +168,7 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style x:Key="MetaText" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
@@ -235,7 +250,7 @@
                     <!-- Fond du bouton actif : glisse jusqu'au bouton choisi -->
                     <Border x:Name="CategoryPill" CornerRadius="17" Background="#F3F5F9"/>
                     <StackPanel x:Name="CategoryBar" Orientation="Horizontal"/>
-                    <Border x:Name="CategoryHighlight" CornerRadius="17" BorderBrush="White" BorderThickness="2"/>
+                    <Border x:Name="CategoryHighlight" CornerRadius="17" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                 </Grid>
             </ScrollViewer>
             <Border Grid.Column="2" Style="{StaticResource PadGlyph}" Margin="10,0,0,0" VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonUp="NextCategory_Click"

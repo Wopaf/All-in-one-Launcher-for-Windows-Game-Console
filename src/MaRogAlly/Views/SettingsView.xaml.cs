@@ -23,10 +23,15 @@ public partial class SettingsView : UserControl
     /// <summary>Saisie d'un texte : titre, valeur actuelle, application de la nouvelle valeur.</summary>
     public event Action<string, string, Action<string>>? EditRequested;
     public event Action? Changed, KeysChanged, RescanRequested, RefreshMetadataRequested, MissingMetadataRequested;
+    public event Action? FontRequested;
     public event Action? HiddenGamesRequested, AccentRequested, UiScaleRequested, ThemeRequested, AppUpdateRequested, QuickPanelKeyRequested, QuickPanelPadRequested;
     /// <summary>Choix du mode souris : « size », « speed » ou « acceleration ».</summary>
     public event Action<string>? PointerOptionRequested;
     public event Action? MouseTestRequested;
+    /// <summary>Bouton « Vérifier les clés » des Clés d'API.</summary>
+    public event Action? CheckKeysRequested;
+    private SettingsCategory? _keysCategory;
+    private StackPanel? _keyResults;
     private Border? _themeSwatch;
     private TextBlock? _themeName;
     private TextBlock? _uiScaleValue;
@@ -78,6 +83,7 @@ public partial class SettingsView : UserControl
             "Personnalise la couleur des sélections et adapte la taille de l'interface à ton écran.");
         ThemeRow();
         AccentRow();
+        FontRow();
         UiScaleRow();
 
         Category("Au démarrage", "\uE7E8", "Application et lanceurs",
@@ -118,6 +124,13 @@ public partial class SettingsView : UserControl
 
         Category("Clés d'API", "\uE8D7", "IGDB, SteamGridDB et Steam",
             "Facultatives : elles enrichissent les fiches et les visuels, et donnent accès à toute ta bibliothèque Steam.");
+        _keysCategory = _categories[^1];
+        SetKeyAlert(ApiKeyCheck.NeedsAttention);
+        ActionRow("Vérifier les clés", "", () => CheckKeysRequested?.Invoke(),
+            "Vérifier les clés", "Interroge IGDB, SteamGridDB et Steam avec tes clés et affiche en dessous celles qui fonctionnent.\n\nLa vérification a aussi lieu au démarrage et après chaque modification : une pastille signale alors une clé manquante ou refusée.");
+        _keyResults = new StackPanel { Margin = new Thickness(18, 2, 18, 6), Visibility = Visibility.Collapsed };
+        _building!.Children.Add(_keyResults);
+        if (ApiKeyCheck.Last is { } last) ShowKeyCheck(last);
         Header("Fiches de jeux (IGDB)");
         Field("Client ID IGDB", () => _settings.IgdbClientId, v => _settings.IgdbClientId = v, secret: false,
             "IGDB, l'équivalent de TMDB pour le jeu vidéo",
@@ -168,6 +181,65 @@ public partial class SettingsView : UserControl
         public required StackPanel Panel { get; init; }
         public required Button MenuButton { get; init; }
         public ButtonBase? LastFocused { get; set; }
+        public required Border Dot { get; init; }
+    }
+
+    /// <summary>Pastille d'alerte (orange), masquée par défaut.</summary>
+    public static Border AlertDot() => new()
+    {
+        Width = 10, Height = 10, CornerRadius = new CornerRadius(5),
+        Background = new SolidColorBrush(UpdateBadge.Few),
+        VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0),
+        Visibility = Visibility.Collapsed, IsHitTestVisible = false,
+    };
+
+    /// <summary>Allume la pastille du bouton Clés d'API quand une clé manque ou est refusée.</summary>
+    public void SetKeyAlert(bool alert)
+    {
+        if (_keysCategory is not null) _keysCategory.Dot.Visibility = alert ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>Vérification en cours (results null) ou résultat : une ligne par service sous le bouton.</summary>
+    public void ShowKeyCheck(IReadOnlyList<KeyResult>? results)
+    {
+        if (_keyResults is null) return;
+        _keyResults.Children.Clear();
+        _keyResults.Visibility = Visibility.Visible;
+        if (results is null)
+        {
+            _keyResults.Children.Add(new TextBlock { Text = "Vérification en cours…", FontSize = 15, Foreground = (Brush)FindResource("TextSecondary"), Margin = new Thickness(0, 4, 0, 4) });
+            return;
+        }
+        var ok = results.All(r => r.State == KeyState.Ok);
+        _keyResults.Children.Add(new TextBlock
+        {
+            Text = ok ? "Tout est en ordre : toutes les clés fonctionnent." : "Certaines clés sont à revoir :",
+            FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 4, 0, 6), TextWrapping = TextWrapping.Wrap,
+        });
+        foreach (var r in results)
+        {
+            var color = r.State switch
+            {
+                KeyState.Ok => Color.FromRgb(0x3D, 0xD6, 0x8C),
+                KeyState.Unreachable => Color.FromRgb(0x9A, 0xA0, 0xA8),
+                KeyState.Missing => UpdateBadge.Few,
+                _ => UpdateBadge.Many,
+            };
+            var line = new Grid { Margin = new Thickness(0, 3, 0, 3) };
+            line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(22) });
+            line.ColumnDefinitions.Add(new ColumnDefinition());
+            line.Children.Add(new Border
+            {
+                Width = 9, Height = 9, CornerRadius = new CornerRadius(4.5), Background = new SolidColorBrush(color),
+                VerticalAlignment = VerticalAlignment.Top, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 7, 0, 0),
+            });
+            var text = new TextBlock { FontSize = 15, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("TextSecondary") };
+            text.Inlines.Add(new Run(r.Service + " : ") { FontWeight = FontWeights.SemiBold, Foreground = (Brush)FindResource("TextPrimary") });
+            text.Inlines.Add(new Run(r.Message));
+            Grid.SetColumn(text, 1);
+            line.Children.Add(text);
+            _keyResults.Children.Add(line);
+        }
     }
 
     private readonly List<SettingsCategory> _categories = [];
@@ -188,15 +260,19 @@ public partial class SettingsView : UserControl
         Grid.SetColumn(label, 1);
         grid.Children.Add(label);
         var chevron = new TextBlock { Text = "\uE76C", FontFamily = (FontFamily)FindResource("Icons"), FontSize = 11, Foreground = (Brush)FindResource("TextMuted"), VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetColumn(chevron, 2);
-        grid.Children.Add(chevron);
+        var dot = AlertDot();
+        var right = new StackPanel { Orientation = Orientation.Horizontal };
+        right.Children.Add(dot);
+        right.Children.Add(chevron);
+        Grid.SetColumn(right, 2);
+        grid.Children.Add(right);
 
         var button = new Button { Content = grid, Style = (Style)FindResource("RowButton"), Margin = new Thickness(0, 4, 0, 4) };
         RowOptions.SetNoBar(button, true);
         RowOptions.SetFloating(button, true);
         RowOptions.SetCard(button, true);
         var panel = new StackPanel();
-        var category = new SettingsCategory { Name = name, Summary = summary, Help = help, Panel = panel, MenuButton = button };
+        var category = new SettingsCategory { Name = name, Summary = summary, Help = help, Panel = panel, MenuButton = button, Dot = dot };
         var index = _categories.Count;
         // Sélectionner une catégorie l'affiche à droite ; A ou → y entre.
         button.GotKeyboardFocus += (_, _) =>
@@ -364,6 +440,25 @@ public partial class SettingsView : UserControl
             "La couleur des sélections, boutons, onglets et halos. Le changement s'applique immédiatement à toute l'application.");
         b.Click += (_, _) => AccentRequested?.Invoke();
         UpdateAccent();
+    }
+
+    private TextBlock? _fontValue;
+
+    private void FontRow()
+    {
+        _fontValue = new TextBlock { FontSize = 15, Foreground = (Brush)FindResource("TextSecondary"), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var grid = new Grid();
+        grid.Children.Add(new TextBlock { Text = "Police d'écriture", VerticalAlignment = VerticalAlignment.Center });
+        grid.Children.Add(_fontValue);
+        var b = Row(new Button { Content = grid }, "Police d'écriture",
+            "La police de toute l'application, au choix parmi cinq polices fournies avec Windows.\n\nL'application redémarre pour l'appliquer partout.");
+        b.Click += (_, _) => FontRequested?.Invoke();
+        UpdateFont();
+    }
+
+    public void UpdateFont()
+    {
+        if (_fontValue is not null) _fontValue.Text = AppFont.Find(_settings.Font).Name;
     }
 
     private void UiScaleRow()

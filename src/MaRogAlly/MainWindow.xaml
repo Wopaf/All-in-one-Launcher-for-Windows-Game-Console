@@ -7,7 +7,7 @@
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="True"
         Width="1280" Height="800" WindowStartupLocation="Manual" Left="0" Top="0"
         Background="{DynamicResource Bg}" Foreground="{StaticResource TextPrimary}"
-        FontFamily="{StaticResource Body}" UseLayoutRounding="True"
+        FontFamily="{DynamicResource Body}" UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType">
 
     <Grid x:Name="RootGrid" ClipToBounds="True">
@@ -96,9 +96,9 @@
                 <StackPanel x:Name="BatteryPanel" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,24,0">
                     <!-- Icône bien visible ; couleur selon le niveau (vert, orange < 30 %, rouge < 15 %) -->
                     <TextBlock x:Name="BatteryIcon" FontFamily="{StaticResource Icons}" FontSize="32" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    <TextBlock x:Name="BatteryText" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center" Margin="8,0,0,0"/>
                 </StackPanel>
-                <TextBlock x:Name="ClockText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center"/>
+                <TextBlock x:Name="ClockText" FontFamily="{DynamicResource Display}" FontWeight="SemiBold" FontSize="22" VerticalAlignment="Center"/>
                 <!-- Bouton Menu de la manette (aussi cliquable) -->
                 <Grid Margin="16,0,0,0" VerticalAlignment="Center">
                     <Border CornerRadius="20" Background="{DynamicResource Bg}" Padding="7,5,16,5" Cursor="Hand" MouseLeftButtonUp="MenuHint_Click">
@@ -154,7 +154,7 @@
                 </TextBlock>
                 <TextBlock x:Name="ActivityTitle" Grid.Column="1" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"
                            TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="ActivityPercent" Grid.Column="2" FontFamily="{StaticResource Display}" FontSize="14" FontWeight="SemiBold"
+                <TextBlock x:Name="ActivityPercent" Grid.Column="2" FontFamily="{DynamicResource Display}" FontSize="14" FontWeight="SemiBold"
                            Foreground="{StaticResource TextSecondary}" Margin="12,0,0,0"/>
                 <TextBlock x:Name="ActivityDetail" Grid.Column="1" Grid.ColumnSpan="2" Grid.Row="1" FontSize="13"
                            Foreground="{StaticResource TextSecondary}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>

@@ -5,7 +5,7 @@
              Focusable="False">
     <UserControl.Resources>
         <Style x:Key="StatValue" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource Display}"/>
+            <Setter Property="FontFamily" Value="{DynamicResource Display}"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="FontSize" Value="44"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
@@ -82,7 +82,7 @@
                         </LinearGradientBrush>
                     </ScrollViewer.OpacityMask>
                     <Grid x:Name="ListHost" Margin="0,0,0,60">
-                        <Border x:Name="ListHighlight" CornerRadius="14" Background="Transparent" BorderBrush="#E6FFFFFF" BorderThickness="2"/>
+                        <Border x:Name="ListHighlight" CornerRadius="14" Background="Transparent" BorderBrush="{DynamicResource Accent}" BorderThickness="2"/>
                         <StackPanel x:Name="List"/>
                     </Grid>
                 </ScrollViewer>

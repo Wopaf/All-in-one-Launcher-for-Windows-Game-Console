@@ -14,6 +14,12 @@ public static class Power
         return new Status(true, s.BatteryLifePercent, s.ACLineStatus == 1);
     }
 
+    /// <summary>Couleur du niveau : vert, orange sous 30 %, rouge sous 15 % (barre du haut et centre de contrôle).</summary>
+    public static System.Windows.Media.Color LevelColor(int percent)
+        => percent < 15 ? System.Windows.Media.Color.FromRgb(0xFF, 0x3B, 0x4E)
+         : percent < 30 ? System.Windows.Media.Color.FromRgb(0xFF, 0x9F, 0x1C)
+         : System.Windows.Media.Color.FromRgb(0x4C, 0xD9, 0x64);
+
     /// <summary>Glyphe Segoe Fluent correspondant au niveau (0 à 10 dixièmes).</summary>
     public static string Glyph(Status s)
     {

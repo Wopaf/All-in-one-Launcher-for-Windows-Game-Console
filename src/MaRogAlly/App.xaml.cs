@@ -49,6 +49,7 @@ public partial class App : Application
         var settings = AppSettings.Load();
         UI.AppTheme.Apply(settings.Theme);
         UI.AccentTheme.Apply(settings.AccentColor);
+        UI.AppFont.Apply(settings.Font);
 #if !DEBUG
         // Garde la clé « Run » à jour avec l'emplacement actuel de l'exécutable.
         AutoStart.Apply(settings.StartWithWindows);

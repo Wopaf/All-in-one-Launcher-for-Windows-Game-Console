@@ -49,7 +49,10 @@ public sealed class DiscoverGame : ObservableObject
     [JsonIgnore] public string ImageKey => HasSteam ? $"steam-{AppId}" : $"igdb-{IgdbId}";
 
     private string? _coverPath, _heroPath;
+    private bool _coverWide;
     [JsonIgnore] public string? CoverPath { get => _coverPath; set => Set(ref _coverPath, value); }
+    /// <summary>Aucune jaquette verticale n'existe : la carte montre l'image horizontale entière sur un fond flouté.</summary>
+    [JsonIgnore] public bool CoverWide { get => _coverWide; set => Set(ref _coverWide, value); }
     [JsonIgnore] public string? HeroPath { get => _heroPath; set => Set(ref _heroPath, value); }
 
     /// <summary>Jeu correspondant dans la bibliothèque, s'il est déjà possédé.</summary>
@@ -301,18 +304,38 @@ public sealed class DiscoverService(HttpClient http, IgdbClient? igdb = null)
             var first = group.First();
             IEnumerable<string> steamCovers = first.HasSteam ? SteamStore.CoverUrls(first.AppId) : [];
             IEnumerable<string> steamHeroes = first.HasSteam ? SteamStore.HeroUrls(first.AppId) : [];
-            // Jaquette verticale d'abord ; à défaut (jeu récent), la capsule large recadrée.
-            var cover = ImageCache.Existing(key, "cover")
-                        ?? await _images.GetAsync(key, "cover", first.CoverUrls.Take(2).Concat(steamCovers).Concat(first.CoverUrls.Skip(2)), token);
+            // Toutes les jaquettes verticales (Steam, puis IGDB) avant les capsules larges, qui seraient recadrées en tranche.
+            var urls = first.CoverUrls.Concat(steamCovers).ToList();
+            var portrait = urls.Where(IsPortraitUrl).ToList();
+            var wide = urls.Where(u => !IsPortraitUrl(u)).ToList();
+            var cover = ImageCache.Existing(key, "cover");
+            // Capsule large gardée d'une version précédente : une jaquette verticale la remplace si elle existe.
+            var marker = ImageCache.PathFor(key, "cover") + ".wide";
+            if (cover is not null && !File.Exists(marker) && Images.IsWide(cover))
+            {
+                try { File.Delete(cover); } catch (IOException) { }
+                cover = null;
+            }
+            if (cover is null)
+            {
+                cover = await _images.GetAsync(key, "cover", portrait, token);
+                if (cover is null && (cover = await _images.GetAsync(key, "cover", wide, token)) is not null)
+                    try { File.WriteAllText(marker, ""); } catch (IOException) { }
+            }
+            var coverWide = cover is not null && Images.IsWide(cover);
             var hero = ImageCache.Existing(key, "hero")
                        ?? await _images.GetAsync(key, "hero", first.HeroUrls.Concat(steamHeroes), token);
             foreach (var g in group)
             {
                 g.CoverPath = cover;
+                g.CoverWide = coverWide;
                 g.HeroPath = hero;
             }
         });
     }
+
+    /// <summary>Jaquette verticale : library_600x900 de Steam, couverture d'IGDB.</summary>
+    private static bool IsPortraitUrl(string url) => url.Contains("600x900") || url.Contains("library_capsule") || url.Contains("t_cover");
 
     /// <summary>Applique tout de suite les visuels déjà sur disque.</summary>
     public static void ApplyCachedImages(IEnumerable<DiscoverGame> games)
@@ -320,6 +343,7 @@ public sealed class DiscoverService(HttpClient http, IgdbClient? igdb = null)
         foreach (var g in games)
         {
             g.CoverPath = ImageCache.Existing(g.ImageKey, "cover");
+            g.CoverWide = g.CoverPath is { } p && Images.IsWide(p);
             g.HeroPath = ImageCache.Existing(g.ImageKey, "hero");
         }
     }

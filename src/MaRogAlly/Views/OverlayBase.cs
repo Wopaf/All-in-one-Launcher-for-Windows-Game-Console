@@ -16,6 +16,9 @@ public class OverlayBase : UserControl
     /// <summary>Élément animé à l'ouverture (glisse depuis la droite par défaut).</summary>
     protected virtual FrameworkElement? AnimatedPart => null;
     protected virtual double EnterFromX => 60;
+    /// <summary>Durées d'ouverture : fondu du panneau, glissement de sa partie animée.</summary>
+    protected virtual double FadeInMs => 220;
+    protected virtual double EnterMs => 360;
 
     public OverlayBase()
     {
@@ -24,8 +27,8 @@ public class OverlayBase : UserControl
 
     public virtual void OnOpened()
     {
-        Anim.Enter(this, 0, 0, 220);
-        if (AnimatedPart is { } part) Anim.Enter(part, EnterFromX, 0, 360);
+        Anim.Enter(this, 0, 0, FadeInMs);
+        if (AnimatedPart is { } part) Anim.Enter(part, EnterFromX, 0, EnterMs);
         Dispatcher.BeginInvoke(FocusOnOpen, System.Windows.Threading.DispatcherPriority.Loaded);
     }
 
