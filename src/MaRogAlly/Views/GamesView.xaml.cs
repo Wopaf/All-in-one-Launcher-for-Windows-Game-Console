@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -24,7 +25,25 @@ public partial class GamesView : UserControl
     public Thickness RowPadding { get => (Thickness)GetValue(RowPaddingProperty); set => SetValue(RowPaddingProperty, value); }
 
     /// <summary>Onglet « Installés » : seuls les jeux installés sont proposés.</summary>
-    public bool InstalledOnly { get; set; }
+    /// <summary>
+    /// Vrai pour Mes jeux (jeux installés), faux pour la Bibliothèque. Sous le titre, Mes jeux ne montre pas les genres,
+    /// et la Bibliothèque pas le temps de jeu.
+    /// </summary>
+    public bool InstalledOnly
+    {
+        get => _installedOnly;
+        set
+        {
+            _installedOnly = value;
+            GenresBadge.ClearValue(VisibilityProperty);
+            PlaytimeBadge.ClearValue(VisibilityProperty);
+            GenresBadge.SetBinding(VisibilityProperty, new Binding(nameof(Game.GenresText)) { Converter = (IValueConverter)FindResource("VisibleIf") });
+            PlaytimeBadge.SetBinding(VisibilityProperty, new Binding(nameof(Game.PlaytimeText)) { Converter = (IValueConverter)FindResource("VisibleIf") });
+            (value ? GenresBadge : PlaytimeBadge).Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private bool _installedOnly;
     public GameFilter Filter { get; } = new();
 
     public Game? Selected => _index >= 0 && _index < _visible.Count ? _visible[_index] : null;
@@ -53,6 +72,8 @@ public partial class GamesView : UserControl
     public GamesView()
     {
         InitializeComponent();
+        // Bibliothèque par défaut (sans temps de jeu sous le titre) ; Mes jeux le change en se déclarant.
+        InstalledOnly = false;
         GridHost.SizeChanged += (_, _) => Relayout();
         SizeChanged += (_, _) => Relayout();
         RowsList.Loaded += (_, _) => _scroller ??= RowsList.Template.FindName("Scroller", RowsList) as ScrollViewer;
@@ -222,18 +243,16 @@ public partial class GamesView : UserControl
         Dispatcher.BeginInvoke(() => ScrollToSelection(false));
     }
 
-    /// <summary>Fiche du jeu plus ramassée sur petit écran : logo et titre réduits, description sur deux lignes.</summary>
+    /// <summary>Fiche du jeu plus ramassée sur petit écran : logo et titre réduits.</summary>
     private void ApplyCompact(bool compact)
     {
         LogoBox.Height = compact ? 96 : 150;
         TitleText.FontSize = compact ? 32 : 44;
         TitleText.LineHeight = compact ? 36 : 50;
         MetaRow.Margin = new Thickness(0, compact ? 8 : 16, 0, 0);
-        DescText.Margin = new Thickness(0, compact ? 6 : 14, 0, 0);
-        DescText.MaxHeight = compact ? 44 : 72;
         DetailPanel.Margin = new Thickness(SidePadding, 0, SidePadding, compact ? 10 : 20);
-        // Hauteur fixe (logo + badges + description) : le bloc centré ne saute pas d'un jeu à l'autre.
-        DetailPanel.Height = LogoBox.Height + MetaRow.Margin.Top + MetaRow.Height + DescText.Margin.Top + DescText.MaxHeight;
+        // Hauteur fixe (logo + badges) : le bloc centré ne saute pas d'un jeu à l'autre.
+        DetailPanel.Height = LogoBox.Height + MetaRow.Margin.Top + MetaRow.Height;
     }
 
     private void BuildRows()
@@ -276,8 +295,7 @@ public partial class GamesView : UserControl
         {
             // Seul le logo glisse ; les informations en dessous apparaissent en simple fondu.
             Anim.Enter(LogoBox, dx: 0, dy: 14, ms: 320);
-            foreach (var part in new UIElement[] { MetaRow, DescText })
-                part.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, Anim.Ms(320)) { EasingFunction = Anim.Out });
+            MetaRow.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, Anim.Ms(320)) { EasingFunction = Anim.Out });
         }
         _lastSelectionChange = DateTime.UtcNow;
 

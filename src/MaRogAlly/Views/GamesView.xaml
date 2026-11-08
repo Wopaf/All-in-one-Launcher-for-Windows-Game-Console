@@ -206,10 +206,10 @@
                 <Border Style="{StaticResource MetaBadge}" Visibility="{Binding ReleaseYear, Converter={StaticResource VisibleIf}}">
                     <TextBlock Style="{StaticResource MetaText}" Text="{Binding ReleaseYear}"/>
                 </Border>
-                <Border Style="{StaticResource MetaBadge}" Visibility="{Binding GenresText, Converter={StaticResource VisibleIf}}">
+                <Border x:Name="GenresBadge" Style="{StaticResource MetaBadge}" Visibility="{Binding GenresText, Converter={StaticResource VisibleIf}}">
                     <TextBlock Style="{StaticResource MetaText}" Text="{Binding GenresText}"/>
                 </Border>
-                <Border Style="{StaticResource MetaBadge}" Visibility="{Binding PlaytimeText, Converter={StaticResource VisibleIf}}">
+                <Border x:Name="PlaytimeBadge" Style="{StaticResource MetaBadge}" Visibility="{Binding PlaytimeText, Converter={StaticResource VisibleIf}}">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE916;" FontFamily="{StaticResource Icons}" FontSize="13" Foreground="{DynamicResource Accent}"
                                    VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -217,9 +217,6 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
-
-            <TextBlock x:Name="DescText" Text="{Binding Description}" Style="{StaticResource BodyText}" Margin="0,14,0,0" MaxWidth="780"
-                       HorizontalAlignment="Left" VerticalAlignment="Top" MaxHeight="72" TextTrimming="WordEllipsis"/>
         </StackPanel>
 
         <!-- ====== Catégories (Bibliothèque) : le cadre de sélection glisse d'un bouton à l'autre ====== -->

@@ -22,6 +22,8 @@ public sealed class NetworkMenus(Action<OverlayBase> open, Action<string, string
     {
         var panel = new SidePanel(title, subtitle);
         panel.AnchorCenter();
+        // Fond opaque, cartes et cadre de sélection du menu principal.
+        panel.UseMenuStyle();
         return panel;
     }
 

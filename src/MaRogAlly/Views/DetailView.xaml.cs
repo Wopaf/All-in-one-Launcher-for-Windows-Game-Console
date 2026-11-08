@@ -298,6 +298,13 @@ public partial class DetailView : OverlayBase
     protected override double EnterFromX => 0;
     protected override FrameworkElement FocusScope => Body;
 
+    /// <summary>Taille du jeu sur la ligne d'informations ; null la masque.</summary>
+    public void SetSize(string? text)
+    {
+        SizeText.Text = text ?? "";
+        SizePanel.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     public void SetGame(Game game)
     {
         Game = game;
@@ -606,13 +613,19 @@ public partial class DetailView : OverlayBase
                 FocusNav.Focus(rows[row][col + 1]);
                 break;
             case NavAction.Up when row > 0:
-                FocusNav.Focus(Nearest(rows[row - 1], focused));
+                FocusNav.Focus(Enter(rows[row - 1], rows[row], focused));
                 break;
             case NavAction.Down when row < rows.Count - 1:
-                FocusNav.Focus(Nearest(rows[row + 1], focused));
+                FocusNav.Focus(Enter(rows[row + 1], rows[row], focused));
                 break;
         }
     }
+
+    /// <summary>
+    /// Élément atteint dans la rangée voisine. Depuis une section seule sur sa rangée (description, succès), qui prend toute
+    /// la largeur, on arrive sur le premier élément (la première capture, « Jouer ») plutôt que sur celui du milieu.
+    /// </summary>
+    private Button Enter(List<Button> target, List<Button> from, Button focused) => from.Count == 1 ? target[0] : Nearest(target, focused);
 
     /// <summary>L'élément de la rangée le plus proche horizontalement de celui qui a le focus.</summary>
     private Button Nearest(List<Button> row, Button from)

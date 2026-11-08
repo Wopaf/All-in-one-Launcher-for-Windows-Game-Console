@@ -153,6 +153,41 @@ public sealed class QuickPanelWindow : Window
         Stage.Open(overlay);
     }
 
+    /// <summary>Vrai pendant une capture d'écran : le volet est caché, il ne doit pas réagir.</summary>
+    public bool IsCapturing { get; private set; }
+
+    /// <summary>
+    /// Cache le volet et le voile d'un coup (sans fermer : le jeu reste en pause, le premier plan reste au volet),
+    /// fait <paramref name="action"/> (une capture d'écran), puis le volet revient en glissant comme à l'ouverture.
+    /// </summary>
+    public async Task HideWhileAsync(Func<Task> action)
+    {
+        if (!_visible || _closing)
+        {
+            await action();
+            return;
+        }
+        IsCapturing = true;
+        BeginAnimation(LeftProperty, null);
+        Left = -(Width + 10000);
+        FadeDim(0, 1);
+        // Le temps que l'écran soit redessiné sans le volet ni le voile.
+        await Task.Delay(150);
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            IsCapturing = false;
+            if (!_closing)
+            {
+                _slidIn = false;
+                SlideIn();
+            }
+        }
+    }
+
     private void SlideIn()
     {
         if (_slidIn || _closing) return;

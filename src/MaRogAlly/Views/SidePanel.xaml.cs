@@ -121,6 +121,7 @@ public partial class SidePanel : OverlayBase
         var b = new Button { Content = grid, Style = (Style)FindResource("RowButton") };
         Track(b);
         b.Click += (_, _) => onClick();
+        Carded(b, 54);
         Items.Children.Add(b);
         return b;
     }
@@ -187,6 +188,14 @@ public partial class SidePanel : OverlayBase
         b.Content = card;
     }
 
+    /// <summary>Style du menu : la ligne sur sa carte, espacée de la suivante. Sans effet dans le style habituel.</summary>
+    private void Carded(ButtonBase b, double height)
+    {
+        if (!_menuStyle) return;
+        OnCard(b, new Thickness(16, 0, 16, 0), height);
+        b.Margin = new Thickness(0, 0, 0, 8);
+    }
+
     /// <summary>Panneau plus large que d'habitude (contenu en colonnes).</summary>
     public void Widen(double width) => Panel.Width = width;
 
@@ -242,6 +251,7 @@ public partial class SidePanel : OverlayBase
         Track(b);
         Tagged(b, tag);
         b.Click += (_, _) => onClick();
+        Carded(b, 62);
         Items.Children.Add(b);
         return b;
     }
@@ -398,6 +408,27 @@ public partial class SidePanel : OverlayBase
             IsChecked = isChecked,
             Style = (Style)FindResource(asSwitch ? "SwitchRow" : "CheckRow"),
         };
+        // Style du menu : l'interrupteur est dessiné dans la carte (celui du modèle se poserait contre son bord).
+        if (_menuStyle && asSwitch)
+        {
+            var knob = new System.Windows.Shapes.Ellipse { Width = 18, Height = 18, Fill = Brushes.White, Margin = new Thickness(4, 0, 4, 0) };
+            var track = new Border { Width = 46, Height = 26, CornerRadius = new CornerRadius(13), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Child = knob };
+            var row = new Grid();
+            row.Children.Add(content as UIElement ?? new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(track);
+            void PaintSwitch()
+            {
+                var on = t.IsChecked == true;
+                track.Background = on ? (Brush)FindResource("Accent") : new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF));
+                knob.HorizontalAlignment = on ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+            }
+            t.Style = (Style)FindResource("RowButton");
+            t.Content = row;
+            t.Checked += (_, _) => PaintSwitch();
+            t.Unchecked += (_, _) => PaintSwitch();
+            PaintSwitch();
+            Carded(t, 54);
+        }
         Track(t);
         t.Click += (_, _) => onChanged(t.IsChecked == true);
         Items.Children.Add(t);

@@ -20,8 +20,8 @@ namespace MaRogAlly.Views;
 public sealed class QuickPanel : UserControl
 {
     private const int QuickColumns = 4, GalleryLimit = 60, KeepModeSeconds = 15, BrightnessMin = 10, Step = 10;
-    private static readonly string[] Names = ["Accueil", "Performance", "Audio", "Affichage", "Galerie"];
-    private static readonly string[] Glyphs = ["", "", "", "", ""];
+    private static readonly string[] Names = ["Accueil", "Performance", "Galerie", "Affichage", "Audio"];
+    private static readonly string[] Glyphs = ["", "", "", "", ""];
     private static HashSet<RadioKind>? _beforeAirplane;
 
     private readonly OpenWindow? _target;
@@ -205,6 +205,9 @@ public sealed class QuickPanel : UserControl
         }
     }
 
+    /// <summary>Message sous le contenu de l'onglet (résultat d'une capture d'écran, par exemple).</summary>
+    public void Notify(string text) => SetStatus(text);
+
     private void SetStatus(string text)
     {
         _status.Text = text;
@@ -234,9 +237,9 @@ public sealed class QuickPanel : UserControl
         {
             case 0: BuildHome(); break;
             case 1: BuildPerformance(); break;
-            case 2: BuildAudio(); break;
+            case 2: BuildGallery(); break;
             case 3: BuildDisplay(); break;
-            default: BuildGallery(); break;
+            default: BuildAudio(); break;
         }
         FocusFirst();
     }
@@ -514,9 +517,9 @@ public sealed class QuickPanel : UserControl
         AddSection("Accès rapides");
         AddTileRow(84, QuickColumns,
         [
+            ("", "Accueil", () => HomeRequested?.Invoke()),
             ("", "Fin de tâche", EndTask),
             ("", "Afficher le bureau", () => DesktopRequested?.Invoke()),
-            ("", "Accueil", () => HomeRequested?.Invoke()),
             ("", "Capture d'écran", () => ScreenshotRequested?.Invoke()),
         ]);
         var radios = AddTileRow(84, QuickColumns,
@@ -524,12 +527,9 @@ public sealed class QuickPanel : UserControl
             ("", "Wi-Fi", () => WifiRequested?.Invoke()),
             ("", "Bluetooth", () => BluetoothRequested?.Invoke()),
             ("", "Mode avion", () => _ = ToggleAirplaneAsync()),
-            ("\uE706", "Luminosité auto", () => _ = ToggleAutoBrightnessAsync()),
         ]);
         _radioCards = radios;
-        _autoBrightnessCard = radios[3];
         _ = PaintRadiosAsync(screen);
-        _ = PaintAutoBrightnessAsync(screen);
 
         _items.Children.Add(new Border { Height = 12 });
         Button? volumeRow = null;
@@ -571,27 +571,6 @@ public sealed class QuickPanel : UserControl
         Paint(wifi, all.Any(r => r.Kind == RadioKind.WiFi && r.State == RadioState.On));
         Paint(bluetooth, all.Any(r => r.Kind == RadioKind.Bluetooth && r.State == RadioState.On));
         Paint(airplane, all.Count > 0 && all.All(r => r.State != RadioState.On));
-    }
-
-    private Border? _autoBrightnessCard;
-
-    private async Task PaintAutoBrightnessAsync(int screen)
-    {
-        var on = await Task.Run(() => AutoBrightness.Read());
-        if (screen == _screen && _autoBrightnessCard is { } card) Paint(card, on == true);
-    }
-
-    private async Task ToggleAutoBrightnessAsync()
-    {
-        var screen = _screen;
-        if (!await Task.Run(() => AutoBrightness.HasSensor))
-        {
-            SetStatus("Pas de capteur de lumière sur cette machine : Windows ne peut pas régler la luminosité tout seul.");
-            return;
-        }
-        var on = await Task.Run(() => AutoBrightness.Read());
-        if (on is not { } current || !await Task.Run(() => AutoBrightness.Set(!current))) SetStatus("Windows a refusé de changer la luminosité automatique.");
-        await PaintAutoBrightnessAsync(screen);
     }
 
     /// <summary>Coupe toutes les radios et retient celles qui étaient allumées, pour les rallumer ensuite.</summary>

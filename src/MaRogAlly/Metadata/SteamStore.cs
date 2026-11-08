@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using MaRogAlly.Core;
 using MaRogAlly.Models;
 
@@ -86,6 +87,32 @@ public sealed class SteamStore(HttpClient http)
             meta.Screenshots.AddRange(shots.EnumerateArray().Select(s => Str(s, "path_full")).OfType<string>().Take(8));
         meta.Sources.Add("Steam");
         return true;
+    }
+
+    /// <summary>Taille sur la ligne de stockage de la configuration requise (« Storage: 50 GB available space »).</summary>
+    private static readonly Regex StorageLine = new(
+        @"(storage|hard drive|hard disk|disk space|hdd|ssd)[^0-9]{0,40}?(\d+(?:[.,]\d+)?)\s*(tb|gb|mb)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Espace disque demandé par la configuration requise de la page Steam (en octets) ; 0 si la page n'en dit rien,
+    /// null si le magasin ne répond pas. Recommandée d'abord, sinon minimale : la taille du jeu est la même, la recommandée est plus souvent à jour.
+    /// </summary>
+    public async Task<long?> RequiredStorageAsync(int appId, CancellationToken ct)
+    {
+        using var doc = await GetJsonAsync($"https://store.steampowered.com/api/appdetails?appids={appId}&l=english&cc=FR", ct);
+        if (doc is null || !doc.RootElement.TryGetProperty(appId.ToString(), out var root)) return null;
+        if (!root.TryGetProperty("success", out var ok) || !ok.GetBoolean() || !root.TryGetProperty("data", out var d)) return 0;
+        // Sans configuration requise, Steam renvoie un tableau vide au lieu d'un objet.
+        if (!d.TryGetProperty("pc_requirements", out var req) || req.ValueKind != JsonValueKind.Object) return 0;
+        foreach (var level in new[] { "recommended", "minimum" })
+        {
+            var match = StorageLine.Match(Text.StripHtml(Str(req, level)));
+            if (!match.Success || !double.TryParse(match.Groups[2].Value.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out var amount)) continue;
+            var unit = match.Groups[3].Value.ToUpperInvariant() switch { "TB" => 1L << 40, "GB" => 1L << 30, _ => 1L << 20 };
+            return (long)(amount * unit);
+        }
+        return 0;
     }
 
     private async Task<JsonDocument?> GetJsonAsync(string url, CancellationToken ct)

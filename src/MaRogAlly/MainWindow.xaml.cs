@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private readonly AchievementService _achievements;
     /// <summary>Fiches des jeux du magasin (Découverte) : magasin Steam, logos en cache disque.</summary>
     private readonly SteamStore _steamStore;
+    private readonly StoreSizes _storeSizes;
     private readonly ImageCache _imageCache;
     private readonly Dictionary<int, GameMetadata> _storeMeta = [];
     private List<FreeGame> _freeGames = [];
@@ -93,6 +94,7 @@ public partial class MainWindow : Window
         _discover = new DiscoverService(_http);
         _achievements = new AchievementService(_http, _settings);
         _steamStore = new SteamStore(_http);
+        _storeSizes = new StoreSizes(_steamStore);
         _search = new GameSearch(_http, _discover);
         _tags = new TagService(_http);
         _appUpdater = new AppUpdater(_http);
@@ -120,6 +122,8 @@ public partial class MainWindow : Window
         _pad.IsActive = () => _desktop.IsForeground || _quickPanel is not null;
         _pad.Action += OnNav;
         _pad.MinimizeRequested += MinimizeForegroundApp;
+        _pad.PanelChord = _settings.QuickPanelPadButtons;
+        _pad.PanelChordPressed += OnQuickPanelKey;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
 
         _heroTimer.Tick += (_, _) => { _heroTimer.Stop(); ShowHero(); };
@@ -211,7 +215,7 @@ public partial class MainWindow : Window
         if (args.Contains("--storage")) OpenStorage();
         if (args.Contains("--detail") && _installed.Source.FirstOrDefault() is { } firstGame) OpenDetail(firstGame);
         if (args.Contains("--menu")) OpenSystemMenu();
-        // « --quick 2 » : centre de contrôle sur cet onglet à la place de la fenêtre dans la capture, hors de l'écran et sans focus.
+        // « --quick 4 » : centre de contrôle sur cet onglet à la place de la fenêtre dans la capture, hors de l'écran et sans focus.
         var quickArg = Array.IndexOf(args, "--quick");
         if (quickArg >= 0) OpenQuickPanel(int.TryParse(args.ElementAtOrDefault(quickArg + 1), out var quickTab) ? quickTab : 0, activate: false);
         // « --quick-open image|wifi|bluetooth|demo » : ce que le volet ouvre en plein écran, pour vérifier l'affichage.
@@ -978,6 +982,7 @@ public partial class MainWindow : Window
         detail.SetWished(_wishlist.Contains(d.WishKey));
         detail.WishRequested += g => detail.SetWished(ToggleWish(WishOf(g), g.Name));
         OpenOverlay(detail);
+        _ = ShowGameSizeAsync(detail, game);
         SetHero(d.HeroPath ?? d.CoverPath);
         if (known is null)
         {
@@ -1371,6 +1376,7 @@ public partial class MainWindow : Window
         _settingsView.UiScaleRequested += OpenUiScalePicker;
         _settingsView.HiddenGamesRequested += OpenHiddenGames;
         _settingsView.QuickPanelKeyRequested += OpenQuickPanelKeyPicker;
+        _settingsView.QuickPanelPadRequested += OpenQuickPanelPadPicker;
     }
 
     private void OnSelectionChanged(Game? game)
@@ -1469,7 +1475,8 @@ public partial class MainWindow : Window
     private void OnNav(NavAction action)
     {
         // Le volet repart et le jeu a repris la main : ces boutons sont pour lui.
-        if (_quickPanel is { IsClosing: true }) return;
+        // Volet en train de se fermer, ou caché le temps d'une capture : les boutons ne lui sont pas destinés.
+        if (_quickPanel is { IsClosing: true } or { IsCapturing: true }) return;
         CursorHider.Hide();
         var onStage = _quickPanel?.Stage?.Current;
         UiSounds.OnNav(action, onKeyboard: (onStage ?? _overlays.LastOrDefault()) is KeyboardPanel);
@@ -1734,6 +1741,36 @@ public partial class MainWindow : Window
         detail.AchievementsRequested += OpenGameAchievements;
         OpenOverlay(detail);
         AttachAchievements(detail);
+        _ = ShowGameSizeAsync(detail, game);
+    }
+
+    /// <summary>
+    /// Taille dans la fiche : place prise sur le disque pour un jeu installé (mesurée si elle ne l'est pas encore),
+    /// sinon espace demandé par sa page Steam. Rien si aucune des deux n'est connue.
+    /// </summary>
+    private async Task ShowGameSizeAsync(DetailView detail, Game game)
+    {
+        if (game.IsInstalled && game.InstallDir is not null)
+        {
+            if (game.DiskBytes is null) detail.SetSize("Calcul de la taille…");
+            var bytes = await _sizes.MeasureOneAsync(game);
+            detail.SetSize(bytes is { } b ? $"{SizeLabel(b)} sur le disque" : null);
+            return;
+        }
+        if ((game.SteamAppId ?? game.Meta?.SteamAppId) is not int appId) return;
+        var needed = await _storeSizes.GetAsync(appId);
+        if (needed is { } n) detail.SetSize($"{SizeLabel(n)} à installer");
+    }
+
+    private static string SizeLabel(long bytes)
+    {
+        var fr = System.Globalization.CultureInfo.GetCultureInfo("fr-FR");
+        return bytes switch
+        {
+            >= 1L << 40 => (bytes / (double)(1L << 40)).ToString("0.#", fr) + " To",
+            >= 1L << 30 => (bytes / (double)(1L << 30)).ToString(bytes >= 100L << 30 ? "0" : "0.#", fr) + " Go",
+            _ => Math.Max(1, bytes / (1L << 20)).ToString(fr) + " Mo",
+        };
     }
 
     /// <summary>Succès mis en avant dans la fiche (déjà ouverte si les succès arrivent après).</summary>
@@ -2019,6 +2056,64 @@ public partial class MainWindow : Window
             Deactivated -= OnLeave;
             StopCapture();
         };
+        OpenOverlay(panel);
+    }
+
+    /// <summary>
+    /// Bouton ou combinaison de la manette qui ouvre le centre de contrôle : « Assigner » attend que les boutons soient
+    /// pressés ensemble puis relâchés (10 secondes au plus), ou « Aucun ».
+    /// </summary>
+    private void OpenQuickPanelPadPicker()
+    {
+        const string Subtitle = "En plus de la touche du clavier";
+        var panel = new SidePanel("Bouton de la manette", Subtitle);
+        DispatcherTimer? timeout = null;
+
+        void StopCapture()
+        {
+            timeout?.Stop();
+            _pad.StopCapture();
+        }
+
+        void Choose(int? chord)
+        {
+            StopCapture();
+            _settings.QuickPanelPadButtons = chord;
+            _settings.Save();
+            _pad.PanelChord = chord;
+            _settingsView.UpdateQuickPanelPad();
+            panel.Close();
+            Toast("\uE7FC", chord is { } c ? $"Centre de contrôle : {Gamepad.Describe(c)}" : "Plus de bouton de manette pour le centre de contrôle");
+        }
+
+        panel.AddChoice("Assigner", false, () =>
+        {
+            if (!_pad.IsConnected)
+            {
+                panel.SetSubtitle("Aucune manette détectée : sur la ROG Ally, passe en mode manette.");
+                return;
+            }
+            panel.SetSubtitle("Relâche, puis appuie sur le bouton ou la combinaison, et relâche…");
+            timeout = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+            timeout.Tick += (_, _) =>
+            {
+                StopCapture();
+                panel.SetSubtitle("Aucun bouton reçu. M1 et M2 ne sont lus que s'ils sont reliés à un bouton de manette dans Armoury Crate.");
+            };
+            timeout.Start();
+            _pad.StartCapture(chord =>
+            {
+                timeout.Stop();
+                if (!Gamepad.CanUseForPanel(chord))
+                    panel.SetSubtitle($"{Gamepad.Describe(chord)} sert à naviguer : choisis un autre bouton, ou une combinaison.");
+                else Choose(chord);
+            });
+        }, detail: "Puis presse les boutons");
+        var current = panel.AddChoice("Aucun", _settings.QuickPanelPadButtons is null, () => Choose(null));
+        if (_settings.QuickPanelPadButtons is { } chosen)
+            current = panel.AddChoice(Gamepad.Describe(chosen), true, () => Choose(chosen), detail: Gamepad.IsSingle(chosen) ? "Aussi reçu par les jeux" : null);
+        panel.InitialFocus = current;
+        panel.CloseRequested += _ => StopCapture();
         OpenOverlay(panel);
     }
 
@@ -2551,14 +2646,16 @@ public partial class MainWindow : Window
         GoHome();
     }
 
-    /// <summary>Le volet se ferme d'abord, et le jeu reprend le premier plan : il ne doit pas figurer sur l'image.</summary>
+    /// <summary>
+    /// Le volet disparaît d'un coup sans se fermer : le jeu reste en pause, sa dernière image à l'écran est capturée,
+    /// puis le volet revient en glissant, avec le résultat sous ses boutons.
+    /// </summary>
     private async Task TakeScreenshotAsync(QuickPanelWindow window)
     {
-        window.CloseOnce();
-        await window.Gone;
-        await Task.Delay(150);
-        if (await ScreenCapture.SaveAsync() is not null) UiSounds.PlaySearch();
-        else Toast("\uE783", "Impossible d'enregistrer la capture");
+        var saved = false;
+        await window.HideWhileAsync(async () => saved = await ScreenCapture.SaveAsync() is not null);
+        if (saved) UiSounds.PlaySearch();
+        window.Panel.Notify(saved ? "Capture enregistrée dans la galerie." : "Impossible d'enregistrer la capture.");
     }
 
     // ---- Mode de la manette : rien n'est écrit tant qu'aucun mode n'a été choisi ----

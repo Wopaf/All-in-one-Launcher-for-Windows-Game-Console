@@ -310,7 +310,8 @@ public partial class MainMenu : OverlayBase
                 Margin = new Thickness(i == 0 ? 0 : 6, 0, i == buttons.Length - 1 ? 0 : 6, 0),
                 Content = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(0x26, tint.R, tint.G, tint.B)),
+                    // Sans couleur, comme les autres boutons du menu.
+                    Background = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF)),
                     CornerRadius = new CornerRadius(14),
                     Padding = new Thickness(14, 0, 14, 0),
                     Height = 68,
@@ -411,7 +412,7 @@ public partial class MainMenu : OverlayBase
         ApplyTileLook(state.Card, dot);
     }
 
-    /// <summary>Mise à jour à faire : voile orange qui part du coin de l'icône et s'efface en diagonale, avec un liseré assorti.</summary>
+    /// <summary>Mise à jour à faire : voile à la couleur d'accent qui part du coin de l'icône et s'efface en diagonale, avec un liseré assorti.</summary>
     private static void ApplyTileLook(Border card, Color? dot)
     {
         var alert = dot is { } c && c != Ok && c != Idle;
@@ -422,12 +423,13 @@ public partial class MainMenu : OverlayBase
             card.BorderBrush = Brushes.Transparent;
             return;
         }
-        static Color Orange(byte alpha) => Color.FromArgb(alpha, 0xFF, 0x8A, 0x1C);
+        var accent = (Color)Application.Current.FindResource("AccentColor");
+        Color Tint(byte alpha) => Color.FromArgb(alpha, accent.R, accent.G, accent.B);
         card.Background = new LinearGradientBrush(new GradientStopCollection
         {
-            new(Orange(0x4D), 0), new(Orange(0x1F), 0.55), new(Orange(0x0A), 1),
+            new(Tint(0x4D), 0), new(Tint(0x1F), 0.55), new(Tint(0x0A), 1),
         }, new Point(0, 0), new Point(1, 1));
-        card.BorderBrush = new LinearGradientBrush(Orange(0x73), Orange(0x14), new Point(0, 0), new Point(1, 1));
+        card.BorderBrush = new LinearGradientBrush(Tint(0x73), Tint(0x14), new Point(0, 0), new Point(1, 1));
     }
 
     private Button Tile(MenuTile t)

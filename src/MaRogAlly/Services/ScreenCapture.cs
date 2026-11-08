@@ -16,6 +16,12 @@ public static class ScreenCapture
     private static string Pictures => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
     private static string Folder => Path.Combine(Pictures, "Ma ROG Ally");
 
+    /// <summary>
+    /// Repli quand Images est refusé : l'accès contrôlé aux dossiers de Windows Defender bloque les applications qu'il ne
+    /// connaît pas. Le dossier de données de l'application n'est pas protégé ; la galerie le montre aussi.
+    /// </summary>
+    private static string FallbackFolder => Path.Combine(AppPaths.Root, "Captures");
+
     /// <summary>Chemin du fichier créé, ou null en cas d'échec. Un jeu en plein écran exclusif peut donner une image noire.</summary>
     public static async Task<string?> SaveAsync()
     {
@@ -25,13 +31,16 @@ public static class ScreenCapture
             frame.Freeze();
             return await Task.Run(() =>
             {
-                Directory.CreateDirectory(Folder);
-                var path = Path.Combine(Folder, $"Capture {DateTime.Now:yyyy-MM-dd HH-mm-ss}.png");
-                var png = new PngBitmapEncoder();
-                png.Frames.Add(BitmapFrame.Create(frame));
-                using var file = File.Create(path);
-                png.Save(file);
-                return path;
+                var name = $"Capture {DateTime.Now:yyyy-MM-dd HH-mm-ss}.png";
+                try
+                {
+                    return Write(Folder, name, frame);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    Log.Info($"Images refusé ({ex.GetType().Name}) : capture enregistrée dans {FallbackFolder}");
+                    return Write(FallbackFolder, name, frame);
+                }
             });
         }
         catch (Exception ex)
@@ -41,11 +50,22 @@ public static class ScreenCapture
         }
     }
 
+    private static string Write(string folder, string name, BitmapSource frame)
+    {
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, name);
+        var png = new PngBitmapEncoder();
+        png.Frames.Add(BitmapFrame.Create(frame));
+        using var file = File.Create(path);
+        png.Save(file);
+        return path;
+    }
+
     /// <summary>Captures les plus récentes d'abord.</summary>
     public static List<string> List(int limit)
     {
         var files = new List<FileInfo>();
-        foreach (var folder in new[] { Folder, Path.Combine(Pictures, "Screenshots") })
+        foreach (var folder in new[] { Folder, FallbackFolder, Path.Combine(Pictures, "Screenshots") })
         {
             try
             {

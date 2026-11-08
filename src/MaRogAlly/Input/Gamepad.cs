@@ -35,6 +35,37 @@ public sealed class Gamepad : IDisposable
 
     public bool IsConnected { get; private set; }
 
+    /// <summary>Gâchettes ajoutées aux boutons XInput dans une combinaison (au-delà des 16 bits des boutons).</summary>
+    public const int LeftTriggerBit = 0x10000, RightTriggerBit = 0x20000;
+
+    /// <summary>
+    /// Bouton ou combinaison qui ouvre le centre de contrôle, lu même quand une autre application est au premier plan.
+    /// Null : aucun.
+    /// </summary>
+    public int? PanelChord { get; set; }
+
+    public event Action? PanelChordPressed;
+
+    private Action<int>? _capture;
+    private bool _captureReady;
+    private int _captureMask, _previousMask;
+
+    /// <summary>
+    /// Assignation : la prochaine combinaison pressée (tous les boutons appuyés ensemble, puis relâchés) est passée à
+    /// <paramref name="done"/>. Rien d'autre ne réagit à la manette pendant ce temps. Les boutons encore enfoncés au départ
+    /// (le A qui a lancé l'assignation) doivent d'abord être relâchés.
+    /// </summary>
+    public void StartCapture(Action<int> done)
+    {
+        _capture = done;
+        _captureReady = false;
+        _captureMask = 0;
+    }
+
+    public void StopCapture() => _capture = null;
+
+    public bool IsCapturing => _capture is not null;
+
     private readonly DispatcherTimer _timer;
     private int _slot = -1;
     private int _probeCountdown;
@@ -64,6 +95,30 @@ public sealed class Gamepad : IDisposable
 
         var active = IsActive();
         var pad = state.Gamepad;
+        var mask = Mask(pad);
+
+        if (_capture is { } capture)
+        {
+            if (!_captureReady) _captureReady = mask == 0;
+            else if (mask != 0) _captureMask |= mask;
+            else if (_captureMask != 0)
+            {
+                var chord = _captureMask;
+                _capture = null;
+                capture(chord);
+            }
+            Swallow(pad, mask);
+            return;
+        }
+
+        // Combinaison du volet : elle ne sert à rien d'autre (pas de navigation avec ses boutons).
+        if (PanelChord is { } panel && (mask & panel) == panel && (_previousMask & panel) != panel)
+        {
+            Swallow(pad, mask);
+            PanelChordPressed?.Invoke();
+            return;
+        }
+        _previousMask = mask;
         if (!active || !_wasActive)
         {
             // En arrière-plan (ou au retour), on ignore les boutons déjà enfoncés pour ne pas
@@ -99,6 +154,35 @@ public sealed class Gamepad : IDisposable
 
         HandleDirection(CurrentDirection(pad));
     }
+
+    /// <summary>Boutons pris en compte sans action : ils ne se déclencheront pas au prochain relevé.</summary>
+    private void Swallow(XInputGamepad pad, int mask)
+    {
+        _previousMask = mask;
+        _previousButtons = pad.Buttons;
+        _previousLt = pad.LeftTrigger > TriggerThreshold;
+        _previousRt = pad.RightTrigger > TriggerThreshold;
+        _heldDirection = null;
+    }
+
+    private static int Mask(XInputGamepad pad)
+        => pad.Buttons | (pad.LeftTrigger > TriggerThreshold ? LeftTriggerBit : 0) | (pad.RightTrigger > TriggerThreshold ? RightTriggerBit : 0);
+
+    private static readonly (int Bit, string Name)[] ButtonNames =
+    [
+        (0x0100, "LB"), (0x0200, "RB"), (LeftTriggerBit, "LT"), (RightTriggerBit, "RT"), (0x0020, "Select"), (0x0010, "Start"),
+        (0x0040, "L3"), (0x0080, "R3"), (0x1000, "A"), (0x2000, "B"), (0x4000, "X"), (0x8000, "Y"),
+        (0x0001, "Haut"), (0x0002, "Bas"), (0x0004, "Gauche"), (0x0008, "Droite"),
+    ];
+
+    public static string Describe(int chord) => string.Join(" + ", ButtonNames.Where(b => (chord & b.Bit) != 0).Select(b => b.Name));
+
+    /// <summary>Faux pour un bouton seul qui sert à naviguer (A, B, X, Y, croix) : l'application ne serait plus utilisable.</summary>
+    public static bool CanUseForPanel(int chord)
+        => chord != 0 && (System.Numerics.BitOperations.PopCount((uint)chord) > 1 || (chord & 0xF00F) == 0);
+
+    /// <summary>Un seul bouton : les jeux le reçoivent aussi, une combinaison les gêne moins.</summary>
+    public static bool IsSingle(int chord) => System.Numerics.BitOperations.PopCount((uint)chord) == 1;
 
     private void HandleDirection(NavAction? dir)
     {

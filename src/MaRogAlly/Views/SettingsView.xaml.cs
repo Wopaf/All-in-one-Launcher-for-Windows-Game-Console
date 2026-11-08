@@ -23,7 +23,7 @@ public partial class SettingsView : UserControl
     /// <summary>Saisie d'un texte : titre, valeur actuelle, application de la nouvelle valeur.</summary>
     public event Action<string, string, Action<string>>? EditRequested;
     public event Action? Changed, KeysChanged, RescanRequested, RefreshMetadataRequested, MissingMetadataRequested;
-    public event Action? HiddenGamesRequested, AccentRequested, UiScaleRequested, ThemeRequested, AppUpdateRequested, QuickPanelKeyRequested;
+    public event Action? HiddenGamesRequested, AccentRequested, UiScaleRequested, ThemeRequested, AppUpdateRequested, QuickPanelKeyRequested, QuickPanelPadRequested;
     private Border? _themeSwatch;
     private TextBlock? _themeName;
     private TextBlock? _uiScaleValue;
@@ -99,6 +99,7 @@ public partial class SettingsView : UserControl
 
         Header("Centre de contrôle");
         QuickPanelKeyRow();
+        QuickPanelPadRow();
         Switch("Mettre le jeu en pause", () => _settings.PauseGameWithPanel, v => _settings.PauseGameWithPanel = v,
             "Jeu en pause", "Un jeu de ta bibliothèque s'arrête complètement tant que le centre de contrôle est ouvert, puis repart là où il en était à sa fermeture.\n\nÀ éviter avec un jeu en ligne : le serveur peut te déconnecter, et un anti-triche peut le signaler. Le son du jeu se coupe pendant la pause.");
 
@@ -380,6 +381,26 @@ public partial class SettingsView : UserControl
             "La touche du clavier qui ouvre le centre de contrôle, quelle que soit l'application devant toi.\n\nSur la ROG Ally, relie la même touche à M1 (ou M2) dans Armoury Crate, dans le mode manette comme dans le mode bureau : leurs réglages sont séparés.\n\n« Détecter une touche » affiche la touche que tu presses : pratique pour vérifier ce que M1 envoie vraiment.");
         b.Click += (_, _) => QuickPanelKeyRequested?.Invoke();
         UpdateQuickPanelKey();
+    }
+
+    private TextBlock? _quickPanelPadValue;
+
+    private void QuickPanelPadRow()
+    {
+        _quickPanelPadValue = new TextBlock { FontSize = 15, Foreground = (Brush)FindResource("TextSecondary"), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var grid = new Grid();
+        grid.Children.Add(new TextBlock { Text = "Bouton de la manette", VerticalAlignment = VerticalAlignment.Center });
+        grid.Children.Add(_quickPanelPadValue);
+        var b = Row(new Button { Content = grid }, "Bouton de la manette",
+            "Un bouton, ou une combinaison de boutons pressés ensemble, qui ouvre le centre de contrôle, en plus de la touche du clavier.\n\nChoisis « Assigner », puis appuie sur les boutons et relâche-les.\n\nSeuls les boutons d'une manette Xbox sont lus (A, B, X, Y, croix, gâchettes, sticks, Select, Start), en mode manette. M1 et M2 n'en font pas partie : pour les utiliser, relie-les dans Armoury Crate à un bouton de manette. Un bouton seul est aussi reçu par les jeux : une combinaison, comme L3 + R3, les gêne moins.");
+        b.Click += (_, _) => QuickPanelPadRequested?.Invoke();
+        UpdateQuickPanelPad();
+    }
+
+    public void UpdateQuickPanelPad()
+    {
+        if (_quickPanelPadValue is not null)
+            _quickPanelPadValue.Text = _settings.QuickPanelPadButtons is { } chord ? Input.Gamepad.Describe(chord) : "Aucun";
     }
 
     public void UpdateQuickPanelKey()

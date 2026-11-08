@@ -38,6 +38,9 @@ public sealed class AppSettings
     /// <summary>Touche (code virtuel) qui ouvre le centre de contrôle ; null : Arrêt défil, Pause ou F13.</summary>
     public int? QuickPanelKey { get; set; }
 
+    /// <summary>Bouton ou combinaison de la manette (boutons XInput, gâchettes en plus) qui ouvre le centre de contrôle ; null : aucun.</summary>
+    public int? QuickPanelPadButtons { get; set; }
+
     /// <summary>Un jeu de la bibliothèque au premier plan est suspendu tant que le centre de contrôle est ouvert.</summary>
     public bool PauseGameWithPanel { get; set; } = true;
 

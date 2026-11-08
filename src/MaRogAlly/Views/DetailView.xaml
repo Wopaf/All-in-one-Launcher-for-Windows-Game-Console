@@ -159,6 +159,11 @@
                     <TextBlock Text="&#xE916;" FontFamily="{StaticResource Icons}" FontSize="15" Foreground="{DynamicResource Accent}" VerticalAlignment="Center" Margin="0,0,7,0"/>
                     <TextBlock Text="{Binding PlaytimeText}" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
                 </StackPanel>
+                <!-- Taille : place prise sur le disque, ou espace demandé par Steam (rempli après coup) -->
+                <StackPanel x:Name="SizePanel" Orientation="Horizontal" Margin="0,0,16,0" Visibility="Collapsed">
+                    <TextBlock Text="&#xEDA2;" FontFamily="{StaticResource Icons}" FontSize="15" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                    <TextBlock x:Name="SizeText" FontFamily="{StaticResource Display}" FontWeight="SemiBold" FontSize="16" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                </StackPanel>
                 <TextBlock Text="{Binding GenresText}" FontSize="15" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"/>
             </WrapPanel>
 

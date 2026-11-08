@@ -31,6 +31,7 @@ public sealed class SlideHighlight
     /// <summary>Glisse jusqu'à la ligne (rapide et fluide), ou s'y place directement s'il était masqué.</summary>
     public void MoveTo(FrameworkElement row, double opacity = 1)
     {
+        opacity = Math.Min(opacity, MaxOpacity);
         if (!row.IsVisible || row.ActualHeight <= 0)
         {
             // Ligne pas encore mesurée (liste reconstruite) : on réessaie une fois la mise en page faite.
@@ -58,7 +59,7 @@ public sealed class SlideHighlight
             var bounds = VisibleBounds();
             var bounceX = Fits(_move.X, at.X, _box.ActualWidth, width, bounds.Left, bounds.Right);
             var bounceY = Fits(_move.Y, y, _box.ActualHeight, height, bounds.Top, bounds.Bottom);
-            const double ms = 230;
+            const double ms = MoveMs;
             _move.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(at.X, Anim.Ms(ms)) { EasingFunction = bounceX ? Bounce : Smooth });
             _move.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(y, Anim.Ms(ms)) { EasingFunction = bounceY ? Bounce : Smooth });
             _box.BeginAnimation(FrameworkElement.WidthProperty, new DoubleAnimation(width, Anim.Ms(ms)) { EasingFunction = bounceX ? Bounce : Smooth });
@@ -66,6 +67,11 @@ public sealed class SlideHighlight
         }
         Anim.Fade(_box, opacity, 150);
     }
+
+    private const double MoveMs = 230;
+
+    /// <summary>Opacité du cadre, toujours la même : il souligne la sélection sans la masquer.</summary>
+    private const double MaxOpacity = 0.8;
 
     private static readonly BackEase Bounce = new() { EasingMode = EasingMode.EaseOut, Amplitude = 0.12 };
     private static readonly CubicEase Smooth = new() { EasingMode = EasingMode.EaseOut };
@@ -100,7 +106,7 @@ public sealed class SlideHighlight
     }
 
     /// <summary>Atténue le cadre sans le déplacer (ex. catégorie active quand on règle ses options).</summary>
-    public void Dim(double opacity) { if (_shown) Anim.Fade(_box, opacity, 150); }
+    public void Dim(double opacity) { if (_shown) Anim.Fade(_box, Math.Min(opacity, MaxOpacity), 150); }
 
     public void Hide()
     {

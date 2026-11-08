@@ -28,6 +28,21 @@ public sealed class GameSizes
             g.DiskBytes = g.IsInstalled && g.InstallDir is { } dir && _bytes.TryGetValue(StorageScanner.Norm(dir), out var bytes) ? bytes : null;
     }
 
+    /// <summary>Place prise par ce jeu installé : la mesure connue, sinon mesurée maintenant (fiche du jeu).</summary>
+    public async Task<long?> MeasureOneAsync(Game game)
+    {
+        if (!game.IsInstalled || game.InstallDir is not { } installDir) return null;
+        if (game.DiskBytes is { } known) return known;
+        var dir = StorageScanner.Norm(installDir);
+        if (!Directory.Exists(dir)) return null;
+        var bytes = await Task.Run(() => Measure(dir, CancellationToken.None));
+        _measured.Add(dir);
+        _bytes[dir] = bytes;
+        Json.Save(CachePath, _bytes);
+        game.DiskBytes = bytes;
+        return bytes;
+    }
+
     /// <summary>Mesure les dossiers pas encore vus dans cette session ; vrai si une taille a changé.</summary>
     public async Task<bool> MeasureAsync(IEnumerable<Game> games, Action<int, int> progress)
     {
