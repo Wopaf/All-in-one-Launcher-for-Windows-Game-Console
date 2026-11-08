@@ -17,14 +17,18 @@ namespace MaRogAlly.Views;
 public sealed class PointerOverlay : Window
 {
     /// <summary>Marge autour de la flèche (place de son ombre) ; la pointe est le point visé.</summary>
-    private const double Gap = 6, Stroke = 2.6;
+    private const double Gap = 6, Stroke = 1.7;
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TRANSPARENT = 0x20, WS_EX_TOOLWINDOW = 0x80, WS_EX_NOACTIVATE = 0x08000000;
     private const uint SWP_NOSIZE = 0x1, SWP_NOACTIVATE = 0x10;
     private static readonly IntPtr HwndTopmost = new(-1);
 
-    /// <summary>Flèche inclinée vers le haut à gauche, pointe en (0, 0), à la façon du modèle choisi.</summary>
-    private static readonly Geometry Arrow = Geometry.Parse("M 0,0 L 22,12.5 L 11.5,16 L 4,26 Z");
+    /// <summary>
+    /// Flèche inclinée vers le haut à gauche, pointe en (0, 0), coins arrondis (la pointe un peu moins, pour viser juste).
+    /// Calculée à partir des sommets (0,0), (22,12.5), (11.5,16) et (4,26).
+    /// </summary>
+    private static readonly Geometry Arrow = Geometry.Parse(
+        "M 1.91,1.09 L 18.87,10.72 Q 22,12.5 18.58,13.64 L 14.35,15.05 Q 11.5,16 9.7,18.4 L 6.16,23.12 Q 4,26 3.45,22.44 L 0.33,2.17 Q 0,0 1.91,1.09 Z");
 
     private IntPtr _hwnd;
 
@@ -49,7 +53,8 @@ public sealed class PointerOverlay : Window
         {
             Data = Arrow,
             Fill = Brushes.White,
-            Stroke = new SolidColorBrush(Color.FromRgb(0x12, 0x12, 0x14)),
+            // Contour fin et gris très foncé, légèrement transparent : net sans être dur.
+            Stroke = new SolidColorBrush(Color.FromArgb(0xE6, 0x28, 0x2A, 0x30)),
             StrokeThickness = Stroke,
             StrokeLineJoin = PenLineJoin.Round,
             Effect = new DropShadowEffect { Color = Colors.Black, BlurRadius = 6, ShadowDepth = 1.5, Opacity = 0.45 },

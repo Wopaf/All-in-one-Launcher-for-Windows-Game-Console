@@ -130,6 +130,10 @@ public partial class MainWindow : Window
         _padMouse.ShowPointer = (x, y) => (_pointer ??= new PointerOverlay()).ShowAt(x, y);
         _padMouse.HidePointer = () => _pointer?.HidePointer();
         _pad.BackgroundPoll += _padMouse.Update;
+        // Le curseur de la souris à la manette ne doit jamais rester affiché sur un jeu ou sur l'application.
+        var pointerWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        pointerWatch.Tick += (_, _) => _padMouse.Watch();
+        pointerWatch.Start();
         _pad.PanelChordPressed += OnQuickPanelKey;
         _pad.ConnectionChanged += connected => Toast(connected ? "" : "", connected ? "Manette connectée" : "Manette déconnectée");
 
@@ -2681,6 +2685,8 @@ public partial class MainWindow : Window
     {
         _hasController = await Task.Run(() => AllyController.IsAvailable);
         if (_hasController && ReadControlMode() == ControlMode.Auto) StartAutoControl();
+        // Notre mode Bureau garde la manette en mode manette (une version précédente l'avait mise en mode bureau).
+        if (_hasController && ReadControlMode() == ControlMode.Desktop) WriteControlMode(true);
     }
 
     private void ChooseControlMode(ControlMode mode)
@@ -2689,8 +2695,10 @@ public partial class MainWindow : Window
         _settings.Save();
         _autoControl?.Stop();
         _writtenGamepad = null;
+        _padMouseChecked = DateTime.MinValue;
         if (mode == ControlMode.Auto) StartAutoControl();
-        else WriteControlMode(mode == ControlMode.Gamepad);
+        // Bureau : notre mode bureau. La manette reste lue comme une manette (B, volet, combinaison), notre souris fait le reste.
+        else WriteControlMode(true);
     }
 
     /// <summary>
@@ -2731,8 +2739,11 @@ public partial class MainWindow : Window
                 // La minuterie du mode Auto réécrit le mode qui convient à l'application revenue devant.
                 _writtenGamepad = null;
                 break;
+            case ControlMode.Desktop:
+                // Notre mode bureau garde la manette en mode manette.
+                break;
             default:
-                // Mode bureau, choisi ici ou par Armoury Crate : c'était celui d'avant l'ouverture.
+                // Mode laissé à Armoury Crate, en mode bureau avant l'ouverture : on le lui rend.
                 _writtenGamepad = false;
                 _ = AllyController.WriteAsync(false);
                 break;
@@ -2758,8 +2769,11 @@ public partial class MainWindow : Window
         var now = DateTime.UtcNow;
         if (now - _padMouseChecked < TimeSpan.FromMilliseconds(250)) return _padMouseWanted;
         _padMouseChecked = now;
-        _padMouseWanted = _settings.PadMouse && !_desktop.IsForeground && _quickPanel is null
-            && (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || !WindowsShell.IsFullscreen(app.Handle) && !IsGamepadWindow(app));
+        var mode = ReadControlMode();
+        _padMouseWanted = mode != ControlMode.Gamepad && !_desktop.IsForeground && _quickPanel is null
+            // Bureau : la souris partout, jeux compris. Auto (ou mode laissé à Armoury Crate) : sur les applications de bureau seulement.
+            && (mode == ControlMode.Desktop
+                || _settings.PadMouse && (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || !WindowsShell.IsFullscreen(app.Handle) && !IsGamepadWindow(app)));
         return _padMouseWanted;
     }
 

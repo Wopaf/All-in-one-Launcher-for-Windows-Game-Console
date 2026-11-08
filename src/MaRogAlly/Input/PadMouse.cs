@@ -116,6 +116,20 @@ public sealed class PadMouse
         return GetCursorInfo(ref info) && (info.Flags & CursorShowing) != 0;
     }
 
+    /// <summary>
+    /// Vérification indépendante de la manette (minuterie) : les relevés s'arrêtent quand la manette n'est plus lue
+    /// (changement de mode) ou que l'application passe devant. Le curseur ne doit pas rester affiché pour autant.
+    /// </summary>
+    public void Watch()
+    {
+        if (!_pointerShown && !_left && !_right) return;
+        var stale = _clock.Elapsed.TotalSeconds - _last > 0.3;
+        if (!stale && IsWanted()) return;
+        if (_active) Log.Info(stale ? "Souris à la manette : manette plus lue, curseur caché" : "Souris à la manette : inactive");
+        _active = false;
+        Release();
+    }
+
     /// <summary>Relâche un clic resté enfoncé (l'application ou un jeu passe devant pendant un glisser) et cache notre curseur.</summary>
     public void Release()
     {
