@@ -120,6 +120,26 @@ public partial class MainMenu : OverlayBase
             Margin = new Thickness(4, 0, 0, 18),
         });
 
+    /// <summary>Avertissement sous le titre (pastille orange et texte), ex. pas de connexion internet.</summary>
+    public void AddWarning(string glyph, string text)
+    {
+        var row = new Border
+        {
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(14, 10, 14, 10), Margin = new Thickness(0, 0, 0, 14),
+            Background = new SolidColorBrush(Color.FromArgb(0x2E, 0xFF, 0x9F, 0x1C)),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0x9F, 0x1C)), BorderThickness = new Thickness(1),
+        };
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(new TextBlock
+        {
+            Text = glyph, FontFamily = (FontFamily)FindResource("Icons"), FontSize = 16, VerticalAlignment = VerticalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0x9F, 0x1C)), Margin = new Thickness(0, 0, 12, 0),
+        });
+        content.Children.Add(new TextBlock { Text = text, FontSize = 14, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 380 });
+        row.Child = content;
+        Items.Children.Add(row);
+    }
+
     public void AddSection(string title)
         => Items.Children.Add(new TextBlock
         {

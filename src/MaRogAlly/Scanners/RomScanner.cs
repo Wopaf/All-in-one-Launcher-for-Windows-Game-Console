@@ -55,7 +55,7 @@ public sealed partial class RomScanner(EmulatorInfo emulator) : GameScanner
         }
         catch { yield break; }
         foreach (var f in files.Order(StringComparer.OrdinalIgnoreCase))
-            if (emulator.Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)) yield return f;
+            if (emulator.Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase) && (emulator.Accept?.Invoke(f) ?? true)) yield return f;
         foreach (var d in dirs)
             foreach (var f in Files(d, depth + 1)) yield return f;
     }
@@ -67,7 +67,11 @@ public sealed partial class RomScanner(EmulatorInfo emulator) : GameScanner
     {
         var name = Path.GetFileNameWithoutExtension(path).Replace('_', ' ');
         name = Tags().Replace(name, " ");
+        // Nom d'un site collé au titre (« Jeu-SITE.NET », « Jeu V0 Switch-xci.com ») : retiré.
+        name = Site().Replace(name, " ");
         name = MultiSpace().Replace(name, " ").Trim(' ', '-', '.');
+        // En fin de titre : numéro de version (« V0 », « 3.0.1 ») ou mot « Switch » laissé par le nom du fichier.
+        while (Trailing().Match(name) is { Success: true } t) name = name[..t.Index].Trim(' ', '-', '.');
         // « Titre, The » ou « Titre, The - Sous-titre » : l'article revient devant.
         if (Article().Match(name) is { Success: true } m)
             name = $"{m.Groups["art"].Value} {m.Groups["title"].Value}{m.Groups["rest"].Value}";
@@ -79,6 +83,12 @@ public sealed partial class RomScanner(EmulatorInfo emulator) : GameScanner
 
     [GeneratedRegex(@"\s{2,}")]
     private static partial Regex MultiSpace();
+
+    [GeneratedRegex(@"[\s\-]?[A-Za-z0-9]+\.(com|net|org|xyz|info|to|io|cc|fr)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex Site();
+
+    [GeneratedRegex(@"[\s\-](v\d+(\.\d+)*|\d+\.\d+(\.\d+)*|Switch)$", RegexOptions.IgnoreCase)]
+    private static partial Regex Trailing();
 
     [GeneratedRegex(@"^(?<title>.+?), (?<art>The|A|An|Le|La|Les|L')(?<rest>( - .*)?)$", RegexOptions.IgnoreCase)]
     private static partial Regex Article();

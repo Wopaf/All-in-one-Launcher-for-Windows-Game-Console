@@ -87,7 +87,8 @@ public sealed class AchievementService(HttpClient http, AppSettings settings)
     public List<AchievementGame> Load(IReadOnlyList<Game> games) => Merge(games, ReadGalaxy());
 
     /// <summary>Met à jour les succès Steam des jeux joués (si une clé d'API est renseignée), puis renvoie la liste complète.</summary>
-    public async Task<List<AchievementGame>> RefreshAsync(IReadOnlyList<Game> games, Action<int, int>? progress, CancellationToken ct)
+    /// <param name="installedOnly">Vrai : seuls les jeux installés sont relus en ligne ; les autres gardent leurs succès connus.</param>
+    public async Task<List<AchievementGame>> RefreshAsync(IReadOnlyList<Game> games, Action<int, int>? progress, CancellationToken ct, bool installedOnly = false)
     {
         var galaxy = ReadGalaxy();
         var key = settings.SteamApiKey;
@@ -97,7 +98,7 @@ public sealed class AchievementService(HttpClient http, AppSettings settings)
             // Jeux Steam joués au moins une fois (ou dont Galaxy connaît des succès débloqués).
             var counted = galaxy.Where(g => g.Platform == Platform.Steam && g.Unlocked > 0).Select(g => g.Key).ToHashSet();
             var todo = games
-                .Where(g => g.SteamAppId is not null && g.Platform == Platform.Steam)
+                .Where(g => g.SteamAppId is not null && g.Platform == Platform.Steam && (!installedOnly || g.IsInstalled))
                 .Where(g => (g.PlaytimeMinutes ?? 0) > 0 || g.LastPlayedAny is not null || counted.Contains($"steam_{g.SteamAppId}"))
                 .Where(g => NeedsRefresh(g))
                 .Select(g => g.SteamAppId!.Value)
@@ -137,9 +138,11 @@ public sealed class AchievementService(HttpClient http, AppSettings settings)
             if (SteamProfilePrivate) Log.Info("Succès Steam : profil privé (« Détails du jeu » à rendre public)");
 
             // Succès Steam connus par Galaxy (souvent en anglais) : fiches françaises, renouvelées chaque mois.
+            var installed = games.Where(g => g.IsInstalled && g.SteamAppId is not null).Select(g => g.SteamAppId!.Value).ToHashSet();
             var schemas = galaxy
                 .Where(g => g.Platform == Platform.Steam && g.HasDetails && int.TryParse(g.Key["steam_".Length..], out _))
                 .Select(g => int.Parse(g.Key["steam_".Length..]))
+                .Where(id => !installedOnly || installed.Contains(id))
                 .Where(id => !_steam.TryGetValue(id, out var e) || e.Items.Count == 0)
                 .Where(id => !_schemas.TryGetValue(id, out var s) || DateTime.Now - s.FetchedAt > TimeSpan.FromDays(30))
                 .ToList();

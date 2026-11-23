@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using MaRogAlly.Input;
 using MaRogAlly.Models;
 using MaRogAlly.UI;
@@ -80,6 +81,8 @@ public partial class GamesView : UserControl
     public GamesView()
     {
         InitializeComponent();
+        // Chaque nouveau logo (chargé après coup) prend la taille qui convient à sa forme.
+        System.ComponentModel.DependencyPropertyDescriptor.FromProperty(Image.SourceProperty, typeof(Image)).AddValueChanged(LogoImage, (_, _) => SizeLogo());
         // Bibliothèque par défaut (sans temps de jeu sous le titre) ; Mes jeux le change en se déclarant.
         InstalledOnly = false;
         GridHost.SizeChanged += (_, _) => Relayout();
@@ -244,6 +247,7 @@ public partial class GamesView : UserControl
         RowPadding = new Thickness(SidePadding, 0, 0, 0);
         // Un peu moins que l'écart : le bord de la rangée suivante ne dépasse pas d'un filet.
         var edge = overflow - 2;
+        _edge = edge;
         RowsList.Height = RowHeight * VisibleRows + edge * 2;
         RowsList.Padding = new Thickness(0, edge, 0, edge);
         RowsList.Margin = new Thickness(0, -edge, 0, -edge);
@@ -265,11 +269,15 @@ public partial class GamesView : UserControl
         TileHeight = tileH;
         TileMargin = new Thickness(0, 0, Gap, 0);
         var overflow = Math.Ceiling((tileH * 0.045 + 26) / 2);
-        RowHeight = tileH + overflow * 2;
+        // La rangée défile à l'horizontale et coupe ce qui la dépasse : elle laisse au halo de la sélection toute sa place
+        // (zoom de 4,5 % + marge et flou du halo, environ 30 px), sans décaler la mise en page (marge négative équivalente).
+        var glow = Math.Ceiling(tileH * 0.0225 + 32);
+        var extra = Math.Max(0, glow - overflow);
+        RowHeight = tileH + glow * 2;
         RowPadding = new Thickness(SidePadding, 0, 0, 0);
         RowsList.Height = RowHeight;
         RowsList.Padding = new Thickness(0);
-        RowsList.Margin = new Thickness(0);
+        RowsList.Margin = new Thickness(0, -extra, 0, -extra);
         // Places vides jusqu'au bord de l'écran quand il y a peu de jeux.
         var slots = Math.Max(1, (int)Math.Ceiling((width - SidePadding + Gap) / (tileW + Gap)));
         if (slots != _slots)
@@ -313,10 +321,38 @@ public partial class GamesView : UserControl
         else scroll.ScrollToHorizontalOffset(_listOffset);
     }
 
+    /// <summary>
+    /// Taille du logo selon sa forme, à surface visible à peu près égale : un logo long et fin s'élargit et baisse,
+    /// un logo carré monte jusqu'à la hauteur du cadre. Sans cela, les uns paraissent minuscules et les autres énormes.
+    /// </summary>
+    private void SizeLogo()
+    {
+        if (LogoImage.Source is not BitmapSource { PixelWidth: > 0, PixelHeight: > 0 } logo)
+        {
+            LogoImage.Width = LogoImage.Height = double.NaN;
+            return;
+        }
+        var ratio = (double)logo.PixelWidth / logo.PixelHeight;
+        var maxHeight = LogoBox.Height;
+        var maxWidth = Math.Min(LogoBox.MaxWidth, maxHeight * 4.3);
+        // Référence : un logo 2,4 fois plus large que haut occupe 90 % de la hauteur du cadre.
+        var area = 2.4 * Math.Pow(maxHeight * 0.9, 2);
+        var height = Math.Min(maxHeight, Math.Sqrt(area / ratio));
+        var width = height * ratio;
+        if (width > maxWidth)
+        {
+            width = maxWidth;
+            height = width / ratio;
+        }
+        LogoImage.Width = Math.Round(width);
+        LogoImage.Height = Math.Round(height);
+    }
+
     /// <summary>Fiche du jeu plus ramassée sur petit écran : logo et titre réduits.</summary>
     private void ApplyCompact(bool compact)
     {
-        LogoBox.Height = compact ? 96 : 150;
+        LogoBox.Height = compact ? 120 : 170;
+        SizeLogo();
         TitleText.FontSize = compact ? 32 : 44;
         TitleText.LineHeight = compact ? 36 : 50;
         MetaRow.Margin = new Thickness(0, compact ? 8 : 16, 0, 0);
@@ -446,7 +482,12 @@ public partial class GamesView : UserControl
     private int VisibleRows => ListMode ? 1 : 2;
     private int _firstRow;
 
-    /// <summary>On ne défile que si la sélection sort des deux rangées visibles.</summary>
+    private double _edge;
+
+    /// <summary>
+    /// Défilement par pages de deux rangées : rangées 1-2, puis 3-4… Une dernière page incomplète garde sa place vide
+    /// en dessous (marge ajoutée), pour ne jamais montrer une rangée à moitié ni revoir la rangée d'avant.
+    /// </summary>
     private void ScrollToSelection(bool animate)
     {
         if (ListMode)
@@ -458,9 +499,14 @@ public partial class GamesView : UserControl
         _scroller ??= RowsList.Template.FindName("Scroller", RowsList) as ScrollViewer;
         if (_scroller is null || _index < 0) return;
         var row = _index / _cols;
-        if (row < _firstRow) _firstRow = row;
-        else if (row > _firstRow + VisibleRows - 1) _firstRow = row - VisibleRows + 1;
-        _firstRow = Math.Clamp(_firstRow, 0, Math.Max(0, RowCount - VisibleRows));
+        _firstRow = row - row % VisibleRows;
+        var missing = (VisibleRows - RowCount % VisibleRows) % VisibleRows;
+        var padding = new Thickness(0, _edge, 0, _edge + missing * RowHeight);
+        if (RowsList.Padding != padding)
+        {
+            RowsList.Padding = padding;
+            RowsList.UpdateLayout();
+        }
 
         var target = _firstRow * RowHeight;
         if (animate) Anim.ScrollTo(_scroller, target, 280);

@@ -33,6 +33,8 @@ public static class PlatformLogos
         // GBA : console horizontale, écran au centre.
         [Platform.Gba] = "F0 M5 5h14c3 0 5 2.5 5 6v2c0 3.5-2 6-5 6H5c-3 0-5-2.5-5-6v-2c0-3.5 2-6 5-6z M7 7.5v9h10v-9z M2.6 10.8v1.3H1.4v1.2h1.2v1.3h1.2v-1.3H5v-1.2H3.8v-1.3z M21 10.6a1 1 0 1 0 0 2a1 1 0 1 0 0-2z M19.4 13a1 1 0 1 0 0 2a1 1 0 1 0 0-2z",
         // N64 : manette à trois poignées.
+        // Switch : deux manettes de part et d'autre de l'écran.
+        [Platform.Switch] = "F0 M2.5 4H6v16H2.5A2.5 2.5 0 0 1 0 17.5v-11A2.5 2.5 0 0 1 2.5 4z M3 7a1.2 1.2 0 1 0 0 2.4a1.2 1.2 0 1 0 0-2.4z M7 4h10v16H7z M8.4 5.6v12.8h7.2V5.6z M18 4h3.5A2.5 2.5 0 0 1 24 6.5v11a2.5 2.5 0 0 1-2.5 2.5H18z M21 13.6a1.2 1.2 0 1 0 0 2.4a1.2 1.2 0 1 0 0-2.4z",
         [Platform.N64] = "F0 M4 5h16c2.2 0 4 1.8 4 4v1.5c0 1-.6 1.8-1.5 2.2L21 20a1.5 1.5 0 0 1-2.9.3L16.5 14h-2.3l-.7 7a1.5 1.5 0 0 1-3 0l-.7-7H7.5l-1.6 6.3A1.5 1.5 0 0 1 3 20l-1.5-7.3C.6 12.3 0 11.5 0 10.5V9c0-2.2 1.8-4 4-4z M4.5 7.5v1.5H3v1h1.5v1.5h1V10H7V9H5.5V7.5z M18 7.8a1 1 0 1 0 0 2a1 1 0 1 0 0-2z M20.4 9.4a1 1 0 1 0 0 2a1 1 0 1 0 0-2z M12 8.2a1.3 1.3 0 1 0 0 2.6a1.3 1.3 0 1 0 0-2.6z",
     };
 

@@ -12,25 +12,34 @@ using SharpCompress.Readers;
 
 namespace MaRogAlly.Services;
 
-/// <summary>Un émulateur proposé dans l'onglet Émulateurs, téléchargé depuis les versions publiées sur GitHub par ses auteurs.</summary>
+/// <summary>
+/// Un émulateur de l'onglet Émulateurs : téléchargé depuis les versions publiées sur GitHub par ses auteurs (<see cref="Repo"/>),
+/// ou seulement repris s'il est déjà installé sur la machine (<see cref="Locate"/>, sans téléchargement ni mise à jour).
+/// </summary>
 public sealed record EmulatorInfo(
     string Id,
     Platform Platform,
     string Name,
     string Pitch,
-    string Repo,
-    Regex Asset,
+    string? Repo,
+    Regex? Asset,
     string Exe,
     string[] Extensions,
     string ArgsFormat,
     string? PortableFile,
-    string FirstRunNote)
+    string FirstRunNote,
+    Func<string?>? Locate = null,
+    Func<IEnumerable<string>>? OwnFolders = null,
+    Func<string, bool>? Accept = null)
 {
     public PlatformInfo PlatformInfo => PlatformInfo.Of(Platform);
 
-    /// <summary>Dossier de l'émulateur : %LOCALAPPDATA%\MaRogAlly\Emulators\{Id}.</summary>
-    public string Dir => Path.Combine(Emulators.Root, Id);
-    public string ExePath => Path.Combine(Dir, Exe);
+    /// <summary>Installé, mis à jour et désinstallé par l'application (sinon : repris tel qu'il est sur la machine).</summary>
+    public bool Downloadable => Repo is not null;
+
+    /// <summary>Dossier de l'émulateur : %LOCALAPPDATA%\MaRogAlly\Emulators\{Id}, ou celui où il est déjà installé.</summary>
+    public string Dir => Locate?.Invoke() is { } found ? Path.GetDirectoryName(found)! : Path.Combine(Emulators.Root, Id);
+    public string ExePath => Locate?.Invoke() ?? Path.Combine(Emulators.Root, Id, Exe);
 
     /// <summary>Dossier de jeux de la console, toujours scanné (créé à l'installation).</summary>
     public string RomDir => Path.Combine(Emulators.RomsRoot, PlatformInfo.Short);
@@ -73,13 +82,33 @@ public static class Emulators
             "Rosalie241/RMG", new Regex(@"^RMG-Portable-Windows64-v[\d.]+\.zip$", RegexOptions.IgnoreCase), "RMG.exe",
             [".z64", ".n64", ".v64", ".zip", ".7z"], "-f -n -q {rom}", null,
             "Règle la manette une fois dans RMG (Réglages › Manette) avant de jouer."),
+        // Développement arrêté en 2024 : plus de téléchargement officiel. Proposé seulement s'il est déjà sur la machine.
+        new("yuzu", Platform.Switch, "yuzu",
+            "Déjà installé sur ta machine : l'application l'utilise tel quel, sans le télécharger ni le mettre à jour.",
+            null, null, "yuzu.exe",
+            [".nsp", ".xci"], "-f -g {rom}", null,
+            "yuzu a besoin des clés (prod.keys) et du firmware de ta propre Switch. Les dossiers de jeux réglés dans yuzu sont repris ici.",
+            Locate: Yuzu.Exe, OwnFolders: Yuzu.GameFolders, Accept: Yuzu.IsBaseGame),
     ];
+
+    /// <summary>Émulateurs affichés : ceux que l'application installe, et ceux déjà présents sur la machine.</summary>
+    public static IEnumerable<EmulatorInfo> Visible => All.Where(e => e.Downloadable || IsInstalled(e));
+
+    /// <summary>Fenêtre d'un émulateur (dossier de l'application ou émulateur repris) : elle se pilote comme un jeu.</summary>
+    public static bool IsEmulatorPath(string path)
+        => path.StartsWith(Root + '\\', StringComparison.OrdinalIgnoreCase)
+           || All.Any(e => !e.Downloadable && e.Locate?.Invoke() is { } exe && path.StartsWith(Path.GetDirectoryName(exe) + '\\', StringComparison.OrdinalIgnoreCase));
 
     public static EmulatorInfo? For(Platform platform) => All.FirstOrDefault(e => e.Platform == platform);
 
     public static EmulatorInstall? Installed(EmulatorInfo e)
     {
         if (!File.Exists(e.ExePath)) return null;
+        if (!e.Downloadable)
+        {
+            var version = FileVersionInfo.GetVersionInfo(e.ExePath).ProductVersion;
+            return new EmulatorInstall(string.IsNullOrWhiteSpace(version) ? "?" : version, File.GetLastWriteTime(e.ExePath));
+        }
         return Json.Load<EmulatorInstall>(Path.Combine(e.Dir, MarkerFile)) ?? new EmulatorInstall("?", File.GetLastWriteTime(e.ExePath));
     }
 
@@ -89,9 +118,13 @@ public static class Emulators
     public static List<string> RomFolders(EmulatorInfo e, AppSettings settings)
     {
         var folders = new List<string> { e.RomDir };
-        if (settings.RomFolders.TryGetValue(e.Platform, out var extra))
-            folders.AddRange(extra.Where(f => !folders.Contains(f, StringComparer.OrdinalIgnoreCase)));
-        return folders;
+        void Add(IEnumerable<string> more) => folders.AddRange(more.Where(f => !folders.Contains(f, StringComparer.OrdinalIgnoreCase)));
+        // Dossiers réglés dans l'émulateur lui-même (yuzu), puis ceux ajoutés dans l'application.
+        if (e.OwnFolders is { } own) Add(own());
+        if (settings.RomFolders.TryGetValue(e.Platform, out var extra)) Add(extra);
+        // Un dossier déjà compris dans un autre (sous-dossier) n'est ni scanné ni affiché deux fois.
+        static string Norm(string f) => f.Replace('/', '\\').TrimEnd('\\') + '\\';
+        return folders.Where(f => !folders.Any(o => o != f && Norm(f).StartsWith(Norm(o), StringComparison.OrdinalIgnoreCase) && Norm(f).Length > Norm(o).Length)).ToList();
     }
 
     /// <summary>L'émulateur tourne (fichiers verrouillés : ni mise à jour ni désinstallation).</summary>
@@ -111,6 +144,7 @@ public static class Emulators
     /// <summary>Dernière version publiée sur GitHub (null si GitHub ne répond pas ou si le fichier attendu manque).</summary>
     public static async Task<EmulatorRelease?> LatestAsync(HttpClient http, EmulatorInfo e, CancellationToken ct)
     {
+        if (e.Repo is null || e.Asset is null) return null;
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{e.Repo}/releases/latest");
@@ -156,6 +190,7 @@ public static class Emulators
     /// </summary>
     public static async Task InstallAsync(HttpClient http, EmulatorInfo e, EmulatorRelease release, IProgress<double> progress, CancellationToken ct)
     {
+        if (!e.Downloadable) throw new InvalidOperationException($"{e.Name} n'est pas installé par l'application.");
         var work = Path.Combine(Root, ".work", e.Id);
         var archive = Path.Combine(work, release.FileName);
         var staging = Path.Combine(work, "files");
@@ -214,6 +249,8 @@ public static class Emulators
     /// <summary>Supprime le dossier de l'émulateur (réglages et sauvegardes rangées dedans compris). Les jeux restent.</summary>
     public static void Uninstall(EmulatorInfo e)
     {
+        // Émulateur repris tel qu'il est sur la machine : l'application n'y touche jamais.
+        if (!e.Downloadable) return;
         if (Directory.Exists(e.Dir)) Directory.Delete(e.Dir, true);
         Log.Info($"Émulateur {e.Name} : désinstallé");
     }
@@ -252,4 +289,68 @@ public static class Emulators
         foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
             File.Copy(file, Path.Combine(to, Path.GetRelativePath(from, file)), overwrite: true);
     }
+}
+
+/// <summary>yuzu déjà installé (installateur officiel, avant l'arrêt du projet) : son exe et ses dossiers de jeux.</summary>
+internal static class Yuzu
+{
+    private static string Local => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+    private static string Roaming => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    private static string ProgramFiles => Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+    public static string? Exe()
+    {
+        string[] candidates =
+        [
+            Path.Combine(Local, "yuzu", "yuzu-windows-msvc", "yuzu.exe"),
+            Path.Combine(ProgramFiles, "yuzu", "yuzu-windows-msvc", "yuzu.exe"),
+            Path.Combine(ProgramFiles, "yuzu", "yuzu.exe"),
+        ];
+        return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>Réglages de yuzu : à côté de l'exe en version portable (dossier « user »), sinon dans %APPDATA%\yuzu.</summary>
+    private static string? ConfigFile()
+    {
+        if (Exe() is { } exe && Path.Combine(Path.GetDirectoryName(exe)!, "user", "config", "qt-config.ini") is var portable && File.Exists(portable)) return portable;
+        var roaming = Path.Combine(Roaming, "yuzu", "config", "qt-config.ini");
+        return File.Exists(roaming) ? roaming : null;
+    }
+
+    /// <summary>Dossiers de jeux ajoutés dans yuzu (Paths\gamedirs\N\path=…), sans ses emplacements internes (SDMC, NAND).</summary>
+    public static IEnumerable<string> GameFolders()
+    {
+        if (ConfigFile() is not { } file) return [];
+        try
+        {
+            return File.ReadLines(file)
+                .Select(line => GameDir.Match(line))
+                .Where(m => m.Success)
+                .Select(m => m.Groups[1].Value.Trim().Replace('/', '\\').TrimEnd('\\'))
+                .Where(p => p is not ("SDMC" or "UserNAND" or "SysNAND") && Path.IsPathRooted(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Dossiers de jeux de yuzu", ex);
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Jeu de base, pas une mise à jour ni un contenu téléchargeable : dans « Jeu [0100ABCD12340000][v0].nsp »,
+    /// l'identifiant d'un jeu finit par 000 (800 pour sa mise à jour, autre chose pour un DLC).
+    /// </summary>
+    public static bool IsBaseGame(string path)
+    {
+        var name = Path.GetFileNameWithoutExtension(path);
+        if (UpdateTag.IsMatch(name)) return false;
+        var id = TitleId.Match(name);
+        return !id.Success || id.Groups[1].Value.EndsWith("000", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static readonly Regex GameDir = new(@"^Paths\\gamedirs\\\d+\\path=(.+)$");
+    private static readonly Regex TitleId = new(@"\[(0100[0-9A-Fa-f]{12})\]");
+    private static readonly Regex UpdateTag = new(@"\[(UPD|Update|DLC)\]|\((UPD|Update|DLC)\)", RegexOptions.IgnoreCase);
 }

@@ -36,6 +36,7 @@ public partial class EmulatorsView : UserControl
     private (string Id, DateTime At)? _confirmUninstall;
 
     private readonly Dictionary<string, (Ellipse Dot, TextBlock Text)> _rowStates = [];
+    private List<EmulatorInfo> _shownList = [];
     private SlideHighlight? _highlight;
 
     /// <summary>Un émulateur ou un dossier de jeux a changé : la bibliothèque doit être relue.</summary>
@@ -62,6 +63,7 @@ public partial class EmulatorsView : UserControl
         _settings = settings;
         // À l'ouverture : le premier émulateur installé, sinon le premier de la liste.
         _current = Emulators.All.FirstOrDefault(Emulators.IsInstalled) ?? Emulators.All[0];
+        BuildList();
         Refresh();
     }
 
@@ -94,7 +96,9 @@ public partial class EmulatorsView : UserControl
     {
         List.Children.Clear();
         _rowStates.Clear();
-        foreach (var e in Emulators.All) List.Children.Add(BuildRow(e));
+        // Les émulateurs que l'application installe, et ceux déjà présents sur la machine (yuzu).
+        _shownList = Emulators.Visible.ToList();
+        foreach (var e in _shownList) List.Children.Add(BuildRow(e));
     }
 
     private Button BuildRow(EmulatorInfo e)
@@ -169,6 +173,7 @@ public partial class EmulatorsView : UserControl
             State.Downloading => (Blue, $"Téléchargement… {_busy[e.Id]:P0}"),
             State.NotInstalled => (Grey, "Non installé"),
             State.UpdateAvailable => (Orange, $"Mise à jour disponible ({_latest[e.Id]!.Version})"),
+            _ when !e.Downloadable => (Green, installed!.Version == "?" ? "Déjà installé sur la machine" : $"Déjà installé · version {installed.Version}"),
             _ => (Green, installed!.Version == "?" ? "Installé" : $"Installé · version {installed.Version}"),
         };
     }
@@ -178,6 +183,12 @@ public partial class EmulatorsView : UserControl
     /// <summary>Met à jour la liste et la fiche (états, compteurs), sans perdre la sélection.</summary>
     private void Refresh()
     {
+        // Un émulateur repris est apparu ou a disparu de la machine : la liste suit.
+        if (!Emulators.Visible.SequenceEqual(_shownList))
+        {
+            BuildList();
+            if (!_shownList.Contains(_current)) _current = _shownList[0];
+        }
         foreach (var e in Emulators.All)
         {
             if (!_rowStates.TryGetValue(e.Id, out var row)) continue;
@@ -187,8 +198,8 @@ public partial class EmulatorsView : UserControl
             if (RowOf(e)?.Content is Grid g && g.Children.OfType<TextBlock>().FirstOrDefault(t => Equals(t.Tag, "count")) is { } count)
                 count.Text = GamesOf(e).Count is var n and > 0 ? n.ToString() : "";
         }
-        var installed = Emulators.All.Count(Emulators.IsInstalled);
-        Summary.Text = $"{installed} sur {Emulators.All.Count} installés · {_games.Count} jeu{(_games.Count > 1 ? "x" : "")}";
+        var installed = _shownList.Count(Emulators.IsInstalled);
+        Summary.Text = $"{installed} sur {_shownList.Count} installés · {_games.Count} jeu{(_games.Count > 1 ? "x" : "")}";
         Show(_current, animate: false);
     }
 
@@ -253,6 +264,8 @@ public partial class EmulatorsView : UserControl
                 break;
             default:
                 Actions.Children.Add(Action("launch", "", $"Ouvrir {e.Name}", () => Launch(e)));
+                // Émulateur repris : ni mise à jour ni désinstallation depuis l'application.
+                if (!e.Downloadable) break;
                 Actions.Children.Add(state == State.UpdateAvailable
                     ? Action("update", "", "Mettre à jour", () => _ = InstallAsync(e, update: true))
                     : Action("check", "", _checking ? "Recherche…" : "Rechercher une mise à jour", () => _ = CheckUpdatesAsync(force: true)));
@@ -451,7 +464,8 @@ public partial class EmulatorsView : UserControl
         Show(_current, animate: false);
         try
         {
-            var found = await Task.WhenAll(Emulators.All.Select(e => Emulators.LatestAsync(_http, e, CancellationToken.None)));
+            // Seuls ceux que l'application installe ont une version à suivre sur GitHub.
+            var found = await Task.WhenAll(Emulators.All.Select(e => e.Downloadable ? Emulators.LatestAsync(_http, e, CancellationToken.None) : Task.FromResult<EmulatorRelease?>(null)));
             for (var i = 0; i < found.Length; i++)
                 if (found[i] is { } release) _latest[Emulators.All[i].Id] = release;
             _checkedAt = DateTime.Now;

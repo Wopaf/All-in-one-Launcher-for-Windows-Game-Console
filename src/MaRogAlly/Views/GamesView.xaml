@@ -186,16 +186,17 @@
         </Grid.RowDefinitions>
 
         <!-- ====== Fiche du jeu sélectionné ====== -->
-        <StackPanel x:Name="DetailPanel" Margin="64,0,64,22" ClipToBounds="False" VerticalAlignment="Bottom" HorizontalAlignment="Left" MaxWidth="900">
-            <Grid x:Name="LogoBox" Height="150" HorizontalAlignment="Left" MaxWidth="640">
-                <Image ui:ImageLoader.Source="{Binding LogoPath}" ui:ImageLoader.DecodeWidth="900"
-                       Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+        <!-- Logo (ou titre) centré au-dessus de la rangée -->
+        <StackPanel x:Name="DetailPanel" Margin="64,0,64,22" ClipToBounds="False" VerticalAlignment="Bottom" HorizontalAlignment="Center" MaxWidth="900">
+            <Grid x:Name="LogoBox" Height="150" HorizontalAlignment="Center" MaxWidth="640">
+                <Image x:Name="LogoImage" ui:ImageLoader.Source="{Binding LogoPath}" ui:ImageLoader.DecodeWidth="900" ui:ImageLoader.Trim="True"
+                       Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                        RenderOptions.BitmapScalingMode="HighQuality">
                     <Image.Effect>
                         <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.6"/>
                     </Image.Effect>
                 </Image>
-                <TextBlock x:Name="TitleText" Text="{Binding DisplayTitle}" Style="{StaticResource H1}" TextWrapping="Wrap" MaxWidth="820"
+                <TextBlock x:Name="TitleText" Text="{Binding DisplayTitle}" Style="{StaticResource H1}" TextWrapping="Wrap" MaxWidth="820" TextAlignment="Center" HorizontalAlignment="Center"
                            VerticalAlignment="Bottom" LineStackingStrategy="BlockLineHeight" LineHeight="50"
                            Visibility="{Binding LogoPath, Converter={StaticResource VisibleIf}, ConverterParameter=invert}"/>
             </Grid>

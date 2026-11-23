@@ -92,6 +92,30 @@ public static class WindowsShell
         return GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), ref monitor)
             && window.Left <= monitor.Screen.Left && window.Top <= monitor.Screen.Top && window.Right >= monitor.Screen.Right && window.Bottom >= monitor.Screen.Bottom;
     }
+    /// <summary>
+    /// Ferme pour de bon une application en arrière-plan : tous ses processus (ce programme), avec ceux qu'ils ont lancés
+    /// (les fenêtres web de Steam, par exemple). Faux si aucun n'a pu être arrêté (application administrateur).
+    /// </summary>
+    public static bool EndApp(string path)
+    {
+        var ended = false;
+        foreach (var process in System.Diagnostics.Process.GetProcessesByName(Path.GetFileNameWithoutExtension(path)))
+            using (process)
+            {
+                if (process.Id == Environment.ProcessId || !string.Equals(ProcessPath((uint)process.Id), path, StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    ended = true;
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException or AggregateException)
+                {
+                    Log.Error($"Fermeture de {path}", ex);
+                }
+            }
+        return ended;
+    }
+
     /// <summary>Fin de tâche : arrête de force le processus de cette fenêtre. Faux si Windows refuse (application administrateur).</summary>
     public static bool EndProcess(IntPtr hwnd)
     {

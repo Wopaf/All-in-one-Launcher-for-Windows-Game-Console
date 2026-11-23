@@ -26,6 +26,7 @@ public sealed partial class IgdbClient(HttpClient http, AppSettings settings)
         Platform.Nes => 18,
         Platform.Gba => 24,
         Platform.N64 => 4,
+        Platform.Switch => 130,
         _ => null,
     };
 

@@ -762,7 +762,7 @@ public partial class MainWindow : Window
     // Succès (toutes plateformes)
     // =====================================================================
 
-    private DateTime _lastAchievementsFetch;
+    private DateTime _lastAchievementsFetch, _lastInstalledAchievementsFetch;
     private List<AchievementGame> _achievementList = [];
     private bool _loadingAchievements, _achievementsShown;
 
@@ -802,14 +802,22 @@ public partial class MainWindow : Window
         finally { _achievementCoverGate.Release(); }
     }
 
-    private async Task LoadAchievementsAsync()
+    /// <param name="installedOnly">
+    /// Vrai (à l'ouverture de l'onglet Succès) : seuls les jeux installés sont relus en ligne, les autres gardent leurs
+    /// succès connus. Le scan complet reste celui du démarrage et des actualisations de la bibliothèque.
+    /// </param>
+    private async Task LoadAchievementsAsync(bool installedOnly = false)
     {
         if (_loadingAchievements) return;
         _loadingAchievements = true;
-        _achievementsDirty = false;
-        _lastAchievementsFetch = DateTime.Now;
+        if (installedOnly) _lastInstalledAchievementsFetch = DateTime.Now;
+        else
+        {
+            _achievementsDirty = false;
+            _lastAchievementsFetch = _lastInstalledAchievementsFetch = DateTime.Now;
+        }
         var games = _games.ToList();
-        Activity("achievements", "Succès", "Lecture des succès de toutes les plateformes…");
+        Activity("achievements", "Succès", installedOnly ? "Lecture des succès des jeux installés…" : "Lecture des succès de toutes les plateformes…");
         try
         {
             // Succès déjà connus tout de suite (cache Steam, base Galaxy), puis mise à jour en ligne.
@@ -822,7 +830,7 @@ public partial class MainWindow : Window
             }
             var list = await Task.Run(() => _achievements.RefreshAsync(games, (done, total) => Dispatcher.BeginInvoke(() =>
                 Activity("achievements", "Succès", $"Récupération des succès Steam ({done} / {total} jeux)…", (double)done / total)),
-                CancellationToken.None));
+                CancellationToken.None, installedOnly));
             _achievementList = list;
             _achievementsView.SetData(list, loaded: true, _achievements.SteamProfilePrivate);
             RefreshDetailAchievements();
@@ -1252,7 +1260,9 @@ public partial class MainWindow : Window
                 // Pas de visuel de jeu : seulement le fond de l'application.
                 av.FocusFirst();
                 SetHero(null);
-                if (DateTime.Now - _lastAchievementsFetch > TimeSpan.FromMinutes(10)) _ = LoadAchievementsAsync();
+                // À l'ouverture de l'onglet : les jeux installés seulement (le scan complet se fait au démarrage et toutes les 30 min).
+                if (_lastAchievementsFetch != DateTime.MinValue && DateTime.Now - _lastInstalledAchievementsFetch > TimeSpan.FromMinutes(10))
+                    _ = LoadAchievementsAsync(installedOnly: true);
                 break;
             case SettingsView sv:
                 sv.FocusFirst();
@@ -2525,18 +2535,41 @@ public partial class MainWindow : Window
         return panel;
     }
 
-    /// <summary>Applications lancées sans fenêtre (Steam, Epic Games…) : A fait réapparaître leur fenêtre.</summary>
+    /// <summary>Applications lancées sans fenêtre (Steam, Epic Games…) : A fait réapparaître leur fenêtre, Y les ferme pour de bon.</summary>
     private void OpenBackgroundApps()
     {
         var panel = DockPanelOf(BackgroundApps, bottom: true);
         panel.UseMenuStyle();
-        if (Dock.BackgroundApps.Count == 0) panel.AddHeader("Aucune application en arrière-plan");
-        foreach (var app in Dock.BackgroundApps)
-            panel.AddApp(app.Name, app.Path, () =>
+        var apps = Dock.BackgroundApps.ToList();
+        void Build()
+        {
+            panel.Clear();
+            panel.SetHints(apps.Count == 0 ? "B:Fermer" : "A:Ouvrir|Y:Quitter l'application|B:Fermer");
+            if (apps.Count == 0) panel.AddHeader("Aucune application en arrière-plan");
+            foreach (var app in apps)
+                panel.AddApp(app.Name, app.Path, () =>
+                {
+                    panel.Close();
+                    if (!GameLauncher.Open(app.OpenTarget)) Toast("", $"Impossible d'ouvrir {app.Name}");
+                }, tag: app);
+        }
+        Build();
+        // Y (ou clic droit) : l'application sélectionnée est arrêtée avec tous ses processus, et quitte la liste.
+        panel.SecondaryAction = tag =>
+        {
+            if (tag is not BackgroundApp app) return;
+            if (!WindowsShell.EndApp(app.Path))
             {
-                panel.Close();
-                if (!GameLauncher.Open(app.OpenTarget)) Toast("", $"Impossible d'ouvrir {app.Name}");
-            });
+                Toast("", $"Windows refuse de fermer {app.Name}");
+                return;
+            }
+            Log.Info($"Application en arrière-plan fermée : {app.Name}");
+            Toast("", $"{app.Name} est fermé");
+            apps.Remove(app);
+            panel.Rebuild(Build);
+            UpdateHints();
+            _ = RefreshDockSoonAsync();
+        };
         OpenOverlay(panel);
     }
 
@@ -3081,12 +3114,16 @@ public partial class MainWindow : Window
         menu.OpenSubMenu(() =>
         {
             menu.AddTitle("Mises à jour");
+            // Hors ligne : rien ne peut se télécharger, les états affichés sont ceux de la dernière vérification.
+            if (!Connectivity.IsOnline)
+                menu.AddWarning("", "Pas de connexion internet : les mises à jour ne peuvent pas être recherchées ni téléchargées.");
             var (winText, winColor) = MainMenu.WindowsStatus(_windowsUpdates);
             var (asusText, asusColor) = MainMenu.AsusStatus(_asusApp, _asusApp is not null || _lastUpdateCheck != default);
             var updates = new List<MenuTile>
             {
                 new("\uE895", "Windows", winText, () =>
                 {
+                    if (Offline("Windows")) return;
                     menu.Close();
                     _updatesDirty = true;
                     GameLauncher.Open("ms-settings:windowsupdate");
@@ -3096,6 +3133,7 @@ public partial class MainWindow : Window
             if (_asusApp is { } asus)
                 updates.Add(new MenuTile("\uE7FC", "Armoury Crate", asusText, async () =>
                 {
+                    if (Offline("Armoury Crate")) return;
                     menu.Close();
                     _updatesDirty = true;
                     if (!await UpdateChecker.LaunchAsync(asus)) Toast("\uE783", "Impossible d'ouvrir Armoury Crate");
@@ -3104,10 +3142,19 @@ public partial class MainWindow : Window
             var (appText, appColor) = AppUpdateStatus;
             menu.AddTiles(new MenuTile("", AppTile, appText, () =>
             {
+                if (Offline(AppTile)) return;
                 menu.Close();
                 _ = ManualAppUpdateAsync();
             }, appColor));
         });
+    }
+
+    /// <summary>Pas de connexion internet : un message le dit et la mise à jour demandée n'est pas lancée.</summary>
+    private bool Offline(string service)
+    {
+        if (Connectivity.IsOnline) return false;
+        Toast("", $"Pas de connexion internet : impossible de mettre à jour {service}");
+        return true;
     }
 
     // ---- Recherche sur toutes les boutiques (onglet Découverte) ----
@@ -3453,7 +3500,7 @@ public partial class MainWindow : Window
     private bool IsGameWindow(OpenWindow window)
         => window.IconSource is { } path && (_games.Any(g => g.InstallDir is { Length: > 0 } dir && path.StartsWith(dir.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase))
             // Émulateur installé depuis l'onglet Émulateurs : ses fenêtres sont celles d'un jeu.
-            || path.StartsWith(Emulators.Root + '\\', StringComparison.OrdinalIgnoreCase));
+            || Emulators.IsEmulatorPath(path));
 
     private void UpdateClock()
     {

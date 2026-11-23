@@ -320,7 +320,8 @@ public partial class AchievementsView : UserControl
         EmptyText.Visibility = Visibility.Collapsed;
         // Un jeu peut avoir des centaines de succès : les premières lignes tout de suite, la suite par petits lots.
         foreach (var a in items.Take(ItemsBatch)) Items.Children.Add(BuildItemRow(a));
-        Anim.Enter(Items, 0, 14, 280);
+        // Le cadre de sélection glisse avec les lignes : posé pendant l'arrivée, il resterait décalé.
+        Anim.Enter(ItemsHost, 0, 14, 280);
         Dispatcher.BeginInvoke(LoadVisibleIcons, DispatcherPriority.Loaded);
         if (items.Count > ItemsBatch) AppendItems(items, build);
     }
