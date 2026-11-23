@@ -32,11 +32,16 @@ public static class Power
     public static bool Sleep() => SetSuspendState(false, false, false);
 
     /// <summary>Arrêt immédiat de l'appareil.</summary>
-    public static bool Shutdown()
+    public static bool Shutdown() => RunShutdown("/s /t 0");
+
+    /// <summary>Redémarrage immédiat de l'appareil.</summary>
+    public static bool Restart() => RunShutdown("/r /t 0");
+
+    private static bool RunShutdown(string args)
     {
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("shutdown", "/s /t 0") { CreateNoWindow = true, UseShellExecute = false });
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("shutdown", args) { CreateNoWindow = true, UseShellExecute = false });
             return true;
         }
         catch { return false; }

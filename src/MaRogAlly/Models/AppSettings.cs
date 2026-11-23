@@ -75,6 +75,9 @@ public sealed class AppSettings
     /// <summary>Jeux ajoutés à la main (exécutables).</summary>
     public List<ManualGame> ManualGames { get; set; } = [];
 
+    /// <summary>Dossiers de jeux (ROM) ajoutés pour une console émulée, en plus de son dossier Roms dans les données de l'application.</summary>
+    public Dictionary<Platform, List<string>> RomFolders { get; set; } = [];
+
     public static AppSettings Load() => Json.Load<AppSettings>(AppPaths.Settings) ?? new AppSettings();
     public void Save() => Json.Save(AppPaths.Settings, this);
 

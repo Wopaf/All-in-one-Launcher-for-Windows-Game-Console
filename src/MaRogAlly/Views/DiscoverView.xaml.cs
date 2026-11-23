@@ -60,7 +60,7 @@ public partial class DiscoverView : UserControl
         if (ActualHeight <= 0) return;
         var compact = ActualHeight < 760;
         CoverHeight = Math.Clamp(Math.Floor(ActualHeight * (compact ? 0.3 : 0.32)), 120, 340);
-        CoverWidth = Math.Floor(CoverHeight / 1.5);
+        CoverWidth = Math.Floor(CoverHeight / CoverArt.Ratio);
         CoversHost.MinHeight = CoverHeight; // les onglets restent en place sur une liste vide
         TitleText.FontSize = compact ? 32 : 46;
         TitleText.LineHeight = compact ? 36 : 52;

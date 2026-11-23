@@ -866,9 +866,9 @@ public partial class StorageView : OverlayBase
 
     private static FrameworkElement Cover(Game game)
     {
-        var cover = new Grid { Width = 38, Height = 54, HorizontalAlignment = HorizontalAlignment.Left, Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x2A)) };
+        var cover = new Grid { Width = 39, Height = 54, HorizontalAlignment = HorizontalAlignment.Left, Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x2A)) };
         Rounded.SetRadius(cover, 6);
-        var image = new Image { Stretch = Stretch.UniformToFill };
+        var image = CoverArt.Image();
         ImageLoader.SetDecodeWidth(image, 90);
         ImageLoader.SetSource(image, game.CoverPath);
         cover.Children.Add(image);

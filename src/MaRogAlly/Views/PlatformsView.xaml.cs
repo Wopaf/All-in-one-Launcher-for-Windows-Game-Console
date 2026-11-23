@@ -41,8 +41,8 @@ public partial class PlatformsView : UserControl
         foreach (var t in new[] { InstalledCount, OwnedCount, HoursCount }) t.FontSize = compact ? 30 : 44;
         RatioBar.Margin = new Thickness(0, compact ? 10 : 22, 0, 0);
         GamesLabel.Margin = new Thickness(0, compact ? 14 : 34, 0, compact ? 8 : 12);
-        CoverWidth = compact ? 74 : 116;
         CoverHeight = compact ? 111 : 174;
+        CoverWidth = Math.Floor(CoverHeight / CoverArt.Ratio);
         ActionsRow.Margin = new Thickness(0, compact ? 14 : 34, 0, 0);
     }
 
@@ -50,7 +50,7 @@ public partial class PlatformsView : UserControl
     {
         InitializeComponent();
         SizeChanged += (_, _) => ApplyCompact(ActualHeight < 760);
-        SetData(PlatformInfo.All.Where(p => p.Id != Platform.Manual).Select(p => new PlatformStatus(p, false, 0, 0)).ToList(), []);
+        SetData(PlatformInfo.All.Where(p => p.HasLauncher).Select(p => new PlatformStatus(p, false, 0, 0)).ToList(), []);
     }
 
     public void SetData(List<PlatformStatus> statuses, IReadOnlyList<Game> games)
@@ -58,7 +58,7 @@ public partial class PlatformsView : UserControl
         var focused = (Keyboard.FocusedElement as Button)?.Tag as PlatformStatus;
         _games = games.ToList();
         _statuses = statuses
-            .Where(s => s.Info.Id != Platform.Manual || s.Owned > 0)
+            .Where(s => s.Info.HasLauncher || s.Info.Id == Platform.Manual && s.Owned > 0)
             .OrderByDescending(s => s.ClientInstalled)
             .ThenByDescending(s => s.Owned)
             .ThenBy(s => (int)s.Info.Id)

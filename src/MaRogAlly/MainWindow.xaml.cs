@@ -50,6 +50,7 @@ public partial class MainWindow : Window
     /// <summary>Luminosité de l'écran ; null si elle ne se règle pas depuis l'application (écran externe).</summary>
     private CancellationTokenSource? _searchCts;
     private readonly PlatformsView _platforms = new();
+    private readonly EmulatorsView _emulators = new();
     private readonly AchievementsView _achievementsView = new();
     private readonly SettingsView _settingsView;
     private readonly (string Title, FrameworkElement View, string Key)[] _pages;
@@ -111,6 +112,7 @@ public partial class MainWindow : Window
             ("Bibliothèque", _all, "library"),
             ("Découverte", _explore, "explore"),
             ("Succès", _achievementsView, "achievements"),
+            ("Émulateurs", _emulators, "emulators"),
         ];
         BuildTabs();
         WireViews();
@@ -118,7 +120,7 @@ public partial class MainWindow : Window
         // Volet ouvert : la manette le pilote, même si Windows lui a refusé le premier plan.
         // Pendant l'essai de la souris, la manette pilote la souris et non l'application.
         _pad.IsActive = () => (_desktop.IsForeground || _quickPanel is not null) && _mouseTest is null;
-        _pad.Action += OnNav;
+        _pad.Action += OnPadNav;
         _pad.MinimizeRequested += () =>
         {
             // B pendant l'essai de la souris : il se referme.
@@ -749,6 +751,7 @@ public partial class MainWindow : Window
         _sizes.Apply(games);
         _installed.SetGames(games);
         _all.SetGames(games);
+        _emulators.SetGames(games);
         _installed.SetActive(CurrentGames == _installed);
         _all.SetActive(CurrentGames == _all);
         MarkOwnedFreeGames();
@@ -1240,6 +1243,11 @@ public partial class MainWindow : Window
                 pv.RefreshRunning();
                 SetHero(null);
                 break;
+            case EmulatorsView emv:
+                emv.FocusFirst();
+                SetHero(null);
+                _ = emv.CheckUpdatesAsync();
+                break;
             case AchievementsView av:
                 // Pas de visuel de jeu : seulement le fond de l'application.
                 av.FocusFirst();
@@ -1330,6 +1338,17 @@ public partial class MainWindow : Window
             gv.SortRequested += () => OpenSort(gv);
             gv.HintsChanged += () => { if (gv == CurrentGames && _overlays.Count == 0) UpdateHints(); };
         }
+
+        // Émulateurs : une installation, une désinstallation ou un dossier de jeux change la bibliothèque (disque d'abord, puis fiches).
+        _emulators.Init(_http, _settings);
+        _emulators.Toast += (glyph, text) => Toast(glyph, text);
+        _emulators.LibraryChanged += async () =>
+        {
+            await ScanAsync(initial: false, localOnly: true);
+            await ScanAsync(initial: false);
+        };
+        // Aides en bas : différentes dans la liste et dans la fiche.
+        _emulators.GotKeyboardFocus += (_, _) => { if (CurrentView == _emulators && _overlays.Count == 0) UpdateHints(); };
 
         Dock.AppRequested += w =>
         {
@@ -1620,6 +1639,7 @@ public partial class MainWindow : Window
             DiscoverView dv => dv.Handle(action),
             ExploreView ev => ev.Handle(action),
             PlatformsView pv => pv.Handle(action),
+            EmulatorsView emv => emv.Handle(action),
             AchievementsView av => av.Handle(action),
             SettingsView sv => sv.Handle(action),
             _ => false,
@@ -1693,7 +1713,24 @@ public partial class MainWindow : Window
         };
         if (a is null) return;
         e.Handled = true;
+        // Steam Input ou Armoury Crate peuvent envoyer en plus une touche du clavier pour le même appui sur LB, RB, LT ou RT :
+        // l'action, déjà reçue de la manette, partirait deux fois (ou dans le mauvais sens). La touche est alors ignorée.
+        if (a is NavAction.PrevTab or NavAction.NextTab or NavAction.PrevLetter or NavAction.NextLetter
+            && DateTime.UtcNow - _lastPadShoulder < TimeSpan.FromMilliseconds(250))
+        {
+            Log.Info($"Touche {e.Key} reçue juste après LB/RB/LT/RT de la manette : ignorée");
+            return;
+        }
         OnNav(a.Value);
+    }
+
+    private DateTime _lastPadShoulder;
+
+    /// <summary>Action venue de la manette : les gâchettes et les boutons de tranche sont notés (voir <see cref="OnKeyDown"/>).</summary>
+    private void OnPadNav(NavAction action)
+    {
+        if (action is NavAction.PrevTab or NavAction.NextTab or NavAction.PrevLetter or NavAction.NextLetter) _lastPadShoulder = DateTime.UtcNow;
+        OnNav(action);
     }
 
     private void OnTextInput(object sender, TextCompositionEventArgs e)
@@ -1777,6 +1814,7 @@ public partial class MainWindow : Window
                 case DiscoverView dv: dv.FocusFirst(); SetHero(dv.CurrentHero); break;
                 case ExploreView ev: ev.FocusFirst(); SetHero(ev.CurrentHero); break;
                 case PlatformsView pv: pv.FocusFirst(); break;
+                case EmulatorsView emv: emv.FocusFirst(); break;
                 case AchievementsView av: av.FocusFirst(); SetHero(null); break;
                 case SettingsView sv: sv.FocusFirst(); break;
                 case GamesView gv: OnSelectionChanged(gv.Selected); gv.RestoreFocus(); break;
@@ -2650,7 +2688,7 @@ public partial class MainWindow : Window
             {
                 // Plateformes prises en charge par l'application et installées : détectées, ou présentes dans la liste de Windows.
                 var detected = LibraryService.InstalledLaunchers();
-                var platforms = PlatformInfo.All.Where(p => p.Id != Platform.Manual
+                var platforms = PlatformInfo.All.Where(p => p.HasLauncher
                     && (detected.Any(d => d.Id == p.Id) || loaded.Any(a => WindowsShell.LauncherPlatform(a.Name) == p.Id))).ToList();
 
                 // Historique de Windows, complété par ce qui a été lancé depuis ce menu.
@@ -2956,11 +2994,22 @@ public partial class MainWindow : Window
         timer.Tick += (_, _) =>
         {
             // La souris à la manette remplace le mode bureau : la manette reste toujours lue comme une manette
-            // (réécrit chaque seconde si Armoury Crate l'a changé ; rien n'est écrit tant qu'il n'a pas changé).
+            // (réécrit si Armoury Crate l'a changé ; rien n'est écrit tant qu'il n'a pas changé).
+            // Armoury Crate (un profil de jeu, par exemple) peut repasser en mode bureau pendant une partie : la manette
+            // n'est plus lue comme une manette et imite un clavier, LB et RB n'ont plus leur rôle. On le voit à la manette
+            // XInput disparue : le mode manette est réécrit, au plus toutes les 5 s (chaque écriture peut faire perdre à M1 sa touche).
+            if (_writtenGamepad == true && !_pad.IsConnected && _quickPanel is null && DateTime.UtcNow - _modeRewritten > TimeSpan.FromSeconds(5))
+            {
+                _modeRewritten = DateTime.UtcNow;
+                Log.Info("Manette plus lue comme une manette (mode bureau ?) : mode manette réécrit");
+                _writtenGamepad = null;
+            }
             WriteControlMode(true);
         };
         return timer;
     }
+
+    private DateTime _modeRewritten;
 
     private bool _menuWarmed, _quickPanelWarmed, _keyboardWarmed;
 
@@ -3402,7 +3451,9 @@ public partial class MainWindow : Window
     private bool IsGamepadWindow(OpenWindow window) => IsGameWindow(window) || WindowsShell.IsWindowsSettings(window);
 
     private bool IsGameWindow(OpenWindow window)
-        => window.IconSource is { } path && _games.Any(g => g.InstallDir is { Length: > 0 } dir && path.StartsWith(dir.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase));
+        => window.IconSource is { } path && (_games.Any(g => g.InstallDir is { Length: > 0 } dir && path.StartsWith(dir.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase))
+            // Émulateur installé depuis l'onglet Émulateurs : ses fenêtres sont celles d'un jeu.
+            || path.StartsWith(Emulators.Root + '\\', StringComparison.OrdinalIgnoreCase));
 
     private void UpdateClock()
     {
@@ -3424,6 +3475,7 @@ public partial class MainWindow : Window
             DiscoverView dv => dv.Hints,
             ExploreView ev => ev.Hints,
             PlatformsView => "Y:Ouvrir le lanceur|B:Retour",
+            EmulatorsView emv => emv.Hints,
             AchievementsView av => av.Hints,
             SettingsView => "A:Valider|Y:Ouvrir le site|B:Retour",
             _ => "",

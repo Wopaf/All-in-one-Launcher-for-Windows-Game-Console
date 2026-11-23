@@ -41,7 +41,7 @@
                     </Grid>
 
                     <Image ui:ImageLoader.DecodeWidth="320" ui:ImageLoader.Source="{Binding CoverPath}"
-                           Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                           Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
 
 
                     <!-- Plateforme (visible à la sélection) -->

@@ -149,7 +149,7 @@
                                 <Grid Width="{Binding CoverWidth, RelativeSource={RelativeSource AncestorType=UserControl}}" Height="{Binding CoverHeight, RelativeSource={RelativeSource AncestorType=UserControl}}" Margin="0,0,14,0" ui:Rounded.Radius="10" Background="#1A1F2A">
                                     <TextBlock Text="{Binding DisplayTitle}" Margin="10" FontSize="13" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
-                                    <Image ui:ImageLoader.DecodeWidth="240" ui:ImageLoader.Source="{Binding CoverPath}" Stretch="UniformToFill"/>
+                                    <Image ui:ImageLoader.DecodeWidth="240" ui:ImageLoader.Source="{Binding CoverPath}" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

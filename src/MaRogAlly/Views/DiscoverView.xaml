@@ -13,7 +13,7 @@
                 <Grid>
                     <TextBlock Text="{Binding Name}" Margin="10" TextWrapping="Wrap" VerticalAlignment="Center" TextAlignment="Center"
                                FontSize="14" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
-                    <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
+                    <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     <!-- Classement (les plus joués) -->
                     <Border CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
                             Background="#E60A0C11" Visibility="{Binding RankText, Converter={StaticResource VisibleIf}}">

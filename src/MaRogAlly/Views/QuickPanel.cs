@@ -415,17 +415,35 @@ public sealed class QuickPanel : UserControl
         var screen = BeginScreen("Éteindre");
         _back = BuildTab;
         SetHints(("A", "Valider"), ("B", "Annuler"));
-        _items.Children.Add(new TextBlock { Text = "Éteindre l'appareil maintenant ?", FontSize = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 4, 8) });
+        _items.Children.Add(new TextBlock { Text = "Éteindre ou redémarrer l'appareil maintenant ?", FontSize = 18, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(4, 0, 4, 8) });
         AddNote("Ce qui n'a pas été enregistré dans le jeu en cours sera perdu.");
         _items.Children.Add(new Border { Height = 16 });
         AddTiles(56,
             (null, "Annuler", () => BuildTab()),
-            (null, "Éteindre", () =>
-            {
-                if (!Power.Shutdown()) SetStatus("Impossible d'éteindre l'appareil.");
-            }));
+            (null, "Redémarrer", () => PowerOff(restart: true)),
+            (null, "Éteindre", () => PowerOff(restart: false)));
         FocusFirst();
         _ = screen;
+    }
+
+    /// <summary>
+    /// Écran d'arrêt affiché par-dessus tout, puis arrêt ou redémarrage une fois qu'il est dessiné.
+    /// Il reste à l'écran jusqu'à ce que Windows ferme l'application.
+    /// </summary>
+    private void PowerOff(bool restart)
+    {
+        var screen = new PowerScreen(restart);
+        screen.Show();
+        screen.Activate();
+        var later = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+        later.Tick += (_, _) =>
+        {
+            later.Stop();
+            if (restart ? Power.Restart() : Power.Shutdown()) return;
+            screen.Close();
+            SetStatus(restart ? "Impossible de redémarrer l'appareil." : "Impossible d'éteindre l'appareil.");
+        };
+        later.Start();
     }
 
     public void Handle(NavAction action)

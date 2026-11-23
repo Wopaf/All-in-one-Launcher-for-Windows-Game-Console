@@ -19,6 +19,10 @@ public enum Platform
     Minecraft,
     Rsi,
     Manual,
+    // Consoles émulées (onglet Émulateurs) : toujours à la fin, l'ordre sert d'index dans PlatformInfo.All.
+    Nes,
+    Gba,
+    N64,
 }
 
 /// <summary>Description d'une plateforme : nom affiché, couleur, accroche, lanceur et page de téléchargement.</summary>
@@ -48,7 +52,16 @@ public sealed record PlatformInfo(
         new(Platform.Minecraft, "Minecraft Launcher","MC",     "#62B47A", "Le lanceur de Minecraft",                 "https://www.minecraft.net/download", null),
         new(Platform.Rsi,       "RSI Launcher",      "RSI",    "#6FB8E6", "Star Citizen et Squadron 42",             "https://robertsspaceindustries.com/download", null),
         new(Platform.Manual,    "Ajoutés à la main", "PERSO",  "#9AA4B2", "Émulateurs et jeux sans lanceur",         "", null),
+        new(Platform.Nes,       "NES",               "NES",    "#D9333F", "Nintendo Entertainment System",           "", null),
+        new(Platform.Gba,       "Game Boy Advance",  "GBA",    "#7B6CF6", "La console portable 32 bits de Nintendo", "", null),
+        new(Platform.N64,       "Nintendo 64",       "N64",    "#2E9E4F", "La console 64 bits de Nintendo",          "", null),
     ];
+
+    /// <summary>Console émulée : ses jeux sont des fichiers (ROM) lancés par un émulateur de l'onglet Émulateurs.</summary>
+    public bool IsEmulated => Id is Platform.Nes or Platform.Gba or Platform.N64;
+
+    /// <summary>Plateforme avec un lanceur à installer (ni jeux ajoutés à la main, ni console émulée).</summary>
+    public bool HasLauncher => Id != Platform.Manual && !IsEmulated;
 
     public static PlatformInfo Of(Platform p) => All[(int)p];
 

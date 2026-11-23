@@ -24,6 +24,7 @@ public sealed class LibraryService(AppSettings settings, HttpClient http)
         new SteamScanner(), new EpicScanner(), new GogScanner(), new EaScanner(), new UbisoftScanner(),
         new BattleNetScanner(), new XboxScanner(), new AmazonScanner(), new RiotScanner(), new ItchScanner(),
         new RockstarScanner(), new AnkamaScanner(), new MinecraftScanner(), new RsiScanner(), new ManualScanner(),
+        .. Emulators.All.Select(e => new RomScanner(e)),
     ];
 
     private Dictionary<string, GameUserData> _userData = Json.Load<Dictionary<string, GameUserData>>(AppPaths.UserData) ?? [];
@@ -32,7 +33,7 @@ public sealed class LibraryService(AppSettings settings, HttpClient http)
     public static List<PlatformInfo> InstalledLaunchers()
         => Scanners.Where(s =>
             {
-                try { return s.Platform != Platform.Manual && s.IsClientInstalled(); }
+                try { return PlatformInfo.Of(s.Platform).HasLauncher && s.IsClientInstalled(); }
                 catch { return false; }
             })
             .Select(s => PlatformInfo.Of(s.Platform))

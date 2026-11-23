@@ -182,7 +182,7 @@ public partial class ExploreView : UserControl
         MainArea.Margin = new Thickness(0, spot || FreeSection.Visibility == Visibility.Visible ? gap + 10 : gap, 0, 0);
         // Un peu plus de cinq jaquettes visibles par rangée (la suivante, coupée, annonce la suite).
         CoverWidth = Math.Clamp(Math.Floor((ActualWidth - 128 + 18) / 5.5 - 18), 120, 260);
-        CoverHeight = Math.Floor(CoverWidth * 1.5);
+        CoverHeight = Math.Floor(CoverWidth * CoverArt.Ratio);
         FreeCardWidth = compact ? 320 : 420;
         FreeHeight = Math.Floor(FreeCardWidth * 0.46);
         // Hauteur stable : la rangée ne saute pas entre les tendances, une recherche en cours et les résultats.

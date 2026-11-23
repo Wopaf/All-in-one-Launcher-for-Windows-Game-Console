@@ -228,11 +228,11 @@ public partial class GamesView : UserControl
         // Deux rangées sous la fiche : la hauteur restante fixe la taille des vignettes, la largeur le nombre de colonnes.
         var bar = CategoryHost.Visibility == Visibility.Visible ? 34 : 0;
         var rowTarget = Math.Min(ActualHeight * 0.3, (ActualHeight - DetailPanel.Height - DetailPanel.Margin.Bottom - 40 - bar) / VisibleRows);
-        var targetW = Math.Min(220, (rowTarget - 34) / 1.5);
+        var targetW = Math.Min(220, (rowTarget - 34) / CoverArt.Ratio);
         var cols = Math.Clamp((int)((usable + Gap) / (targetW + Gap)), 4, 18);
         // Sur un écran très large (limite de colonnes atteinte), les vignettes ne grossissent pas au-delà de ce que permet la hauteur.
         var tileW = Math.Floor(Math.Min((usable - Gap * (cols - 1)) / cols, targetW * 1.15));
-        var tileH = Math.Floor(tileW * 1.5);
+        var tileH = Math.Floor(tileW * CoverArt.Ratio);
 
         TileWidth = tileW;
         TileHeight = tileH;
@@ -260,7 +260,7 @@ public partial class GamesView : UserControl
     private void LayoutList(double width)
     {
         var tileW = Math.Clamp(Math.Floor((width - SidePadding * 2 + Gap) / 5.5 - Gap), 120, 260);
-        var tileH = Math.Floor(tileW * 1.5);
+        var tileH = Math.Floor(tileW * CoverArt.Ratio);
         TileWidth = tileW;
         TileHeight = tileH;
         TileMargin = new Thickness(0, 0, Gap, 0);

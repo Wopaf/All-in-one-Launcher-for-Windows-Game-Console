@@ -32,6 +32,7 @@ L'exécutable n'est pas signé : Windows peut afficher un avertissement au premi
 ## Sources
 
 - Jeux installés : Steam, Epic, GOG, EA app, Ubisoft Connect, Battle.net, Xbox/Microsoft Store, Amazon Games, Riot, itch.io, Rockstar, Ankama, Minecraft Launcher, RSI Launcher, plus les jeux ajoutés à la main.
+- Consoles émulées (onglet Émulateurs) : NES (Mesen), Game Boy Advance (mGBA), Nintendo 64 (Rosalie's Mupen GUI), installés depuis leurs versions officielles sur GitHub dans `%LOCALAPPDATA%\MaRogAlly\Emulators\`. Les jeux (ROM) de `Roms\<console>\` et des dossiers ajoutés apparaissent dans Mes Jeux.
 - Jeux possédés non installés : cache du lanceur Epic, base GOG Galaxy (et plateformes qui y sont connectées), Amazon, itch, API Steam (clé facultative).
 - Fiches et catégories : magasin Steam (sans clé, en français), IGDB (clés Twitch), SteamGridDB (clé).
 

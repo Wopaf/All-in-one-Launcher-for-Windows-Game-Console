@@ -185,9 +185,9 @@ public partial class StatsView : OverlayBase
         var content = new Grid { Margin = new Thickness(30, 26, 30, 26), VerticalAlignment = VerticalAlignment.Bottom };
         content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         content.ColumnDefinitions.Add(new ColumnDefinition());
-        var cover = new Grid { Width = 110, Height = 165, Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x2A)), Margin = new Thickness(0, 0, 24, 0) };
+        var cover = new Grid { Width = 118, Height = 165, Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x2A)), Margin = new Thickness(0, 0, 24, 0) };
         Rounded.SetRadius(cover, 12);
-        var coverImg = new Image { Stretch = Stretch.UniformToFill };
+        var coverImg = CoverArt.Image();
         ImageLoader.SetDecodeWidth(coverImg, 240);
         ImageLoader.SetSource(coverImg, top.CoverPath);
         cover.Children.Add(coverImg);

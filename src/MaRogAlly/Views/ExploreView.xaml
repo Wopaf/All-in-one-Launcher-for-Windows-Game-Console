@@ -102,7 +102,7 @@
                 <Grid>
                     <TextBlock Text="{Binding Title}" Margin="10" TextWrapping="Wrap" VerticalAlignment="Center" TextAlignment="Center"
                                FontSize="14" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
-                    <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
+                    <Image ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     <Border x:Name="PriceBadge" CornerRadius="6" Padding="7,2" Margin="8" HorizontalAlignment="Left" VerticalAlignment="Top"
                             Background="#E60A0C11" Visibility="{Binding Badge, Converter={StaticResource VisibleIf}}">
                         <TextBlock Text="{Binding Badge}" FontFamily="{DynamicResource Display}" FontWeight="Bold" FontSize="12" Foreground="White"/>
@@ -184,10 +184,10 @@
                     <TextBlock Text="{Binding Name}" Margin="10" TextWrapping="Wrap" VerticalAlignment="Center" TextAlignment="Center"
                                FontSize="14" Foreground="{StaticResource TextSecondary}" TextTrimming="WordEllipsis"/>
                     <!-- Sans jaquette verticale : l'image horizontale entière, sur un fond flouté tiré d'elle-même -->
-                    <Image x:Name="CoverBlur" ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill" Opacity="0.5" Visibility="Collapsed">
+                    <Image x:Name="CoverBlur" ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5" Visibility="Collapsed">
                         <Image.Effect><BlurEffect Radius="22" KernelType="Gaussian"/></Image.Effect>
                     </Image>
-                    <Image x:Name="Cover" ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill"/>
+                    <Image x:Name="Cover" ui:ImageLoader.Source="{Binding CoverPath}" ui:ImageLoader.DecodeWidth="300" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     <!-- Dans la liste de souhaits -->
                     <Border CornerRadius="11" Width="22" Height="22" Margin="8" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#E60A0C11"
                             Visibility="{Binding IsWished, Converter={StaticResource VisibleIf}}">

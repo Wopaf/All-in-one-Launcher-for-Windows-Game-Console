@@ -487,7 +487,7 @@ public partial class DetailView : OverlayBase
         PlayIcon.Text = g.IsInstalled ? "" : "";
         HideIcon.Text = g.IsHidden ? "" : "";
         FolderButton.Visibility = g.IsInstalled && g.InstallDir is not null ? Visibility.Visible : Visibility.Collapsed;
-        UninstallButton.Visibility = g.IsInstalled && g.Platform != Platform.Manual ? Visibility.Visible : Visibility.Collapsed;
+        UninstallButton.Visibility = g.IsInstalled && g.PlatformInfo.HasLauncher ? Visibility.Visible : Visibility.Collapsed;
         PlatformButton.Visibility = GameLauncher.HasPlatformPage(g) ? Visibility.Visible : Visibility.Collapsed;
         PlatformButton.ToolTip = $"Voir dans {g.PlatformInfo.Name}";
 

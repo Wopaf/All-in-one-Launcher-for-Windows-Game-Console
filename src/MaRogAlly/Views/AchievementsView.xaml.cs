@@ -150,7 +150,7 @@ public partial class AchievementsView : UserControl
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var cover = new Grid { Width = 36, Height = 52, HorizontalAlignment = HorizontalAlignment.Left, Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x2A)) };
+        var cover = new Grid { Width = 37, Height = 52, HorizontalAlignment = HorizontalAlignment.Left, Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x2A)) };
         Rounded.SetRadius(cover, 6);
         // Logo de la plateforme en attendant la jaquette (ou s'il n'y en a pas).
         cover.Children.Add(new Path
@@ -158,7 +158,7 @@ public partial class AchievementsView : UserControl
             Data = Geometry.Parse(PlatformInfo.Of(g.Platform).Logo), Fill = (Brush)FindResource("TextMuted"), Stretch = Stretch.Uniform,
             Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         });
-        var img = new Image { Stretch = Stretch.UniformToFill };
+        var img = CoverArt.Image();
         ImageLoader.SetDecodeWidth(img, 80);
         // Lié au jeu : la jaquette apparaît aussi si elle se télécharge après coup.
         if (g.Game is { } game) img.SetBinding(ImageLoader.SourceProperty, new Binding(nameof(Game.CoverPath)) { Source = game });
