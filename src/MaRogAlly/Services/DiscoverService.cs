@@ -294,6 +294,27 @@ public sealed class DiscoverService(HttpClient http, IgdbClient? igdb = null)
         return ids.Distinct().Select(id => details.GetValueOrDefault(id)).OfType<DiscoverGame>().ToList();
     }
 
+    /// <summary>
+    /// Suggestions rapides pendant la saisie d'un nom (ajout d'un jeu à la main) : nom et identifiant Steam seulement,
+    /// sans le détail de chaque jeu.
+    /// </summary>
+    public async Task<List<(int AppId, string Name)>> SuggestAsync(string term, CancellationToken ct)
+    {
+        using var doc = await GetJsonAsync(
+            $"https://store.steampowered.com/api/storesearch/?term={Uri.EscapeDataString(term)}&l=french&cc=FR", ct);
+        var found = new List<(int, string)>();
+        if (doc?.RootElement.TryGetProperty("items", out var items) == true)
+            foreach (var i in items.EnumerateArray())
+                if (i.TryGetProperty("type", out var t) && t.GetString() == "app" && i.TryGetProperty("id", out var id) && id.TryGetInt32(out var appId)
+                    && i.TryGetProperty("name", out var name) && name.GetString() is { Length: > 0 } n)
+                    found.Add((appId, n));
+        // Bandes-son, artbooks et fonds d'écran sont aussi des « applications » du magasin : ce ne sont pas des jeux.
+        string[] extras = ["soundtrack", " ost", "artbook", "art book", "wallpaper"];
+        return found.DistinctBy(f => f.Item1)
+            .Where(f => !extras.Any(x => f.Item2.Contains(x, StringComparison.OrdinalIgnoreCase)))
+            .Take(8).ToList();
+    }
+
     /// <summary>Jaquettes et visuels de fond, partagés avec le cache des fiches (clé steam-{appid}).</summary>
     public async Task LoadImagesAsync(IEnumerable<DiscoverGame> games, CancellationToken ct)
     {

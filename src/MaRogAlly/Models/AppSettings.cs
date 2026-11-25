@@ -75,9 +75,6 @@ public sealed class AppSettings
     /// <summary>Jeux ajoutés à la main (exécutables).</summary>
     public List<ManualGame> ManualGames { get; set; } = [];
 
-    /// <summary>Dossiers de jeux (ROM) ajoutés pour une console émulée, en plus de son dossier Roms dans les données de l'application.</summary>
-    public Dictionary<Platform, List<string>> RomFolders { get; set; } = [];
-
     public static AppSettings Load() => Json.Load<AppSettings>(AppPaths.Settings) ?? new AppSettings();
     public void Save() => Json.Save(AppPaths.Settings, this);
 
@@ -90,4 +87,8 @@ public sealed class ManualGame
     public string Title { get; set; } = "";
     public string Exe { get; set; } = "";
     public string? Args { get; set; }
+    /// <summary>Adresse de la jaquette choisie à l'ajout (facultative) : passe avant les visuels trouvés en ligne.</summary>
+    public string? CoverUrl { get; set; }
+    /// <summary>Jeu reconnu sur Steam à l'ajout : sa fiche, son fond et son logo viennent de là.</summary>
+    public int? SteamAppId { get; set; }
 }

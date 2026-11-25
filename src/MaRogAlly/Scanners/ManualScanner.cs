@@ -22,6 +22,8 @@ public sealed class ManualScanner : GameScanner
                 InstallDir = Path.GetDirectoryName(m.Exe),
                 LaunchExe = m.Exe,
                 LaunchArgs = m.Args,
+                CoverUrl = string.IsNullOrWhiteSpace(m.CoverUrl) ? null : m.CoverUrl,
+                SteamAppId = m.SteamAppId,
             });
 
     public override Task<IReadOnlyList<Game>> ScanOwnedAsync(ScanContext ctx, CancellationToken ct)

@@ -243,7 +243,7 @@ public partial class GamesView : UserControl
         // Débord de la sélection (zoom, halo) au-delà de la vignette, partagé entre l'écart autour de la rangée et une marge
         // autour de la liste. Cette marge ne dépasse pas l'écart : les rangées hors champ restent invisibles.
         var overflow = Math.Ceiling((tileH * 0.045 + 26) / 2);
-        RowHeight = tileH + overflow * 2;
+        RowHeight = SnapToPixels(tileH + overflow * 2);
         RowPadding = new Thickness(SidePadding, 0, 0, 0);
         // Un peu moins que l'écart : le bord de la rangée suivante ne dépasse pas d'un filet.
         var edge = overflow - 2;
@@ -273,7 +273,7 @@ public partial class GamesView : UserControl
         // (zoom de 4,5 % + marge et flou du halo, environ 30 px), sans décaler la mise en page (marge négative équivalente).
         var glow = Math.Ceiling(tileH * 0.0225 + 32);
         var extra = Math.Max(0, glow - overflow);
-        RowHeight = tileH + glow * 2;
+        RowHeight = SnapToPixels(tileH + glow * 2);
         RowPadding = new Thickness(SidePadding, 0, 0, 0);
         RowsList.Height = RowHeight;
         RowsList.Padding = new Thickness(0);
@@ -346,6 +346,17 @@ public partial class GamesView : UserControl
         }
         LogoImage.Width = Math.Round(width);
         LogoImage.Height = Math.Round(height);
+    }
+
+    /// <summary>
+    /// Hauteur alignée sur les pixels de l'écran à l'échelle de Windows (150 % sur la ROG Ally) : WPF y arrondit la
+    /// hauteur de chaque rangée. Sans cela, chaque rangée mesure une fraction de pixel de plus que prévu, l'écart
+    /// s'additionne en descendant et la rangée suivante finit par apparaître en bas.
+    /// </summary>
+    private double SnapToPixels(double height)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this).DpiScaleY;
+        return dpi > 0 ? Math.Round(height * dpi) / dpi : height;
     }
 
     /// <summary>Fiche du jeu plus ramassée sur petit écran : logo et titre réduits.</summary>
@@ -509,6 +520,10 @@ public partial class GamesView : UserControl
         }
 
         var target = _firstRow * RowHeight;
+        // Position réelle de la rangée visée quand elle est déjà chargée (les deux rangées suivantes le sont) :
+        // aucun écart ne peut s'accumuler d'une page à l'autre.
+        if (RowsList.ItemContainerGenerator.ContainerFromIndex(_firstRow) is FrameworkElement first && first.IsVisible && first.ActualHeight > 0)
+            target = _scroller.VerticalOffset + first.TranslatePoint(new Point(0, 0), _scroller).Y - RowsList.Padding.Top;
         if (animate) Anim.ScrollTo(_scroller, target, 280);
         else _scroller.ScrollToVerticalOffset(target);
         UpdateDots(row);

@@ -37,10 +37,7 @@ public sealed class Game : ObservableObject
 
     /// <summary>Clé partagée entre plateformes pour le cache des métadonnées.</summary>
     [JsonIgnore]
-    public string MetadataKey => SteamAppId is int id ? $"steam-{id}"
-        // Console émulée : sa propre fiche (le Tetris de la NES n'est pas celui du PC).
-        : PlatformInfo.IsEmulated ? $"{PlatformInfo.Short.ToLowerInvariant()}-{Text.Normalize(Title).Replace(' ', '-')}"
-        : $"name-{Text.Normalize(Title).Replace(' ', '-')}";
+    public string MetadataKey => SteamAppId is int id ? $"steam-{id}" : $"name-{Text.Normalize(Title).Replace(' ', '-')}";
 
     [JsonIgnore] public PlatformInfo PlatformInfo => PlatformInfo.Of(Platform);
     /// <summary>Tags Steam (noms anglais), du plus voté au moins voté ; vide si le jeu n'est pas relié à Steam.</summary>

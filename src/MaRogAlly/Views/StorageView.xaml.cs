@@ -781,7 +781,7 @@ public partial class StorageView : OverlayBase
         FocusFirstRow();
     }
 
-    private static void ShowInExplorer(string path) => GameLauncher.Open("explorer.exe", $"/select,\"{path}\"");
+    private static void ShowInExplorer(string path) => FolderOpener.ShowFile(path);
 
     // =====================================================================
     // Briques visuelles

@@ -153,12 +153,6 @@ public sealed class MetadataService
         if (first.Platform == Platform.Ankama) meta = AnkamaCatalog.Complete(first.Title, meta)!;
 
         var missing = MissingSources(meta).ToList();
-        // Jeu d'une console émulée : pas sur Steam (un homonyme PC y serait trouvé à tort).
-        if (first.PlatformInfo.IsEmulated && missing.Remove("Steam"))
-        {
-            meta.Attempted.Add("Steam");
-            meta.Attempted.Add("SteamRetry");
-        }
         if (missing.Contains("Steam"))
         {
             var appId = games.Select(g => g.SteamAppId).FirstOrDefault(i => i is not null)
@@ -169,7 +163,7 @@ public sealed class MetadataService
         }
         if (missing.Contains("IGDB"))
         {
-            await _igdb.FillAsync(first.Title, meta, ct, IgdbClient.PlatformId(first.Platform));
+            await _igdb.FillAsync(first.Title, meta, ct);
             meta.Attempted.Add("IGDB");
         }
         if (missing.Contains("SteamGridDB"))

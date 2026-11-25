@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Text.Json;
 using MaRogAlly.Core;
 using MaRogAlly.Models;
 using MaRogAlly.Scanners;
@@ -24,7 +25,6 @@ public sealed class LibraryService(AppSettings settings, HttpClient http)
         new SteamScanner(), new EpicScanner(), new GogScanner(), new EaScanner(), new UbisoftScanner(),
         new BattleNetScanner(), new XboxScanner(), new AmazonScanner(), new RiotScanner(), new ItchScanner(),
         new RockstarScanner(), new AnkamaScanner(), new MinecraftScanner(), new RsiScanner(), new ManualScanner(),
-        .. Emulators.All.Select(e => new RomScanner(e)),
     ];
 
     private Dictionary<string, GameUserData> _userData = Json.Load<Dictionary<string, GameUserData>>(AppPaths.UserData) ?? [];
@@ -43,9 +43,34 @@ public sealed class LibraryService(AppSettings settings, HttpClient http)
     /// <summary>Bibliothèque du dernier scan, pour un affichage immédiat au démarrage.</summary>
     public List<Game> LoadCached()
     {
-        var games = Json.Load<List<Game>>(AppPaths.Library) ?? [];
+        var games = LoadKnownPlatforms();
         foreach (var g in games) ApplyUserData(g);
         return games;
+    }
+
+    /// <summary>
+    /// Bibliothèque en cache, jeu par jeu : un jeu d'une plateforme que l'application ne connaît plus (consoles émulées des
+    /// versions 1.9) est ignoré au lieu de faire échouer toute la lecture.
+    /// </summary>
+    private static List<Game> LoadKnownPlatforms()
+    {
+        try
+        {
+            if (!File.Exists(AppPaths.Library)) return [];
+            if (System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(AppPaths.Library)) is not System.Text.Json.Nodes.JsonArray items) return [];
+            var games = new List<Game>();
+            foreach (var item in items)
+            {
+                if (item is null || !Enum.TryParse<Platform>(item["Platform"]?.ToString(), out _)) continue;
+                if (item.Deserialize<Game>(Json.Options) is { } game) games.Add(game);
+            }
+            return games;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Lecture de la bibliothèque en cache", ex);
+            return [];
+        }
     }
 
     /// <param name="online">Faux : disque seulement, pour refléter sans attendre une installation ou une désinstallation

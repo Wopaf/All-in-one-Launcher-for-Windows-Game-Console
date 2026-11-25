@@ -20,25 +20,12 @@ public sealed partial class IgdbClient(HttpClient http, AppSettings settings)
 
     public bool IsConfigured => settings.HasIgdb;
 
-    /// <summary>Identifiant IGDB d'une console émulée (recherche limitée à ses jeux), sinon null.</summary>
-    public static int? PlatformId(Platform platform) => platform switch
-    {
-        Platform.Nes => 18,
-        Platform.Gba => 24,
-        Platform.N64 => 4,
-        Platform.Switch => 130,
-        _ => null,
-    };
-
-    /// <param name="platform">Identifiant IGDB de la console (voir <see cref="PlatformId"/>) : seuls ses jeux sont cherchés.</param>
-    public async Task<bool> FillAsync(string title, GameMetadata meta, CancellationToken ct, int? platform = null)
+    public async Task<bool> FillAsync(string title, GameMetadata meta, CancellationToken ct)
     {
         if (!IsConfigured) return false;
         var clean = Text.CleanTitle(title).Replace("\"", "");
-        var where = platform is int p ? $"where platforms = ({p});" : "";
         var body = $"""
             search "{clean}";
-            {where}
             fields name,summary,storyline,total_rating,aggregated_rating,rating,first_release_date,
                    genres.name,themes.name,cover.image_id,artworks.image_id,screenshots.image_id,
                    involved_companies.developer,involved_companies.publisher,involved_companies.company.name;

@@ -50,7 +50,6 @@ public partial class MainWindow : Window
     /// <summary>Luminosité de l'écran ; null si elle ne se règle pas depuis l'application (écran externe).</summary>
     private CancellationTokenSource? _searchCts;
     private readonly PlatformsView _platforms = new();
-    private readonly EmulatorsView _emulators = new();
     private readonly AchievementsView _achievementsView = new();
     private readonly SettingsView _settingsView;
     private readonly (string Title, FrameworkElement View, string Key)[] _pages;
@@ -68,7 +67,11 @@ public partial class MainWindow : Window
     private DateTime _lastScan = DateTime.MinValue;
     private CancellationTokenSource? _enrichCts;
 
-    private readonly DispatcherTimer _heroTimer = new() { Interval = TimeSpan.FromMilliseconds(260) };
+    /// <summary>
+    /// Attente avant de changer le fond : tant que la sélection bouge (on fait défiler les jeux), le fond ne change pas ;
+    /// il suit le jeu sur lequel on s'arrête.
+    /// </summary>
+    private readonly DispatcherTimer _heroTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(3) };
     private string? _heroPath;
 
@@ -112,7 +115,6 @@ public partial class MainWindow : Window
             ("Bibliothèque", _all, "library"),
             ("Découverte", _explore, "explore"),
             ("Succès", _achievementsView, "achievements"),
-            ("Émulateurs", _emulators, "emulators"),
         ];
         BuildTabs();
         WireViews();
@@ -255,6 +257,9 @@ public partial class MainWindow : Window
         if (args.Contains("--storage")) OpenStorage();
         if (args.Contains("--detail") && _installed.Source.FirstOrDefault() is { } firstGame) OpenDetail(firstGame);
         if (args.Contains("--menu")) OpenSystemMenu();
+        // « --add-game Nom » : formulaire d'ajout d'un jeu, nom déjà saisi, pour vérifier l'affichage et la recherche.
+        var addArg = Array.IndexOf(args, "--add-game");
+        if (addArg >= 0) OpenAddGame(args.ElementAtOrDefault(addArg + 1));
         // « --quick 4 » : centre de contrôle sur cet onglet à la place de la fenêtre dans la capture, hors de l'écran et sans focus.
         var quickArg = Array.IndexOf(args, "--quick");
         if (quickArg >= 0) OpenQuickPanel(int.TryParse(args.ElementAtOrDefault(quickArg + 1), out var quickTab) ? quickTab : 0, activate: false);
@@ -751,7 +756,6 @@ public partial class MainWindow : Window
         _sizes.Apply(games);
         _installed.SetGames(games);
         _all.SetGames(games);
-        _emulators.SetGames(games);
         _installed.SetActive(CurrentGames == _installed);
         _all.SetActive(CurrentGames == _all);
         MarkOwnedFreeGames();
@@ -1251,11 +1255,6 @@ public partial class MainWindow : Window
                 pv.RefreshRunning();
                 SetHero(null);
                 break;
-            case EmulatorsView emv:
-                emv.FocusFirst();
-                SetHero(null);
-                _ = emv.CheckUpdatesAsync();
-                break;
             case AchievementsView av:
                 // Pas de visuel de jeu : seulement le fond de l'application.
                 av.FocusFirst();
@@ -1348,17 +1347,6 @@ public partial class MainWindow : Window
             gv.SortRequested += () => OpenSort(gv);
             gv.HintsChanged += () => { if (gv == CurrentGames && _overlays.Count == 0) UpdateHints(); };
         }
-
-        // Émulateurs : une installation, une désinstallation ou un dossier de jeux change la bibliothèque (disque d'abord, puis fiches).
-        _emulators.Init(_http, _settings);
-        _emulators.Toast += (glyph, text) => Toast(glyph, text);
-        _emulators.LibraryChanged += async () =>
-        {
-            await ScanAsync(initial: false, localOnly: true);
-            await ScanAsync(initial: false);
-        };
-        // Aides en bas : différentes dans la liste et dans la fiche.
-        _emulators.GotKeyboardFocus += (_, _) => { if (CurrentView == _emulators && _overlays.Count == 0) UpdateHints(); };
 
         Dock.AppRequested += w =>
         {
@@ -1566,8 +1554,8 @@ public partial class MainWindow : Window
         image.BeginAnimation(OpacityProperty, new DoubleAnimation(0, isCover ? 0.45 : 0.9, Anim.Ms(HeroFadeMs)) { EasingFunction = Anim.InOut });
     }
 
-    /// <summary>Durée du fondu entre deux visuels de fond.</summary>
-    private const double HeroFadeMs = 1600;
+    /// <summary>Durée du fondu entre deux visuels de fond (court : le délai avant le changement évite déjà les fonds qui s'enchaînent).</summary>
+    private const double HeroFadeMs = 650;
 
     /// <summary>Les visuels affichés s'effacent un peu après le début du suivant, puis leur calque est retiré.</summary>
     private void FadeOutHeroes()
@@ -1649,7 +1637,6 @@ public partial class MainWindow : Window
             DiscoverView dv => dv.Handle(action),
             ExploreView ev => ev.Handle(action),
             PlatformsView pv => pv.Handle(action),
-            EmulatorsView emv => emv.Handle(action),
             AchievementsView av => av.Handle(action),
             SettingsView sv => sv.Handle(action),
             _ => false,
@@ -1824,7 +1811,6 @@ public partial class MainWindow : Window
                 case DiscoverView dv: dv.FocusFirst(); SetHero(dv.CurrentHero); break;
                 case ExploreView ev: ev.FocusFirst(); SetHero(ev.CurrentHero); break;
                 case PlatformsView pv: pv.FocusFirst(); break;
-                case EmulatorsView emv: emv.FocusFirst(); break;
                 case AchievementsView av: av.FocusFirst(); SetHero(null); break;
                 case SettingsView sv: sv.FocusFirst(); break;
                 case GamesView gv: OnSelectionChanged(gv.Selected); gv.RestoreFocus(); break;
@@ -1841,6 +1827,12 @@ public partial class MainWindow : Window
         detail.FolderRequested += g => GameLauncher.OpenFolder(g);
         detail.UninstallRequested += g =>
         {
+            // Jeu ajouté à la main : il quitte seulement Mes Jeux, rien n'est désinstallé.
+            if (g.Platform == Platform.Manual)
+            {
+                RemoveManualGame(g);
+                return;
+            }
             // Confirmation avant de lancer le désinstalleur (Steam, programme du jeu ou paramètres Windows).
             var confirm = new SidePanel("Désinstaller ?", g.DisplayTitle);
             confirm.SetHints("A:Valider|B:Annuler");
@@ -3093,6 +3085,11 @@ public partial class MainWindow : Window
         menu.AddButton("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats));
         menu.AddButton("", "Plateformes", () => OpenFromMenu(menu, () => OpenSubPage(_platforms)));
         menu.AddButton("\uE895", "Mises à jour", () => OpenUpdatesMenu(menu));
+        menu.AddButton("\uE710", "Ajouter un jeu", () =>
+        {
+            menu.Close();
+            OpenAddGame();
+        });
         menu.AddButton("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); });
         menu.SubMenuClosed += () => { if (_updatesMenu == menu) _updatesMenu = null; };
 
@@ -3498,9 +3495,7 @@ public partial class MainWindow : Window
     private bool IsGamepadWindow(OpenWindow window) => IsGameWindow(window) || WindowsShell.IsWindowsSettings(window);
 
     private bool IsGameWindow(OpenWindow window)
-        => window.IconSource is { } path && (_games.Any(g => g.InstallDir is { Length: > 0 } dir && path.StartsWith(dir.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase))
-            // Émulateur installé depuis l'onglet Émulateurs : ses fenêtres sont celles d'un jeu.
-            || Emulators.IsEmulatorPath(path));
+        => window.IconSource is { } path && _games.Any(g => g.InstallDir is { Length: > 0 } dir && path.StartsWith(dir.TrimEnd('\\') + '\\', StringComparison.OrdinalIgnoreCase));
 
     private void UpdateClock()
     {
@@ -3522,7 +3517,6 @@ public partial class MainWindow : Window
             DiscoverView dv => dv.Hints,
             ExploreView ev => ev.Hints,
             PlatformsView => "Y:Ouvrir le lanceur|B:Retour",
-            EmulatorsView emv => emv.Hints,
             AchievementsView av => av.Hints,
             SettingsView => "A:Valider|Y:Ouvrir le site|B:Retour",
             _ => "",

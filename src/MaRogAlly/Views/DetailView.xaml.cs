@@ -487,7 +487,9 @@ public partial class DetailView : OverlayBase
         PlayIcon.Text = g.IsInstalled ? "" : "";
         HideIcon.Text = g.IsHidden ? "" : "";
         FolderButton.Visibility = g.IsInstalled && g.InstallDir is not null ? Visibility.Visible : Visibility.Collapsed;
-        UninstallButton.Visibility = g.IsInstalled && g.PlatformInfo.HasLauncher ? Visibility.Visible : Visibility.Collapsed;
+        // Jeu ajouté à la main : la corbeille le retire de Mes Jeux (rien n'est désinstallé).
+        UninstallButton.Visibility = g.IsInstalled && g.PlatformInfo.HasLauncher || g.Platform == Platform.Manual ? Visibility.Visible : Visibility.Collapsed;
+        UninstallButton.ToolTip = g.Platform == Platform.Manual ? "Retirer de Mes Jeux" : "Désinstaller";
         PlatformButton.Visibility = GameLauncher.HasPlatformPage(g) ? Visibility.Visible : Visibility.Collapsed;
         PlatformButton.ToolTip = $"Voir dans {g.PlatformInfo.Name}";
 

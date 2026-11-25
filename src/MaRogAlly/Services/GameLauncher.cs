@@ -135,6 +135,8 @@ public static class GameLauncher
     public static bool Open(string target, string arguments = "")
     {
         if (string.IsNullOrWhiteSpace(target)) return false;
+        // Un dossier s'ouvre directement dans l'Explorateur (et non sur sa page d'accueil).
+        if (arguments.Length == 0 && Path.IsPathFullyQualified(target) && Directory.Exists(target)) return FolderOpener.OpenFolder(target);
         try
         {
             Process.Start(new ProcessStartInfo { FileName = target, Arguments = arguments, UseShellExecute = true });
