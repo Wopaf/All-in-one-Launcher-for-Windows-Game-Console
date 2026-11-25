@@ -298,7 +298,7 @@ public sealed class DiscoverService(HttpClient http, IgdbClient? igdb = null)
     /// Suggestions rapides pendant la saisie d'un nom (ajout d'un jeu à la main) : nom et identifiant Steam seulement,
     /// sans le détail de chaque jeu.
     /// </summary>
-    public async Task<List<(int AppId, string Name)>> SuggestAsync(string term, CancellationToken ct)
+    public async Task<List<GameSuggestion>> SuggestAsync(string term, CancellationToken ct)
     {
         using var doc = await GetJsonAsync(
             $"https://store.steampowered.com/api/storesearch/?term={Uri.EscapeDataString(term)}&l=french&cc=FR", ct);
@@ -312,7 +312,9 @@ public sealed class DiscoverService(HttpClient http, IgdbClient? igdb = null)
         string[] extras = ["soundtrack", " ost", "artbook", "art book", "wallpaper"];
         return found.DistinctBy(f => f.Item1)
             .Where(f => !extras.Any(x => f.Item2.Contains(x, StringComparison.OrdinalIgnoreCase)))
-            .Take(8).ToList();
+            .Take(8)
+            .Select(f => new GameSuggestion(f.Item2, null, "PC (Steam)", SteamStore.CoverUrls(f.Item1).Last(), SteamStore.HeroUrls(f.Item1).First(), f.Item1))
+            .ToList();
     }
 
     /// <summary>Jaquettes et visuels de fond, partagés avec le cache des fiches (clé steam-{appid}).</summary>

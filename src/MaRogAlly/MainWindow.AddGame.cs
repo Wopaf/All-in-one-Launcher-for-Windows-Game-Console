@@ -28,8 +28,10 @@ public partial class MainWindow
         panel.SetHints("A:Valider|B:Fermer");
 
         string name = "", file = "", image = "";
+        string? hero = null;
+        GameSuggestion? chosen = null;
         int? appId = null;
-        List<(int AppId, string Name)> found = [];
+        List<GameSuggestion> found = [];
         var searching = false;
         CancellationTokenSource? searchCts = null;
 
@@ -51,9 +53,14 @@ public partial class MainWindow
             try
             {
                 await Task.Delay(350, cts.Token);
-                var result = await _discover.SuggestAsync(term, cts.Token);
+                // Tout le catalogue IGDB (consoles actuelles et rétro, PC), puis les jeux du magasin Steam qu'il n'a pas.
+                var igdb = _metadata.Igdb.SearchAsync(term, cts.Token);
+                var steam = _discover.SuggestAsync(term, cts.Token);
+                var all = (await igdb).ToList();
+                var known = all.Select(g => Text.Normalize(g.Name)).ToHashSet();
+                all.AddRange((await steam).Where(g => !known.Contains(Text.Normalize(g.Name))));
                 if (cts.IsCancellationRequested) return;
-                found = result;
+                found = all.Take(12).ToList();
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex)
@@ -65,14 +72,21 @@ public partial class MainWindow
             Build();
         }
 
-        void Choose((int AppId, string Name) hit)
+        void Choose(GameSuggestion hit)
         {
             name = hit.Name;
-            appId = hit.AppId;
-            image = SteamStore.CoverUrls(hit.AppId).First();
+            appId = hit.SteamAppId;
+            chosen = hit;
+            image = hit.CoverUrl ?? "";
+            hero = hit.HeroUrl;
             found = [];
             panel.Rebuild(Build);
+            Refocus("file");
         }
+
+        // Retour dans le formulaire (après le choix du fichier ou le clavier) : la sélection reste sur la ligne d'où l'on vient,
+        // une fois que tout le reste (fermeture du clavier, reconstruction) est passé.
+        void Refocus(string tag) => Dispatcher.BeginInvoke(() => panel.FocusTag(tag), DispatcherPriority.ApplicationIdle);
 
         void ChooseFile()
         {
@@ -81,15 +95,23 @@ public partial class MainWindow
                 Title = "Fichier qui lance le jeu",
                 Filter = "Programmes et raccourcis|*.exe;*.lnk;*.url;*.bat;*.cmd|Tous les fichiers|*.*",
             };
-            if (dialog.ShowDialog(this) != true) return;
-            file = dialog.FileName;
-            // Pas encore de nom : celui du programme, et la recherche part de là.
-            if (name.Length == 0)
+            // Fenêtre de Windows : la manette y pilote la souris (stick droit, RB pour cliquer, B pour fermer).
+            bool? picked;
+            SetFilePicking(true);
+            try { picked = dialog.ShowDialog(this); }
+            finally { SetFilePicking(false); }
+            if (picked == true)
             {
-                name = FileTitle(file);
-                Search(name);
+                file = dialog.FileName;
+                // Pas encore de nom : celui du programme, et la recherche part de là.
+                if (name.Length == 0)
+                {
+                    name = FileTitle(file);
+                    Search(name);
+                }
+                panel.Rebuild(Build);
             }
-            panel.Rebuild(Build);
+            Refocus("file");
         }
 
         void EditImage()
@@ -100,6 +122,7 @@ public partial class MainWindow
                 image = v.Trim();
                 panel.Rebuild(Build);
             };
+            keyboard.CloseRequested += _ => Refocus("image");
             OpenOverlay(keyboard);
         }
 
@@ -111,14 +134,12 @@ public partial class MainWindow
                 // Nom changé à la main : il n'est plus celui du jeu choisi.
                 name = v;
                 appId = null;
+                chosen = null;
+                hero = null;
                 Search(v);
             };
             // Clavier fermé : la sélection va au premier jeu trouvé, sinon au fichier.
-            keyboard.CloseRequested += _ => Dispatcher.BeginInvoke(() =>
-            {
-                if (found.Count > 0) panel.FocusTag($"hit:{found[0].AppId}");
-                else panel.FocusTag("file");
-            }, DispatcherPriority.Input);
+            keyboard.CloseRequested += _ => Refocus(found.Count > 0 ? "hit:0" : "file");
             OpenOverlay(keyboard);
         }
 
@@ -136,6 +157,7 @@ public partial class MainWindow
             if (entry is null) _settings.ManualGames.Add(entry = new ManualGame { Exe = file });
             entry.Title = title;
             entry.CoverUrl = image.Length > 0 ? image : null;
+            entry.HeroUrl = hero;
             entry.SteamAppId = appId;
             _settings.Save();
             Log.Info($"Jeu ajouté à la main : {title}");
@@ -149,25 +171,34 @@ public partial class MainWindow
             panel.Clear();
             panel.AddRow(Glyph(""), name.Length == 0 ? "Rechercher le jeu" : name,
                 name.Length == 0 ? "Tape son nom : les jeux connus s'affichent dessous"
-                : appId is not null ? "Jeu reconnu : son image et sa fiche seront ajoutées"
-                : "Nom choisi (A pour le modifier)", appId is not null, EditName, tag: "name");
+                : chosen is not null ? $"Jeu reconnu ({chosen.Detail}) : son image et sa fiche seront ajoutées"
+                : "Nom choisi (A pour le modifier)", chosen is not null, EditName, tag: "name");
 
             if (searching && found.Count == 0) panel.AddHeader("Recherche…");
-            else if (found.Count > 0 && appId is null)
+            else if (found.Count > 0 && chosen is null)
             {
                 panel.AddHeader("Jeux trouvés");
-                foreach (var hit in found)
-                    panel.AddRow(Thumb(SteamStore.CoverUrls(hit.AppId).Last()), hit.Name, "Choisir : nom et image remplis", false, () => Choose(hit), tag: $"hit:{hit.AppId}");
+                for (var i = 0; i < found.Count; i++)
+                {
+                    var hit = found[i];
+                    panel.AddRow(Thumb(hit.CoverUrl ?? ""), hit.Name, hit.Detail.Length > 0 ? hit.Detail : "Choisir : nom et image remplis", false, () => Choose(hit), tag: $"hit:{i}");
+                }
             }
+            else if (!searching && found.Count == 0 && chosen is null && name.Trim().Length >= 2 && !_metadata.Igdb.IsConfigured)
+                panel.AddHeader("Jeux PC seulement : ajoute les clés IGDB (Réglages) pour chercher sur toutes les consoles");
 
             panel.AddHeader("Jeu");
             panel.AddRow(Glyph(""), "Fichier à lancer", file.Length == 0 ? "Choisir le programme ou le raccourci du jeu" : file, file.Length > 0, ChooseFile, tag: "file");
             panel.AddRow(image.Length > 0 ? Thumb(image) : Glyph(""), "Image du jeu",
                 image.Length == 0 ? "Adresse (URL) de la jaquette, facultative" : image, false, EditImage, tag: "image");
 
+            // Annuler et Ajouter côte à côte, en bas du formulaire.
             panel.AddHeader("");
-            panel.AddChoice("Ajouter à Mes Jeux", false, Add);
-            panel.AddChoice("Annuler", false, panel.Close);
+            panel.AddAppGrid(2,
+            [
+                ("Annuler", null, panel.Close, ""),
+                ("Ajouter à Mes Jeux", null, Add, ""),
+            ]);
         }
 
         Build();
@@ -178,6 +209,31 @@ public partial class MainWindow
             Search(name);
         }
     }
+
+    private bool _filePicking;
+
+    /// <summary>
+    /// Fenêtre de choix d'un fichier ouverte : la souris à la manette s'active (quel que soit le mode réglé), et la manette
+    /// ne pilote plus l'application derrière. À la fermeture, tout revient comme avant.
+    /// </summary>
+    private void SetFilePicking(bool on)
+    {
+        _filePicking = on;
+        _padMouseChecked = DateTime.MinValue; // pris en compte tout de suite, sans attendre la prochaine vérification
+        if (!on) _padMouse.Release();
+    }
+
+    /// <summary>Touche Échap envoyée à la fenêtre au premier plan (ferme la fenêtre de choix d'un fichier).</summary>
+    private static void PressEscape()
+    {
+        const byte escape = 0x1B;
+        const uint keyUp = 0x0002;
+        keybd_event(escape, 0, 0, UIntPtr.Zero);
+        keybd_event(escape, 0, keyUp, UIntPtr.Zero);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
 
     /// <summary>Après un ajout : le jeu apparaît tout de suite (disque), puis sa fiche et ses images arrivent (scan complet).</summary>
     private async Task AddedGameScanAsync()

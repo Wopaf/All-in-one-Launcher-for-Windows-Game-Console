@@ -121,12 +121,14 @@ public partial class MainWindow : Window
 
         // Volet ouvert : la manette le pilote, même si Windows lui a refusé le premier plan.
         // Pendant l'essai de la souris, la manette pilote la souris et non l'application.
-        _pad.IsActive = () => (_desktop.IsForeground || _quickPanel is not null) && _mouseTest is null;
+        // Choix d'un fichier (fenêtre de Windows) : la manette pilote la souris, pas l'application.
+        _pad.IsActive = () => (_desktop.IsForeground || _quickPanel is not null) && _mouseTest is null && !_filePicking;
         _pad.Action += OnPadNav;
         _pad.MinimizeRequested += () =>
         {
-            // B pendant l'essai de la souris : il se referme.
+            // B pendant l'essai de la souris : il se referme ; pendant le choix d'un fichier : la fenêtre se ferme (Échap).
             if (_mouseTest is { } test) test.Close();
+            else if (_filePicking) PressEscape();
             else MinimizeForegroundApp();
         };
         _pad.PanelChord = _settings.QuickPanelPadButtons;
@@ -1343,7 +1345,8 @@ public partial class MainWindow : Window
         {
             gv.SelectionChanged += g => { if (gv == CurrentGames && _overlays.Count == 0) OnSelectionChanged(g); };
             gv.OpenRequested += OpenDetail;
-            gv.FilterRequested += () => OpenFilters(gv);
+            // X : filtres dans la Bibliothèque, ajout d'un jeu à la main dans Mes Jeux.
+            gv.FilterRequested += () => { if (gv == _installed) OpenAddGame(); else OpenFilters(gv); };
             gv.SortRequested += () => OpenSort(gv);
             gv.HintsChanged += () => { if (gv == CurrentGames && _overlays.Count == 0) UpdateHints(); };
         }
@@ -2999,7 +3002,7 @@ public partial class MainWindow : Window
         _padMouseChecked = now;
         var mode = ReadControlMode();
         // Essai de la souris : elle marche sur l'application, quel que soit le mode.
-        _padMouseWanted = _mouseTest is not null || mode != ControlMode.Gamepad && !_desktop.IsForeground && _quickPanel is null
+        _padMouseWanted = _mouseTest is not null || _filePicking || mode != ControlMode.Gamepad && !_desktop.IsForeground && _quickPanel is null
             // Bureau : la souris partout, jeux compris. Auto (ou mode laissé à Armoury Crate) : sur les applications de bureau seulement.
             && (mode == ControlMode.Desktop
                 || (WindowsShell.ForegroundApp(_desktop.Handle) is not { } app || !WindowsShell.IsFullscreen(app.Handle) && !IsGamepadWindow(app)));
@@ -3085,11 +3088,6 @@ public partial class MainWindow : Window
         menu.AddButton("\uE9D2", "Statistiques", () => OpenFromMenu(menu, OpenStats));
         menu.AddButton("", "Plateformes", () => OpenFromMenu(menu, () => OpenSubPage(_platforms)));
         menu.AddButton("\uE895", "Mises à jour", () => OpenUpdatesMenu(menu));
-        menu.AddButton("\uE710", "Ajouter un jeu", () =>
-        {
-            menu.Close();
-            OpenAddGame();
-        });
         menu.AddButton("\uEA8F", "Notifications", () => { menu.Close(); WindowsShell.ShowNotifications(); });
         menu.SubMenuClosed += () => { if (_updatesMenu == menu) _updatesMenu = null; };
 

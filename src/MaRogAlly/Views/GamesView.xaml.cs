@@ -180,10 +180,12 @@ public partial class GamesView : UserControl
     {
         get
         {
+            // Mes Jeux : X ajoute un jeu à la main (pas de filtres) ; la Bibliothèque garde ses filtres.
+            var x = InstalledOnly ? "X:Ajouter un jeu" : $"X:Filtres : {Filter.Summary}";
             if (_inBar)
-                return $"{(_lastChip?.Tag is null ? "A:Choisir les catégories" : "A:Filtrer")}|↓:Jeux|Y:Tri : {Filter.SortLabel}|X:Filtres : {Filter.Summary}";
+                return $"{(_lastChip?.Tag is null ? "A:Choisir les catégories" : "A:Filtrer")}|↓:Jeux|Y:Tri : {Filter.SortLabel}|{x}";
             var categories = CategoryHost.Visibility == Visibility.Visible ? "|LT/RT:Catégorie" : "";
-            return $"A:Détails|Y:Tri : {Filter.SortLabel}|X:Filtres : {Filter.Summary}{categories}";
+            return $"A:Détails|Y:Tri : {Filter.SortLabel}|{x}{categories}";
         }
     }
 

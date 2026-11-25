@@ -23,6 +23,7 @@ public sealed class ManualScanner : GameScanner
                 LaunchExe = m.Exe,
                 LaunchArgs = m.Args,
                 CoverUrl = string.IsNullOrWhiteSpace(m.CoverUrl) ? null : m.CoverUrl,
+                HeroUrl = string.IsNullOrWhiteSpace(m.HeroUrl) ? null : m.HeroUrl,
                 SteamAppId = m.SteamAppId,
             });
 

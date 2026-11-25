@@ -89,6 +89,8 @@ public sealed class ManualGame
     public string? Args { get; set; }
     /// <summary>Adresse de la jaquette choisie à l'ajout (facultative) : passe avant les visuels trouvés en ligne.</summary>
     public string? CoverUrl { get; set; }
+    /// <summary>Visuel de fond du jeu choisi dans la recherche (facultatif).</summary>
+    public string? HeroUrl { get; set; }
     /// <summary>Jeu reconnu sur Steam à l'ajout : sa fiche, son fond et son logo viennent de là.</summary>
     public int? SteamAppId { get; set; }
 }
