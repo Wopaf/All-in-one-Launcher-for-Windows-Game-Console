@@ -931,7 +931,7 @@ public partial class MainWindow : Window
     private bool _installingAppUpdate;
 
     private (string Text, Color Color) AppUpdateStatus => _appRelease is { } r
-        ? ($"Version {r.Version.ToString(3)} disponible", Color.FromRgb(0xFF, 0xB8, 0x3D))
+        ? ($"Version {AppUpdater.Label(r.Version)} disponible", Color.FromRgb(0xFF, 0xB8, 0x3D))
         : ($"Version {AppUpdater.CurrentText}", Color.FromRgb(0x6B, 0xD3, 0x6B));
 
     private async Task CheckAppUpdateAsync()
@@ -940,7 +940,7 @@ public partial class MainWindow : Window
         var known = _appRelease?.Version;
         _appRelease = await _appUpdater.CheckAsync(CancellationToken.None) ?? _appRelease;
         if (_appRelease is not { } release || release.Version == known) return;
-        Toast("", $"Ma ROG Ally {release.Version.ToString(3)} est disponible : voir le menu");
+        Toast("", $"Ma ROG Ally {AppUpdater.Label(release.Version)} est disponible : voir le menu");
         var (text, color) = AppUpdateStatus;
         _updatesMenu?.UpdateTile(AppTile, text, color);
     }
@@ -965,7 +965,7 @@ public partial class MainWindow : Window
 
     private void OpenAppUpdatePrompt(AppRelease release)
     {
-        var panel = new SidePanel("Mise à jour", $"Version {AppUpdater.CurrentText} → {release.Version.ToString(3)}");
+        var panel = new SidePanel("Mise à jour", $"Version {AppUpdater.CurrentText} → {AppUpdater.Label(release.Version)}");
         panel.SetHints("A:Valider|B:Fermer");
         panel.AddChoice("Installer et redémarrer", false, () =>
         {
@@ -985,7 +985,7 @@ public partial class MainWindow : Window
             return;
         }
         _installingAppUpdate = true;
-        var title = $"Mise à jour vers {release.Version.ToString(3)}";
+        var title = $"Mise à jour vers {AppUpdater.Label(release.Version)}";
         try
         {
             Activity("appupdate", title, "Téléchargement…", 0);

@@ -26,11 +26,18 @@ public sealed class AppUpdater(HttpClient http)
         get
         {
             var v = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0);
-            return new Version(v.Major, v.Minor, Math.Max(v.Build, 0));
+            return Normalize(v);
         }
     }
 
-    public static string CurrentText => Current.ToString(3);
+    /// <summary>Numéro complet à quatre chiffres (1.9.2 devient 1.9.2.0) : une version 1.9.2.1 est bien plus récente que 1.9.2.</summary>
+    private static Version Normalize(Version v) => new(v.Major, v.Minor, Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
+
+    /// <summary>« 1.9.3 », ou « 1.9.3.1 » quand le quatrième chiffre sert.</summary>
+    public static string CurrentText => Label(Current);
+
+    /// <summary>Numéro affiché : trois chiffres, quatre si le dernier sert.</summary>
+    public static string Label(Version v) => v.Revision > 0 ? v.ToString(4) : v.ToString(3);
 
     private static string Exe => Environment.ProcessPath ?? "";
 
@@ -56,7 +63,7 @@ public sealed class AppUpdater(HttpClient http)
             using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
             var root = doc.RootElement;
             if (!Version.TryParse(root.GetProperty("tag_name").GetString()?.TrimStart('v'), out var latest)) return null;
-            latest = new Version(latest.Major, latest.Minor, Math.Max(latest.Build, 0));
+            latest = Normalize(latest);
             if (latest <= Current) return null;
             foreach (var asset in root.GetProperty("assets").EnumerateArray())
             {
