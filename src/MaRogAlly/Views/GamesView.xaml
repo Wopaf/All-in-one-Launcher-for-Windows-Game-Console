@@ -43,7 +43,6 @@
                     <Image ui:ImageLoader.DecodeWidth="320" ui:ImageLoader.Source="{Binding CoverPath}"
                            Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
 
-
                     <!-- Plateforme (visible à la sélection) -->
                     <Border x:Name="Tag" VerticalAlignment="Bottom" Opacity="0" Padding="12,34,12,11">
                         <Border.Background>
@@ -62,7 +61,8 @@
                     </Border>
                 </Grid>
 
-                <Border x:Name="Frame" CornerRadius="10" BorderThickness="3" BorderBrush="White" Opacity="0" Margin="-1"/>
+                <!-- Contour de sélection : un tracé, dont l'épaisseur varie en douceur (au demi-pixel près, sans paliers) -->
+                <Rectangle x:Name="Frame" RadiusX="8.5" RadiusY="8.5" Stroke="White" StrokeThickness="3" Opacity="0" Margin="-1" IsHitTestVisible="False"/>
             </Grid>
 
             <DataTemplate.Triggers>
@@ -78,7 +78,11 @@
                                     <DoubleAnimation.EasingFunction><BackEase Amplitude="0.15" EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                 </DoubleAnimation>
                                 <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity" To="0.55" Duration="0:0:0.25"/>
-                                <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18"/>
+                                <!-- Contour visible tout de suite, épais, puis il s'affine sans à-coup jusqu'à son épaisseur normale -->
+                                <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.05"/>
+                                <DoubleAnimation Storyboard.TargetName="Frame" Storyboard.TargetProperty="StrokeThickness" From="8" To="3" Duration="0:0:0.4">
+                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
                                 <DoubleAnimation Storyboard.TargetName="Tag" Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.25"/>
                             </Storyboard>
                         </BeginStoryboard>
@@ -134,6 +138,16 @@
             <ItemsControl ItemsSource="{Binding}" ItemTemplateSelector="{StaticResource TileSelector}" Focusable="False"
                           Height="{Binding RowHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
                           Padding="{Binding RowPadding, RelativeSource={RelativeSource AncestorType=UserControl}}">
+                <!-- La vignette sélectionnée passe devant ses voisines : son contour agrandi n'est pas caché par la suivante -->
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected, FallbackValue=False}" Value="True">
+                                <Setter Property="Panel.ZIndex" Value="1"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center"/>
@@ -148,6 +162,16 @@
                           Height="{Binding RowHeight, RelativeSource={RelativeSource AncestorType=UserControl}}">
                 <ItemsControl ItemsSource="{Binding}" ItemTemplateSelector="{StaticResource TileSelector}" Focusable="False"
                               Margin="64,0,64,0" VerticalAlignment="Center">
+                    <!-- La vignette sélectionnée passe devant ses voisines : son contour agrandi n'est pas caché par la suivante -->
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSelected, FallbackValue=False}" Value="True">
+                                    <Setter Property="Panel.ZIndex" Value="1"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal"/>

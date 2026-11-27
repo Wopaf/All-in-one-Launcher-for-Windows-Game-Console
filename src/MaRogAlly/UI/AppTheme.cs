@@ -18,7 +18,7 @@ public static class AppTheme
     public static readonly IReadOnlyList<Theme> Choices =
     [
         new("nuit", "Nuit ROG", C("#0A0C11"), C("#F2121620"), null),
-        new("carbone", "Carbone", C("#050505"), C("#F5101010"), null),
+        new("carbone", "Carbone", C("#161616"), C("#F2222222"), null),
         new("minuit", "Minuit", C("#060A17"), C("#F20C1326"), C("#2F6BFF")),
         new("aurore", "Aurore boréale", C("#070B12"), C("#F20D1520"), C("#19C3A6"), C("#7A4DFF")),
         new("foret", "Forêt", C("#060E0A"), C("#F20B1712"), C("#1F9D5A")),

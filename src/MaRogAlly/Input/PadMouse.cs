@@ -71,11 +71,11 @@ public sealed class PadMouse
     /// <summary>Remet le curseur de l'application tout devant, depuis le fil qui déplace la souris.</summary>
     public Action? RaisePointer { get; set; }
 
-    /// <summary>
-    /// Forme choisie par Windows sous le curseur (handle du curseur système), depuis le fil qui déplace la souris :
-    /// main sur un lien, barre sur du texte, flèches sur un bord à redimensionner…
-    /// </summary>
-    public Action<IntPtr>? ShapePointer { get; set; }
+    /// <summary>Clic gauche relâché à cette position (pixels de l'écran) : ouverture du clavier sur un champ de texte.</summary>
+    public Action<int, int>? LeftClicked { get; set; }
+
+    /// <summary>Vrai quand le curseur de l'application est affiché (sa forme suit alors ce qu'il survole).</summary>
+    public bool PointerShown => _pointerShown;
 
     /// <summary>Déplace le curseur de l'application, depuis le fil qui déplace la souris.</summary>
     public Action<int, int>? MovePointer { get; set; }
@@ -120,7 +120,9 @@ public sealed class PadMouse
             mouse_event(HWheel, 0, 0, amount, UIntPtr.Zero);
         }
 
+        var wasLeft = _left;
         SetButton(ref _left, (s.Buttons & RightShoulder) != 0, LeftDown, LeftUp);
+        if (wasLeft && !_left && GetCursorPos(out var clicked)) LeftClicked?.Invoke(clicked.X, clicked.Y);
         SetButton(ref _right, (s.Buttons & LeftShoulder) != 0, RightDown, RightUp);
         UpdatePointer(now);
     }
@@ -174,8 +176,7 @@ public sealed class PadMouse
     {
         var clock = Stopwatch.StartNew();
         var last = 0.0;
-        double vx = 0, vy = 0, restX = 0, restY = 0, raised = 0, shaped = 0;
-        var shape = IntPtr.Zero;
+        double vx = 0, vy = 0, restX = 0, restY = 0, raised = 0;
         while (_moving)
         {
             // Attend la prochaine image de l'écran : un déplacement par image, ni plus ni moins.
@@ -186,18 +187,6 @@ public sealed class PadMouse
             {
                 raised = now;
                 RaisePointer?.Invoke();
-            }
-            // La forme suit celle que Windows donne sous le curseur, même immobile (une page qui charge, un lien qui apparaît).
-            if (!_pointerShown) shape = IntPtr.Zero;
-            else if (now - shaped > 0.03)
-            {
-                shaped = now;
-                var info = new CursorInfo { Size = Marshal.SizeOf<CursorInfo>() };
-                if (GetCursorInfo(ref info) && info.Cursor != IntPtr.Zero && info.Cursor != shape)
-                {
-                    shape = info.Cursor;
-                    ShapePointer?.Invoke(shape);
-                }
             }
             var dt = Math.Min(now - last, 0.05);
             last = now;

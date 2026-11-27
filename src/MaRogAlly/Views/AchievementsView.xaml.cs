@@ -257,8 +257,6 @@ public partial class AchievementsView : UserControl
         ProgressBar.UpdateLayout();
         ProgressFill.Background = g.Completed ? (Brush)FindResource("Gold") : new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
         ProgressFill.BeginAnimation(WidthProperty, new DoubleAnimation(ProgressBar.ActualWidth * g.Ratio, Anim.Ms(animate ? 500 : 0)) { EasingFunction = Anim.Out });
-
-        if (animate) Anim.Enter(Header, 0, 12, 300);
     }
 
     private static string FormatRarity(double r) => $"{r.ToString(r < 10 ? "0.#" : "0", Fr)} %";

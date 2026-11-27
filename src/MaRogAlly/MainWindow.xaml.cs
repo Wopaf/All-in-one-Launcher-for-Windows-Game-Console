@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private readonly Gamepad _pad = new();
     private readonly PadMouse _padMouse = new();
     private PointerOverlay? _pointer;
+    private PointerShapeProbe? _shapeProbe;
 
     private readonly GamesView _installed = new() { InstalledOnly = true };
     private readonly GamesView _all = new();
@@ -145,11 +146,10 @@ public partial class MainWindow : Window
             if (down) UiSounds.PlayMouseClick();
         };
         _padMouse.RaisePointer = () => _pointer?.KeepOnTop();
-        _padMouse.ShapePointer = cursor =>
-        {
-            var shape = PointerOverlay.ShapeOf(cursor);
-            Dispatcher.BeginInvoke(() => _pointer?.SetShape(shape));
-        };
+        // Forme du curseur selon ce qu'il survole (bouton, lien, champ de texte, bord de fenêtre, application figée…).
+        _shapeProbe = new PointerShapeProbe(() => _padMouse.PointerShown, shape => Dispatcher.BeginInvoke(() => _pointer?.SetShape(shape)), OwnPointerShape);
+        // Clic dans un champ de texte (barre de recherche…) : le clavier tactile de Windows s'ouvre.
+        _padMouse.LeftClicked = TouchKeyboard.AfterClick;
         _pad.BackgroundPoll += _padMouse.Update;
         // Le curseur de la souris à la manette ne doit jamais rester affiché sur un jeu ou sur l'application.
         var pointerWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
@@ -2995,6 +2995,50 @@ public partial class MainWindow : Window
     /// Souris à la manette : sur le bureau ou une application de bureau, jamais dans l'application, le volet, un jeu,
     /// le plein écran ou les paramètres de Windows. Réévalué quatre fois par seconde (lister les fenêtres coûte).
     /// </summary>
+    /// <summary>
+    /// Forme du curseur au-dessus d'une fenêtre de l'application (relevé depuis un autre fil) : celle que demande l'élément
+    /// survolé, sinon une main sur un bouton et une barre sur un champ de texte.
+    /// </summary>
+    private PointerShape OwnPointerShape(IntPtr hwnd, int x, int y)
+    {
+        try
+        {
+            return Dispatcher.Invoke(() =>
+            {
+                if (System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.RootVisual is not UIElement root) return PointerShape.Arrow;
+                var hit = root.InputHitTest(root.PointFromScreen(new Point(x, y))) as DependencyObject;
+                for (var node = hit; node is not null; node = node is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+                {
+                    if (node is FrameworkElement { Cursor: { } cursor } && PointerShapeOf(cursor) is { } shape) return shape;
+                    if (node is System.Windows.Controls.Primitives.TextBoxBase or PasswordBox) return PointerShape.Text;
+                    if (node is System.Windows.Controls.Primitives.ButtonBase { IsEnabled: true }) return PointerShape.Hand;
+                }
+                return PointerShape.Arrow;
+            }, DispatcherPriority.Send, CancellationToken.None, TimeSpan.FromMilliseconds(150));
+        }
+        catch (TimeoutException)
+        {
+            return PointerShape.Arrow;
+        }
+    }
+
+    private static PointerShape? PointerShapeOf(Cursor cursor)
+    {
+        if (cursor == Cursors.Hand) return PointerShape.Hand;
+        if (cursor == Cursors.IBeam) return PointerShape.Text;
+        if (cursor == Cursors.Wait) return PointerShape.Wait;
+        if (cursor == Cursors.AppStarting) return PointerShape.Busy;
+        if (cursor == Cursors.SizeWE) return PointerShape.SizeWE;
+        if (cursor == Cursors.SizeNS) return PointerShape.SizeNS;
+        if (cursor == Cursors.SizeNWSE) return PointerShape.SizeNWSE;
+        if (cursor == Cursors.SizeNESW) return PointerShape.SizeNESW;
+        if (cursor == Cursors.SizeAll) return PointerShape.SizeAll;
+        if (cursor == Cursors.No) return PointerShape.No;
+        if (cursor == Cursors.Cross) return PointerShape.Cross;
+        if (cursor == Cursors.Arrow) return PointerShape.Arrow;
+        return null;
+    }
+
     private bool PadMouseWanted()
     {
         var now = DateTime.UtcNow;

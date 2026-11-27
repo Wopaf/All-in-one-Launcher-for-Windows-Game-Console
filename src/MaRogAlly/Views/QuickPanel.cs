@@ -174,12 +174,11 @@ public sealed class QuickPanel : UserControl
         body.Children.Add(_status);
         Grid.SetRow(body, 2);
         _root.Children.Add(body);
-        // Batterie : à droite, sur la ligne du titre de l'onglet (elle ne glisse pas avec lui).
-        if (BuildBattery() is { } battery)
-        {
-            Grid.SetRow(battery, 2);
-            _root.Children.Add(battery);
-        }
+        // En-tête du volet : l'heure et la date à gauche, la batterie à droite.
+        var status = new Grid { Margin = new Thickness(4, 0, 4, 14) };
+        status.Children.Add(BuildClock());
+        if (BuildBattery() is { } battery) status.Children.Add(battery);
+        _root.Children.Add(status);
 
         // Pied du volet : les aides à gauche, les petits boutons d'alimentation à droite.
         var footer = new Grid();
@@ -208,14 +207,46 @@ public sealed class QuickPanel : UserControl
         Content = new Grid { Children = { shaded, new Border { CornerRadius = round, Background = (Brush)FindResource("PanelBg"), BorderBrush = (Brush)FindResource("PanelStroke"), BorderThickness = new Thickness(1) }, _root } };
     }
 
-    /// <summary>Niveau de batterie (rien sans batterie), calé sur la hauteur du titre de l'onglet.</summary>
+    private readonly TextBlock _time = new() { FontSize = 26, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _date = new() { FontSize = 15, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 3, 0, 0) };
+    private readonly DispatcherTimer _clock = new();
+
+    /// <summary>Heure (comme en haut de l'application) et date du jour, tenues à jour pendant que le volet est ouvert.</summary>
+    private FrameworkElement BuildClock()
+    {
+        _time.FontFamily = (FontFamily)FindResource("Display");
+        _time.FontWeight = FontWeights.Bold;
+        _date.Foreground = (Brush)FindResource("TextSecondary");
+        _clock.Tick += (_, _) => UpdateClock();
+        UpdateClock();
+        // L'horloge ne tourne que volet affiché ; à chaque ouverture, elle repart de l'heure exacte.
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible) { _clock.Stop(); return; }
+            UpdateClock();
+            _clock.Start();
+        };
+        return new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Left, Children = { _time, _date } };
+    }
+
+    private void UpdateClock()
+    {
+        var now = DateTime.Now;
+        _time.Text = now.ToString("HH:mm");
+        var date = now.ToString("dddd d MMMM", new System.Globalization.CultureInfo("fr-FR"));
+        _date.Text = char.ToUpper(date[0]) + date[1..];
+        // Prochaine mise à jour pile au changement de minute.
+        _clock.Interval = TimeSpan.FromSeconds(60 - now.Second) - TimeSpan.FromMilliseconds(now.Millisecond) + TimeSpan.FromMilliseconds(50);
+    }
+
+    /// <summary>Niveau de batterie (rien sans batterie), à droite de l'heure.</summary>
     private FrameworkElement? BuildBattery()
     {
         var power = Power.Read();
         if (!power.HasBattery) return null;
         // Même dessin que la batterie en haut à droite de l'application : grande icône et pourcentage, couleur selon le niveau.
         var color = new SolidColorBrush(Power.LevelColor(power.Percent));
-        var battery = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 4, 0) };
+        var battery = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         battery.Children.Add(new TextBlock { Text = Power.Glyph(power), FontFamily = (FontFamily)FindResource("Icons"), FontSize = 26, Foreground = color, VerticalAlignment = VerticalAlignment.Center });
         battery.Children.Add(new TextBlock { Text = $"{power.Percent} %", FontFamily = (FontFamily)FindResource("Display"), FontWeight = FontWeights.SemiBold, FontSize = 18, Foreground = color, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 0, 0) });
         return battery;
